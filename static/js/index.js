@@ -102,6 +102,8 @@ let availableRoles = [];
 let managedUsers = [];
 let latestScanResult = null;
 const stageSuggestionsByStage = {};
+let workflowSteps = [];
+const workflowStepByKey = {};
 
 const STAGE_ROLE_MAP = {
     validation_plan: "test",
@@ -112,6 +114,65 @@ const STAGE_ROLE_MAP = {
 
 function roleForStage(stageName) {
     return STAGE_ROLE_MAP[stageName] || "test";
+}
+
+
+function setWorkflowSteps(steps) {
+    workflowSteps = Array.isArray(steps) ? steps : [];
+    Object.keys(workflowStepByKey).forEach((key) => delete workflowStepByKey[key]);
+
+    for (const step of workflowSteps) {
+        const key = String(step.step_key || "").trim().toLowerCase();
+        if (!key) {
+            continue;
+        }
+        workflowStepByKey[key] = step;
+        STAGE_ROLE_MAP[key] = String(step.role_required || "test").trim().toLowerCase() || "test";
+    }
+}
+
+
+function renderWorkflowStepCards() {
+    if (!directionActions) {
+        return;
+    }
+
+    if (!workflowSteps.length) {
+        directionActions.innerHTML = `
+            <button type="button" class="action-card" data-direction="validation_plan">
+                <p class="action-title">Validation Plan</p>
+                <p class="action-description">Workflow step tanımı bulunamadı.</p>
+            </button>
+        `;
+        return;
+    }
+
+    directionActions.innerHTML = workflowSteps
+        .map((step) => {
+            const stepKey = escapeHtml(step.step_key || "");
+            const stepName = escapeHtml(step.step_name || step.step_key || "Step");
+            const stepDesc = escapeHtml(step.description || "");
+            return `
+                <button type="button" class="action-card" data-direction="${stepKey}">
+                    <p class="action-title">${stepName}</p>
+                    <p class="action-description">${stepDesc}</p>
+                </button>
+            `;
+        })
+        .join("");
+}
+
+
+async function loadWorkflowStepsFromServer() {
+    try {
+        const response = await apiRequest("/validation/workflow-steps", { cache: "no-store" });
+        setWorkflowSteps(response.items || []);
+        renderWorkflowStepCards();
+        applyRoleRestrictions();
+    } catch (_) {
+        setWorkflowSteps([]);
+        renderWorkflowStepCards();
+    }
 }
 
 
@@ -769,14 +830,15 @@ async function fetchStageSuggestions() {
     }
 
     try {
-        const response = await apiRequest("/validation/stage-suggestion", {
+        const response = await apiRequest("/validation/step-intents", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                stage: selectedDirection,
+                step_key: selectedDirection,
                 target: latestScanResult.target || document.getElementById("target")?.value.trim() || "authorized-target",
                 scan_tool: latestScanResult.scan_tool || "nmap",
                 scan_result: latestScanResult,
+                evidence: [],
             }),
         });
 
@@ -1717,6 +1779,10 @@ function ensureScanTab() {
 
 
 function getDirectionLabel(directionValue) {
+    const key = String(directionValue || "").trim().toLowerCase();
+    if (workflowStepByKey[key]) {
+        return workflowStepByKey[key].step_name || workflowStepByKey[key].step_key || t("tab.direction", "Ilerleme Yonu");
+    }
     if (directionValue === "validation_plan") return t("direction.validationPlan", "Validation Plan");
     if (directionValue === "evidence_risk_analysis") return t("direction.evidenceRisk", "Evidence & Risk Analysis");
     if (directionValue === "remediation_plan") return t("direction.remediationPlan", "Remediation Plan");
@@ -2427,13 +2493,48 @@ directionPanel.addEventListener("change", (event) => {
         const intent = getSelectedStageIntent();
         const presetSelect = document.getElementById("nextTestPreset");
         const manualInput = document.getElementById("nextTestManualName");
+        const feedback = document.getElementById("nextTestFeedback");
         if (presetSelect) {
             const resolvedTarget = intent?.target || latestScanResult?.target || "authorized-target";
             presetSelect.innerHTML = `<option value="${escapeHtml(resolvedTarget)}">${escapeHtml(resolvedTarget)}</option>`;
         }
+
+        const fallbackParams = intent?.parameters || {};
         if (manualInput) {
-            manualInput.value = JSON.stringify(intent?.parameters || {}, null, 0);
+            manualInput.value = JSON.stringify(fallbackParams, null, 0);
         }
+
+        if (!intent) {
+            return;
+        }
+
+        apiRequest("/validation/resolve-intent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                step_key: selectedDirection,
+                action: intent.action,
+                target: intent.target || latestScanResult?.target || "authorized-target",
+                reason: intent.reason || "Step action resolution",
+                parameters: fallbackParams,
+            }),
+        }).then((resolved) => {
+            if (manualInput) {
+                manualInput.value = JSON.stringify(resolved?.intent?.parameters || fallbackParams, null, 0);
+            }
+            if (feedback) {
+                const toolName = resolved?.tool?.tool_name || "-";
+                const risk = resolved?.tool?.risk_level || "low";
+                const approval = resolved?.tool?.requires_approval ? "yes" : "no";
+                feedback.classList.remove("error");
+                feedback.innerText = `Tool: ${toolName} | Risk: ${risk} | Approval: ${approval}`;
+            }
+        }).catch((error) => {
+            if (feedback) {
+                feedback.classList.add("error");
+                feedback.innerText = error.message || "Intent çözümlenemedi.";
+            }
+        });
         return;
     }
 });
@@ -2486,7 +2587,7 @@ if (directionProceedBtn) {
 
         const editableParams = parseParametersFromManualInput();
         const payload = {
-            stage: selectedDirection,
+            step_key: selectedDirection,
             action: selectedIntent.action,
             target: selectedIntent.target || latestScanResult?.target || "authorized-target",
             reason: selectedIntent.reason || "Stage execution requested by user",
@@ -2496,7 +2597,7 @@ if (directionProceedBtn) {
 
         let execution;
         try {
-            execution = await apiRequest("/validation/execute", {
+            execution = await apiRequest("/validation/execute-intent", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -2515,6 +2616,32 @@ if (directionProceedBtn) {
             ? `Error: ${execResult.output.error}`
             : `Tool: ${execResult.tool_name || "-"} | Status: ${execResult.status || "completed"}`;
         appendStepOutput(`${getDirectionLabel(completedDirection)} - Tool Runner`, outputText);
+
+        try {
+            const evidenceAnalysis = await apiRequest("/validation/evidence-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    target: selectedIntent.target || latestScanResult?.target || "authorized-target",
+                    evidence: [execResult.output || {}],
+                }),
+            });
+
+            const remediationSummary = evidenceAnalysis?.analysis?.summary || "Evidence analizi tamamlandi.";
+            const remediationActions = evidenceAnalysis?.analysis?.actions || [];
+            const renderedRemediation = [remediationSummary];
+            if (remediationActions.length) {
+                renderedRemediation.push("");
+                renderedRemediation.push("Remediation Action Intents:");
+                remediationActions.forEach((item) => {
+                    renderedRemediation.push(`- ${item.action} | ${item.reason}`);
+                });
+            }
+
+            appendStepOutput("Evidence & Remediation Analysis", renderedRemediation.join("\n"));
+        } catch (analysisError) {
+            appendStepOutput("Evidence & Remediation Analysis", analysisError.message || "Evidence analizi alınamadı.");
+        }
 
         directionCompleted = true;
         directionProceedBtn.hidden = true;
@@ -2688,6 +2815,7 @@ async function pollStatus(jobId) {
                 statusText.innerText = `${t("status.prefix", "Durum")}: ${translateJobStatus("finished")}`;
                 currentStep.innerText = t("scan.completed", "Tarama tamamlandi.");
                 renderResult(job.result);
+                await loadWorkflowStepsFromServer();
                 ensureDirectionTab();
                 selectedDirection = "";
                 directionLocked = false;

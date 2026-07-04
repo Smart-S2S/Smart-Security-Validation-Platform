@@ -1,56 +1,50 @@
+import json
+
 from backend.i18n import t
 from backend.modules.test.scanners.masscan_scanner import run_masscan_scan
 from backend.modules.test.scanners.netdiscover_scanner import run_netdiscover_scan
 from backend.modules.test.scanners.nmap_scanner import run_nmap_scan
-from backend.services.tool_registry_store import create_tool_execution_audit, get_tool_action
+from backend.services.orchestrator_store import create_tool_run, get_tool_with_parameters
 from backend.tools.models import ActionIntent
 
 
-_SUPPORTED_ACTION_MAP = {
-    "service_detection": "nmap",
-    "port_discovery_fast": "masscan",
-    "local_network_discovery": "netdiscover",
-}
-
-
-def _merge_params(default_params: dict, user_params: dict) -> dict:
-    merged = dict(default_params or {})
-    for key, value in (user_params or {}).items():
-        merged[key] = value
-    return merged
-
-
-def _run_action(action_key: str, target: str, params: dict, language: str) -> dict:
+def _run_action(tool_name: str, target: str, params: dict, language: str) -> dict:
     scan_params = list(params.get("scan_params") or [])
     scan_ports = list(params.get("scan_ports") or [])
 
-    if action_key == "service_detection":
-        return run_nmap_scan(
-            target=target,
-            scan_params=scan_params,
-            scan_ports=scan_ports,
-            language=language,
-        )
+    if tool_name == "nmap":
+        return run_nmap_scan(target=target, scan_params=scan_params, scan_ports=scan_ports, language=language)
+    if tool_name == "masscan":
+        return run_masscan_scan(target=target, scan_params=scan_params, scan_ports=scan_ports, language=language)
+    if tool_name == "netdiscover":
+        return run_netdiscover_scan(target=target, scan_params=scan_params, scan_ports=scan_ports, language=language)
 
-    if action_key == "port_discovery_fast":
-        return run_masscan_scan(
-            target=target,
-            scan_params=scan_params,
-            scan_ports=scan_ports,
-            language=language,
-        )
+    return {"error": t(language, "scan.job.unsupportedTool", "Desteklenmeyen tarama aracı.")}
 
-    if action_key == "local_network_discovery":
-        return run_netdiscover_scan(
-            target=target,
-            scan_params=scan_params,
-            scan_ports=scan_ports,
-            language=language,
-        )
 
-    return {
-        "error": t(language, "scan.job.unsupportedTool", "Desteklenmeyen tarama aracı."),
-    }
+def _merge_params_from_registry(tool_entry: dict, user_params: dict) -> dict:
+    merged: dict = {}
+    provided = user_params or {}
+
+    for param in tool_entry.get("parameters") or []:
+        key = param.get("param_key")
+        param_type = param.get("param_type") or "string"
+        default_raw = param.get("default_value", "")
+
+        default_value = default_raw
+        if param_type in {"list", "json", "object"}:
+            try:
+                default_value = json.loads(default_raw) if default_raw else ([] if param_type == "list" else {})
+            except Exception:
+                default_value = [] if param_type == "list" else {}
+
+        merged[key] = provided.get(key, default_value)
+
+    for key, value in provided.items():
+        if key not in merged:
+            merged[key] = value
+
+    return merged
 
 
 def execute_action_intent(
@@ -64,9 +58,9 @@ def execute_action_intent(
     target = intent.target.strip()
     reason = intent.reason.strip()
 
-    tool_entry = get_tool_action(action_key)
+    tool_entry = get_tool_with_parameters(action_key)
     if not tool_entry or not tool_entry.get("is_active"):
-        return {
+        result = {
             "ok": False,
             "status": "tool_not_found",
             "action": action_key,
@@ -74,16 +68,30 @@ def execute_action_intent(
             "approval_required": False,
             "risk_level": "low",
             "tool_name": "-",
-            "output": {
-                "error": t(language, "scan.route.invalidTool", "Geçersiz tarama aracı seçildi."),
-            },
+            "output": {"error": t(language, "scan.route.invalidTool", "Geçersiz tarama aracı seçildi.")},
         }
+        run_id = create_tool_run(
+            action_key=action_key,
+            tool_id=None,
+            requested_by=requested_by,
+            target=target,
+            reason=reason,
+            resolved_command="",
+            params=intent.parameters,
+            risk_level="low",
+            approval_required=False,
+            approved=False,
+            status="tool_not_found",
+            output=result,
+        )
+        result["run_id"] = run_id
+        return result
 
     approval_required = bool(tool_entry.get("requires_approval"))
     risk_level = tool_entry.get("risk_level", "low")
 
     if approval_required and not approved:
-        pending_result = {
+        pending = {
             "ok": False,
             "status": "approval_required",
             "action": action_key,
@@ -96,22 +104,25 @@ def execute_action_intent(
                 "message": "Execution requires explicit user approval.",
             },
         }
-        create_tool_execution_audit(
+        run_id = create_tool_run(
             action_key=action_key,
+            tool_id=int(tool_entry["id"]),
             requested_by=requested_by,
             target=target,
             reason=reason,
+            resolved_command=tool_entry.get("base_command", ""),
             params=intent.parameters,
             risk_level=risk_level,
             approval_required=True,
             approved=False,
             status="approval_required",
-            result=pending_result,
+            output=pending,
         )
-        return pending_result
+        pending["run_id"] = run_id
+        return pending
 
-    merged_params = _merge_params(tool_entry.get("default_params", {}), intent.parameters)
-    action_output = _run_action(action_key, target, merged_params, language)
+    merged_params = _merge_params_from_registry(tool_entry, intent.parameters)
+    action_output = _run_action(tool_entry.get("tool_name", ""), target, merged_params, language)
 
     status = "completed"
     ok = True
@@ -131,17 +142,19 @@ def execute_action_intent(
         "applied_parameters": merged_params,
     }
 
-    create_tool_execution_audit(
+    run_id = create_tool_run(
         action_key=action_key,
+        tool_id=int(tool_entry["id"]),
         requested_by=requested_by,
         target=target,
         reason=reason,
+        resolved_command=tool_entry.get("base_command", ""),
         params=merged_params,
         risk_level=risk_level,
         approval_required=approval_required,
         approved=approved,
         status=status,
-        result=result,
+        output=result,
     )
-
+    result["run_id"] = run_id
     return result

@@ -12,6 +12,25 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from backend.auth import get_current_user, require_roles
 from backend.i18n import request_lang, t
+from backend.models.orchestrator_models import (
+    ToolCreateRequest,
+    ToolParameterCreateRequest,
+    ToolParameterUpdateRequest,
+    ToolUpdateRequest,
+    WorkflowStepCreateRequest,
+    WorkflowStepUpdateRequest,
+)
+from backend.services.orchestrator_store import (
+    create_tool,
+    create_tool_parameter,
+    create_workflow_step,
+    list_tool_parameters,
+    list_tools,
+    list_workflow_steps,
+    update_tool,
+    update_tool_parameter,
+    update_workflow_step,
+)
 from backend.services.auth_store import (
     VALID_ROLES,
     get_user_by_username,
@@ -158,7 +177,7 @@ def _public_user(user: dict) -> dict:
 def settings_access(current_user: dict = Depends(get_current_user)):
     tabs = ["appearance", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "system", "ai", "scan"]
+        tabs = ["appearance", "system", "ai", "scan", "workflow", "tools"]
 
     return {
         "user": _public_user(current_user),
@@ -326,3 +345,112 @@ def settings_ai_models(request: Request, current_user: dict = Depends(require_ro
         "active_model": settings.get("ai", {}).get("model_name"),
         "models": models,
     }
+
+
+@router.get("/settings/workflow-steps")
+def settings_workflow_steps(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
+    if not current_user.get("is_admin"):
+        return {"items": []}
+    return {"items": list_workflow_steps(active_only=False)}
+
+
+@router.post("/settings/workflow-steps", status_code=201)
+def settings_workflow_step_create(
+    request: Request,
+    payload: WorkflowStepCreateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    created = create_workflow_step(payload.model_dump())
+    return {"item": created}
+
+
+@router.patch("/settings/workflow-steps/{step_id}")
+def settings_workflow_step_update(
+    request: Request,
+    step_id: int,
+    payload: WorkflowStepUpdateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    item = update_workflow_step(step_id, payload.model_dump(exclude_unset=True))
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"item": item}
+
+
+@router.get("/settings/tool-registry")
+def settings_tool_registry(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
+    if not current_user.get("is_admin"):
+        return {"items": []}
+    return {"items": list_tools(active_only=False)}
+
+
+@router.post("/settings/tool-registry", status_code=201)
+def settings_tool_registry_create(
+    request: Request,
+    payload: ToolCreateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    created = create_tool(payload.model_dump())
+    return {"item": created}
+
+
+@router.patch("/settings/tool-registry/{tool_id}")
+def settings_tool_registry_update(
+    request: Request,
+    tool_id: int,
+    payload: ToolUpdateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    item = update_tool(tool_id, payload.model_dump(exclude_unset=True))
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"item": item}
+
+
+@router.get("/settings/tool-registry/{tool_id}/parameters")
+def settings_tool_registry_parameters(tool_id: int, current_user: dict = Depends(require_roles(allow_must_change_password=False))):
+    if not current_user.get("is_admin"):
+        return {"items": []}
+    return {"items": list_tool_parameters(tool_id)}
+
+
+@router.post("/settings/tool-registry/{tool_id}/parameters", status_code=201)
+def settings_tool_registry_parameter_create(
+    request: Request,
+    tool_id: int,
+    payload: ToolParameterCreateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    item = create_tool_parameter(tool_id, payload.model_dump())
+    return {"item": item}
+
+
+@router.patch("/settings/tool-registry/parameters/{parameter_id}")
+def settings_tool_registry_parameter_update(
+    request: Request,
+    parameter_id: int,
+    payload: ToolParameterUpdateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    item = update_tool_parameter(parameter_id, payload.model_dump(exclude_unset=True))
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"item": item}

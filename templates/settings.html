@@ -28,6 +28,8 @@
         {% if current_user and current_user.is_admin %}
         <button class="tab-btn" data-tab="ai" data-i18n="settings.tab.ai">AI Model</button>
         <button class="tab-btn" data-tab="scan" data-i18n="settings.tab.scan">Tarama Ayarları</button>
+        <button class="tab-btn" data-tab="workflow">Workflow Steps</button>
+        <button class="tab-btn" data-tab="tools">Tool Registry</button>
         {% endif %}
         <button class="tab-btn" data-tab="system" data-i18n="settings.tab.system">Sistem ve Proje</button>
     </aside>
@@ -104,6 +106,158 @@
                 <input id="netdiscoverTimeout" type="number" min="10" max="7200" required>
                 <button type="submit" data-i18n="settings.scan.save">Tarama Ayarlarını Kaydet</button>
             </form>
+        </section>
+
+        <section class="panel" data-panel="workflow" hidden>
+            <h2>Workflow Steps</h2>
+            <div class="card compact-settings-card" style="margin-bottom:12px;">
+                <form id="workflowStepForm" class="form-grid">
+                    <label for="workflowStepKey">Step Key</label>
+                    <input id="workflowStepKey" type="text" maxlength="80" placeholder="validation_plan" required>
+
+                    <label for="workflowStepName">Step Name</label>
+                    <input id="workflowStepName" type="text" maxlength="140" placeholder="Validation Plan" required>
+
+                    <label for="workflowStepRole">Required Role</label>
+                    <input id="workflowStepRole" type="text" maxlength="64" placeholder="test">
+
+                    <label for="workflowStepOrder">Sort Order</label>
+                    <input id="workflowStepOrder" type="number" min="1" max="10000" value="100">
+
+                    <label for="workflowStepDescription">Description</label>
+                    <textarea id="workflowStepDescription" rows="3" maxlength="1000"></textarea>
+
+                    <label for="workflowStepHint">AI Prompt Hint</label>
+                    <textarea id="workflowStepHint" rows="3" maxlength="4000"></textarea>
+
+                    <label class="chip"><input id="workflowStepActive" type="checkbox" checked> <span>Active</span></label>
+
+                    <button type="submit">Step Ekle</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <strong>Workflow Steps List</strong>
+                    <button id="refreshWorkflowStepsBtn" type="button">Yenile</button>
+                </div>
+                <div style="overflow:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Key</th>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Order</th>
+                                <th>Active</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workflowStepsTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" data-panel="tools" hidden>
+            <h2>Tool Registry</h2>
+            <div class="card compact-settings-card" style="margin-bottom:12px;">
+                <form id="toolRegistryForm" class="form-grid">
+                    <label for="toolActionKey">Action Key</label>
+                    <input id="toolActionKey" type="text" maxlength="120" placeholder="service_detection" required>
+
+                    <label for="toolDisplayName">Display Name</label>
+                    <input id="toolDisplayName" type="text" maxlength="160" required>
+
+                    <label for="toolName">Tool Name</label>
+                    <input id="toolName" type="text" maxlength="120" placeholder="nmap" required>
+
+                    <label for="toolRiskLevel">Risk Level</label>
+                    <select id="toolRiskLevel">
+                        <option value="low">low</option>
+                        <option value="medium">medium</option>
+                        <option value="high">high</option>
+                        <option value="critical">critical</option>
+                    </select>
+
+                    <label for="toolTimeout">Timeout (sec)</label>
+                    <input id="toolTimeout" type="number" min="5" max="7200" value="300">
+
+                    <label for="toolBaseCommand">Base Command</label>
+                    <textarea id="toolBaseCommand" rows="3" maxlength="2000"></textarea>
+
+                    <label class="chip"><input id="toolRequiresApproval" type="checkbox" checked> <span>Approval Required</span></label>
+                    <label class="chip"><input id="toolActive" type="checkbox" checked> <span>Active</span></label>
+
+                    <button type="submit">Tool Ekle</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <strong>Tool Registry List</strong>
+                    <button id="refreshToolsBtn" type="button">Yenile</button>
+                </div>
+                <div style="overflow:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Action</th>
+                                <th>Tool</th>
+                                <th>Risk</th>
+                                <th>Timeout</th>
+                                <th>Approval</th>
+                                <th>Active</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="toolsTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top:12px;">
+                <h3 style="margin-top:0;">Tool Parameters</h3>
+                <form id="toolParameterForm" class="form-grid">
+                    <label for="parameterToolId">Tool ID</label>
+                    <input id="parameterToolId" type="number" min="1" required>
+
+                    <label for="parameterKey">Param Key</label>
+                    <input id="parameterKey" type="text" maxlength="120" required>
+
+                    <label for="parameterLabel">Label</label>
+                    <input id="parameterLabel" type="text" maxlength="160" required>
+
+                    <label for="parameterType">Type</label>
+                    <select id="parameterType">
+                        <option value="string">string</option>
+                        <option value="list">list</option>
+                        <option value="json">json</option>
+                    </select>
+
+                    <label for="parameterDefault">Default Value</label>
+                    <textarea id="parameterDefault" rows="2" placeholder='["service-version"]'></textarea>
+
+                    <button type="submit">Parameter Ekle</button>
+                </form>
+
+                <div style="overflow:auto; margin-top:10px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Tool ID</th>
+                                <th>Key</th>
+                                <th>Type</th>
+                                <th>Default</th>
+                            </tr>
+                        </thead>
+                        <tbody id="toolParametersTbody"></tbody>
+                    </table>
+                </div>
+            </div>
         </section>
         {% endif %}
 

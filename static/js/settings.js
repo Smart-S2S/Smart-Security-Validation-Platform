@@ -68,6 +68,34 @@ const scanSettingsForm = document.getElementById("scanSettingsForm");
 const nmapTimeout = document.getElementById("nmapTimeout");
 const masscanTimeout = document.getElementById("masscanTimeout");
 const netdiscoverTimeout = document.getElementById("netdiscoverTimeout");
+const workflowStepForm = document.getElementById("workflowStepForm");
+const workflowStepKey = document.getElementById("workflowStepKey");
+const workflowStepName = document.getElementById("workflowStepName");
+const workflowStepRole = document.getElementById("workflowStepRole");
+const workflowStepOrder = document.getElementById("workflowStepOrder");
+const workflowStepDescription = document.getElementById("workflowStepDescription");
+const workflowStepHint = document.getElementById("workflowStepHint");
+const workflowStepActive = document.getElementById("workflowStepActive");
+const refreshWorkflowStepsBtn = document.getElementById("refreshWorkflowStepsBtn");
+const workflowStepsTbody = document.getElementById("workflowStepsTbody");
+const toolRegistryForm = document.getElementById("toolRegistryForm");
+const toolActionKey = document.getElementById("toolActionKey");
+const toolDisplayName = document.getElementById("toolDisplayName");
+const toolName = document.getElementById("toolName");
+const toolRiskLevel = document.getElementById("toolRiskLevel");
+const toolTimeout = document.getElementById("toolTimeout");
+const toolBaseCommand = document.getElementById("toolBaseCommand");
+const toolRequiresApproval = document.getElementById("toolRequiresApproval");
+const toolActive = document.getElementById("toolActive");
+const refreshToolsBtn = document.getElementById("refreshToolsBtn");
+const toolsTbody = document.getElementById("toolsTbody");
+const toolParameterForm = document.getElementById("toolParameterForm");
+const parameterToolId = document.getElementById("parameterToolId");
+const parameterKey = document.getElementById("parameterKey");
+const parameterLabel = document.getElementById("parameterLabel");
+const parameterType = document.getElementById("parameterType");
+const parameterDefault = document.getElementById("parameterDefault");
+const toolParametersTbody = document.getElementById("toolParametersTbody");
 
 const I18N = {
     tr: {
@@ -331,6 +359,9 @@ let validRoles = [];
 let users = [];
 let settingsConfig = null;
 let systemInfoCache = null;
+let workflowSteps = [];
+let registryTools = [];
+let registryParameters = [];
 
 
 function t(key) {
@@ -743,6 +774,107 @@ async function loadAiModels() {
 }
 
 
+function renderWorkflowStepsTable() {
+    if (!workflowStepsTbody) {
+        return;
+    }
+
+    if (!workflowSteps.length) {
+        workflowStepsTbody.innerHTML = "<tr><td colspan='7'>Step bulunamadı.</td></tr>";
+        return;
+    }
+
+    workflowStepsTbody.innerHTML = workflowSteps.map((item) => {
+        return `
+            <tr>
+                <td>${item.id}</td>
+                <td>${item.step_key}</td>
+                <td>${item.step_name}</td>
+                <td>${item.role_required}</td>
+                <td>${item.sort_order}</td>
+                <td>${item.is_active ? "yes" : "no"}</td>
+                <td><button data-action="toggle-step" data-step-id="${item.id}">${item.is_active ? "Pasifleştir" : "Aktifleştir"}</button></td>
+            </tr>
+        `;
+    }).join("");
+}
+
+
+async function loadWorkflowSteps() {
+    const data = await apiRequest("/settings/workflow-steps", { cache: "no-store" });
+    workflowSteps = Array.isArray(data.items) ? data.items : [];
+    renderWorkflowStepsTable();
+}
+
+
+function renderToolsTable() {
+    if (!toolsTbody) {
+        return;
+    }
+
+    if (!registryTools.length) {
+        toolsTbody.innerHTML = "<tr><td colspan='8'>Tool bulunamadı.</td></tr>";
+        return;
+    }
+
+    toolsTbody.innerHTML = registryTools.map((item) => {
+        return `
+            <tr>
+                <td>${item.id}</td>
+                <td>${item.action_key}</td>
+                <td>${item.tool_name}</td>
+                <td>${item.risk_level}</td>
+                <td>${item.timeout_sec}</td>
+                <td>${item.requires_approval ? "yes" : "no"}</td>
+                <td>${item.is_active ? "yes" : "no"}</td>
+                <td>
+                    <button data-action="load-params" data-tool-id="${item.id}">Parametreler</button>
+                    <button data-action="toggle-tool" data-tool-id="${item.id}">${item.is_active ? "Pasifleştir" : "Aktifleştir"}</button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+
+function renderToolParametersTable() {
+    if (!toolParametersTbody) {
+        return;
+    }
+
+    if (!registryParameters.length) {
+        toolParametersTbody.innerHTML = "<tr><td colspan='5'>Parametre bulunamadı.</td></tr>";
+        return;
+    }
+
+    toolParametersTbody.innerHTML = registryParameters.map((item) => {
+        return `
+            <tr>
+                <td>${item.id}</td>
+                <td>${item.tool_id}</td>
+                <td>${item.param_key}</td>
+                <td>${item.param_type}</td>
+                <td>${String(item.default_value || "")}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+
+async function loadTools() {
+    const data = await apiRequest("/settings/tool-registry", { cache: "no-store" });
+    registryTools = Array.isArray(data.items) ? data.items : [];
+    renderToolsTable();
+}
+
+
+async function loadToolParameters(toolId) {
+    const data = await apiRequest(`/settings/tool-registry/${toolId}/parameters`, { cache: "no-store" });
+    registryParameters = Array.isArray(data.items) ? data.items : [];
+    renderToolParametersTable();
+}
+
+
 function hydrateAdminSettingsForms() {
     if (!settingsConfig) {
         return;
@@ -805,6 +937,14 @@ async function initializeAccess() {
         hydrateAdminSettingsForms();
     }
 
+    if (hasTab("workflow")) {
+        await loadWorkflowSteps();
+    }
+
+    if (hasTab("tools")) {
+        await loadTools();
+    }
+
     if (hasTab("ai")) {
         await loadAiModels();
     }
@@ -837,6 +977,14 @@ tabButtons.forEach((button) => {
 
         if (tab === "system" && hasTab("system")) {
             await loadSystemInfo(true);
+        }
+
+        if (tab === "workflow" && hasTab("workflow")) {
+            await loadWorkflowSteps();
+        }
+
+        if (tab === "tools" && hasTab("tools")) {
+            await loadTools();
         }
     });
 });
@@ -1243,6 +1391,217 @@ if (appearanceForm) {
             setFeedback(t("settings.appearance.saved"));
         } catch (error) {
             setFeedback(error.message || t("settings.error.operationFailed"), true);
+        }
+    });
+}
+
+
+if (refreshWorkflowStepsBtn) {
+    refreshWorkflowStepsBtn.addEventListener("click", async () => {
+        try {
+            await loadWorkflowSteps();
+            setFeedback("Workflow step listesi güncellendi.");
+        } catch (error) {
+            setFeedback(error.message || "Workflow step listesi alınamadı.", true);
+        }
+    });
+}
+
+
+if (workflowStepForm) {
+    workflowStepForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        try {
+            await apiRequest("/settings/workflow-steps", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    step_key: workflowStepKey.value.trim(),
+                    step_name: workflowStepName.value.trim(),
+                    description: workflowStepDescription.value.trim(),
+                    sort_order: Number(workflowStepOrder.value || 100),
+                    role_required: workflowStepRole.value.trim() || "test",
+                    ai_prompt_hint: workflowStepHint.value.trim(),
+                    is_active: Boolean(workflowStepActive.checked),
+                }),
+            });
+
+            workflowStepForm.reset();
+            workflowStepOrder.value = "100";
+            workflowStepActive.checked = true;
+            await loadWorkflowSteps();
+            setFeedback("Workflow step eklendi.");
+        } catch (error) {
+            setFeedback(error.message || "Workflow step eklenemedi.", true);
+        }
+    });
+}
+
+
+if (workflowStepsTbody) {
+    workflowStepsTbody.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action='toggle-step']");
+        if (!button) {
+            return;
+        }
+
+        const stepId = Number(button.dataset.stepId || "0");
+        const target = workflowSteps.find((item) => Number(item.id) === stepId);
+        if (!target) {
+            return;
+        }
+
+        try {
+            await apiRequest(`/settings/workflow-steps/${stepId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_active: !target.is_active }),
+            });
+            await loadWorkflowSteps();
+            setFeedback("Workflow step güncellendi.");
+        } catch (error) {
+            setFeedback(error.message || "Workflow step güncellenemedi.", true);
+        }
+    });
+}
+
+
+if (refreshToolsBtn) {
+    refreshToolsBtn.addEventListener("click", async () => {
+        try {
+            await loadTools();
+            setFeedback("Tool registry güncellendi.");
+        } catch (error) {
+            setFeedback(error.message || "Tool registry alınamadı.", true);
+        }
+    });
+}
+
+
+if (toolRegistryForm) {
+    toolRegistryForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        try {
+            await apiRequest("/settings/tool-registry", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action_key: toolActionKey.value.trim(),
+                    display_name: toolDisplayName.value.trim(),
+                    tool_name: toolName.value.trim(),
+                    tool_type: "scanner",
+                    module_path: "",
+                    executable_path: "",
+                    base_command: toolBaseCommand.value.trim(),
+                    risk_level: toolRiskLevel.value,
+                    timeout_sec: Number(toolTimeout.value || 300),
+                    requires_approval: Boolean(toolRequiresApproval.checked),
+                    wordlist_path: "",
+                    payload_path: "",
+                    template_path: "",
+                    is_active: Boolean(toolActive.checked),
+                }),
+            });
+
+            toolRegistryForm.reset();
+            toolRiskLevel.value = "low";
+            toolTimeout.value = "300";
+            toolRequiresApproval.checked = true;
+            toolActive.checked = true;
+            await loadTools();
+            setFeedback("Tool registry kaydı eklendi.");
+        } catch (error) {
+            setFeedback(error.message || "Tool registry kaydı eklenemedi.", true);
+        }
+    });
+}
+
+
+if (toolsTbody) {
+    toolsTbody.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) {
+            return;
+        }
+
+        const toolId = Number(button.dataset.toolId || "0");
+        const target = registryTools.find((item) => Number(item.id) === toolId);
+        if (!target) {
+            return;
+        }
+
+        const action = button.dataset.action;
+        if (action === "load-params") {
+            parameterToolId.value = String(toolId);
+            await loadToolParameters(toolId);
+            return;
+        }
+
+        if (action === "toggle-tool") {
+            try {
+                await apiRequest(`/settings/tool-registry/${toolId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ is_active: !target.is_active }),
+                });
+                await loadTools();
+                setFeedback("Tool kaydı güncellendi.");
+            } catch (error) {
+                setFeedback(error.message || "Tool kaydı güncellenemedi.", true);
+            }
+        }
+    });
+}
+
+
+if (toolParameterForm) {
+    toolParameterForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const toolId = Number(parameterToolId.value || "0");
+        if (!toolId) {
+            setFeedback("Önce geçerli bir Tool ID girin.", true);
+            return;
+        }
+
+        let optionsJson = {};
+        let defaultValue = parameterDefault.value.trim();
+        if (parameterType.value === "list" || parameterType.value === "json") {
+            try {
+                const parsed = defaultValue ? JSON.parse(defaultValue) : (parameterType.value === "list" ? [] : {});
+                defaultValue = JSON.stringify(parsed);
+                optionsJson = parameterType.value === "list" ? parsed : {};
+            } catch (_) {
+                setFeedback("Default value JSON formatında olmalı.", true);
+                return;
+            }
+        }
+
+        try {
+            await apiRequest(`/settings/tool-registry/${toolId}/parameters`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    param_key: parameterKey.value.trim(),
+                    label: parameterLabel.value.trim(),
+                    param_type: parameterType.value,
+                    default_value: defaultValue,
+                    is_required: false,
+                    is_editable: true,
+                    options_json: optionsJson,
+                    sort_order: 100,
+                }),
+            });
+
+            toolParameterForm.reset();
+            parameterType.value = "string";
+            parameterToolId.value = String(toolId);
+            await loadToolParameters(toolId);
+            setFeedback("Tool parameter eklendi.");
+        } catch (error) {
+            setFeedback(error.message || "Tool parameter eklenemedi.", true);
         }
     });
 }

@@ -52,6 +52,11 @@ def _fake_ai_response(stage: str, target: str) -> dict:
 def _build_prompt(language: str, scan_result: dict, stage: str) -> str:
     ports_json = json.dumps(scan_result.get("ports", []), ensure_ascii=False, indent=2)
     hosts_json = json.dumps(scan_result.get("hosts", []), ensure_ascii=False, indent=2)
+    evidence_json = json.dumps(scan_result.get("evidence", []), ensure_ascii=False, indent=2)
+    workflow_step = scan_result.get("workflow_step") if isinstance(scan_result.get("workflow_step"), dict) else {}
+    step_name = workflow_step.get("step_name") or stage
+    step_desc = workflow_step.get("description") or ""
+    step_hint = workflow_step.get("ai_prompt_hint") or ""
     target = scan_result.get("target", "authorized-target")
 
     return f"""
@@ -59,6 +64,9 @@ Sen {_get_language_label(language)} konuşan kıdemli bir siber güvenlik analis
 Bu analiz sadece izinli lab/sahip olunan sistemler içindir ve savunma amaçlıdır.
 
 Gorev asamasi: {stage}
+Asama adi: {step_name}
+Asama aciklamasi: {step_desc}
+Asama AI notu: {step_hint}
 
 Aşağıdaki tarama sonucuna göre Action Intent listesi üret.
 AI kesinlikle komut, binary path veya tool path döndürmez.
@@ -72,6 +80,9 @@ Açık portlar:
 
 Host özeti:
 {hosts_json}
+
+Evidence:
+{evidence_json}
 
 Sadece şu JSON formatında cevap ver:
 {{
@@ -227,3 +238,18 @@ def analyze_ports_with_ai(scan_result: dict, language: str = "tr") -> str:
         )
 
     return "\n".join(rendered)
+
+
+def analyze_evidence_with_ai(target: str, evidence: list[dict], language: str = "tr") -> dict:
+    scan_result = {
+        "target": target,
+        "ports": [],
+        "hosts": [],
+        "evidence": evidence,
+        "workflow_step": {
+            "step_name": "Remediation Plan",
+            "description": "Evidence ve risk bulgularindan duzeltme plani uret.",
+            "ai_prompt_hint": "Somut hardening adimlari, oncelik sirasi, retest kriteri.",
+        },
+    }
+    return suggest_action_intents(scan_result, stage="remediation_plan", language=language)
