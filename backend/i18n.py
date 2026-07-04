@@ -78,6 +78,8 @@ BACKEND_TRANSLATIONS = {
         "user.notFound": "Kullanıcı bulunamadı",
         "settings.onlyAdminCanUpdate": "Sadece admin bu ayarı değiştirebilir",
         "settings.onlyAdminCanViewModels": "Sadece admin bu listeyi görebilir",
+        "validation.invalidStage": "Gecersiz validation asamasi",
+        "validation.approvalRequired": "Bu action icin kullanici onayi gerekli",
     },
     "en": {
         "status.queued": "queued",
@@ -147,6 +149,8 @@ BACKEND_TRANSLATIONS = {
         "user.notFound": "User not found",
         "settings.onlyAdminCanUpdate": "Only admin can change this setting",
         "settings.onlyAdminCanViewModels": "Only admin can view this list",
+        "validation.invalidStage": "Invalid validation stage",
+        "validation.approvalRequired": "User approval is required for this action",
     },
 }
 

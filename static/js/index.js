@@ -100,6 +100,19 @@ let lastLoginPassword = "";
 let hasUsersTab = false;
 let availableRoles = [];
 let managedUsers = [];
+let latestScanResult = null;
+const stageSuggestionsByStage = {};
+
+const STAGE_ROLE_MAP = {
+    validation_plan: "test",
+    evidence_risk_analysis: "test",
+    remediation_plan: "remediation",
+};
+
+
+function roleForStage(stageName) {
+    return STAGE_ROLE_MAP[stageName] || "test";
+}
 
 
 function t(key, fallback = "") {
@@ -633,7 +646,7 @@ function applyRoleRestrictions() {
     if (directionActions) {
         directionActions.querySelectorAll("[data-direction]").forEach((button) => {
             const direction = button.getAttribute("data-direction");
-            const allowed = hasRole(direction);
+            const allowed = hasRole(roleForStage(direction));
             button.classList.toggle("disabled", !allowed);
             button.disabled = !allowed;
             if (!allowed) {
@@ -654,6 +667,131 @@ function applyRoleRestrictions() {
 
     if (userAdminPanel && userAdminPanel.style.display !== "none") {
         setActiveOperation("scan");
+    }
+}
+
+
+function parseParametersFromManualInput() {
+    const raw = (document.getElementById("nextTestManualName")?.value || "").trim();
+    if (!raw) {
+        return {};
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return parsed;
+        }
+        return {};
+    } catch (_) {
+        return {};
+    }
+}
+
+
+function getCurrentStageIntents() {
+    return stageSuggestionsByStage[selectedDirection] || [];
+}
+
+
+function getSelectedStageIntent() {
+    const actionKey = document.getElementById("nextTestCategory")?.value || "";
+    const intents = getCurrentStageIntents();
+    return intents.find((item) => item.action === actionKey) || null;
+}
+
+
+function populateStageIntentOptions() {
+    const categorySelect = document.getElementById("nextTestCategory");
+    const presetSelect = document.getElementById("nextTestPreset");
+    const manualInput = document.getElementById("nextTestManualName");
+    const manualWrap = document.getElementById("nextTestManualWrap");
+    const feedback = document.getElementById("nextTestFeedback");
+
+    if (!categorySelect || !presetSelect) {
+        return;
+    }
+
+    const intents = getCurrentStageIntents();
+    if (!intents.length) {
+        categorySelect.innerHTML = "<option value=''>No intent</option>";
+        presetSelect.innerHTML = "<option value=''>-</option>";
+        if (manualWrap) {
+            manualWrap.style.display = "block";
+        }
+        if (manualInput) {
+            manualInput.value = "{}";
+        }
+        if (feedback) {
+            feedback.classList.add("error");
+            feedback.innerText = "AI bu aşama için öneri üretemedi.";
+        }
+        return;
+    }
+
+    categorySelect.innerHTML = intents
+        .map((item) => {
+            const action = escapeHtml(item.action || "");
+            const reason = escapeHtml(item.reason || "-");
+            return `<option value="${action}">${action} | ${reason}</option>`;
+        })
+        .join("");
+
+    const firstIntent = intents[0];
+    presetSelect.innerHTML = `<option value="${escapeHtml(firstIntent.target || latestScanResult?.target || "authorized-target")}">${escapeHtml(firstIntent.target || latestScanResult?.target || "authorized-target")}</option>`;
+
+    if (manualWrap) {
+        manualWrap.style.display = "block";
+    }
+    if (manualInput) {
+        manualInput.value = JSON.stringify(firstIntent.parameters || {}, null, 0);
+    }
+    if (feedback) {
+        feedback.classList.remove("error");
+        feedback.innerText = "AI action intent önerisi yüklendi. Parametreleri düzenleyip onaylayabilirsiniz.";
+    }
+}
+
+
+async function fetchStageSuggestions() {
+    const feedback = document.getElementById("nextTestFeedback");
+    if (!selectedDirection || !latestScanResult) {
+        if (feedback) {
+            feedback.classList.add("error");
+            feedback.innerText = "Aşama önerisi için önce bir tarama sonucu gerekli.";
+        }
+        return;
+    }
+
+    if (feedback) {
+        feedback.classList.remove("error");
+        feedback.innerText = "AI önerileri alınıyor...";
+    }
+
+    try {
+        const response = await apiRequest("/validation/stage-suggestion", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                stage: selectedDirection,
+                target: latestScanResult.target || document.getElementById("target")?.value.trim() || "authorized-target",
+                scan_tool: latestScanResult.scan_tool || "nmap",
+                scan_result: latestScanResult,
+            }),
+        });
+
+        stageSuggestionsByStage[selectedDirection] = Array.isArray(response.intents) ? response.intents : [];
+        populateStageIntentOptions();
+
+        if (feedback) {
+            feedback.classList.remove("error");
+            feedback.innerText = response.summary || "AI önerileri yüklendi.";
+        }
+    } catch (error) {
+        if (feedback) {
+            feedback.classList.add("error");
+            feedback.innerText = error.message || "AI aşama önerisi alınamadı.";
+        }
     }
 }
 
@@ -987,20 +1125,20 @@ function applyStaticTranslations() {
     setText("#scanBtn", "scan.start.button", "Tarama Baslat");
     setText("#scanForm section:nth-of-type(6) h3", "scan.result.title", "Tarama Sonucu");
 
-    setText("#directionPanel > h3", "direction.title", "Ilerleme Yonu");
-    setText("#directionPanel > p.muted", "direction.note.initial", "Tarama tamamlandi. Simdi ilerleme yonunu sec.");
-    setText("[data-direction='test'] .action-title", "direction.test", "Test");
-    setText("[data-direction='test'] .action-description", "direction.test.desc", "Sonraki dogrulama test akisini planla.");
-    setText("[data-direction='attack'] .action-title", "direction.attack", "Atak");
-    setText("[data-direction='attack'] .action-description", "direction.attack.desc", "Kontrollu atak dogrulama akisina gec.");
-    setText("[data-direction='remediation'] .action-title", "direction.remediation", "Duzeltme");
-    setText("[data-direction='remediation'] .action-description", "direction.remediation.desc", "Iyilestirme ve sertlestirme adimlarini olustur.");
-    setText("label[for='nextTestCategory']", "direction.category", "Test Kategorisi");
-    setText("label[for='nextTestPreset']", "direction.step", "Yapilmak istenen adim");
-    setText("label[for='nextTestManualName']", "direction.manual", "Yapilmak istenen test (manuel)");
-    setAttr("#nextTestManualName", "placeholder", "direction.manual.placeholder", "Orn: Servis ozel dogrulama senaryosu");
-    setText("#directionNextBtn", "direction.newOperation", "Yeni Islem");
-    setText("#directionProceedBtn", "direction.proceed", "Ilerle");
+    setText("#directionPanel > h3", "direction.title", "Validation Workflow");
+    setText("#directionPanel > p.muted", "direction.note.initial", "Tarama tamamlandi. Asama secip AI onerisi yukleyin.");
+    setText("[data-direction='validation_plan'] .action-title", "direction.validationPlan", "Validation Plan");
+    setText("[data-direction='validation_plan'] .action-description", "direction.validationPlan.desc", "AI ile dogrulama aksiyonlarini planla.");
+    setText("[data-direction='evidence_risk_analysis'] .action-title", "direction.evidenceRisk", "Evidence & Risk Analysis");
+    setText("[data-direction='evidence_risk_analysis'] .action-description", "direction.evidenceRisk.desc", "Bulgulari risk baglaminda dogrula.");
+    setText("[data-direction='remediation_plan'] .action-title", "direction.remediationPlan", "Remediation Plan");
+    setText("[data-direction='remediation_plan'] .action-description", "direction.remediationPlan.desc", "Duzeltme odakli aksiyonlari calistir.");
+    setText("label[for='nextTestCategory']", "direction.category", "AI Onerilen Action");
+    setText("label[for='nextTestPreset']", "direction.step", "Target");
+    setText("label[for='nextTestManualName']", "direction.manual", "Parametre JSON (duzenlenebilir)");
+    setAttr("#nextTestManualName", "placeholder", "direction.manual.placeholder", '{"scan_params":["service-version"],"scan_ports":["80","443"]}');
+    setText("#directionNextBtn", "direction.newOperation", "AI Onerisi Yukle");
+    setText("#directionProceedBtn", "direction.proceed", "Onayla ve Calistir");
 
     setText(".right-rail h2:nth-of-type(1)", "right.tracking", "Islem Takibi");
     setText(".right-rail h2:nth-of-type(2)", "right.ai", "AI Ciktisi");
@@ -1158,10 +1296,8 @@ async function setLanguage(langCode) {
     refreshOperationTabLabels();
     renderLanguageSubmenu();
     await loadLegalNotice();
-    if (directionPanel?.style.display !== "none" || selectedDirection) {
-        await ensureNextTestCatalogLoaded();
-        populateCategoryOptions(document.getElementById("nextTestCategory")?.value || "");
-        populateTestOptions(document.getElementById("nextTestCategory")?.value || "");
+    if ((directionPanel?.style.display !== "none" || selectedDirection) && getCurrentStageIntents().length) {
+        populateStageIntentOptions();
     }
     await loadNetworkSummary();
 }
@@ -1581,25 +1717,26 @@ function ensureScanTab() {
 
 
 function getDirectionLabel(directionValue) {
-    if (directionValue === "test") return t("direction.test", "Test");
-    if (directionValue === "attack") return t("direction.attack", "Atak");
-    if (directionValue === "remediation") return t("direction.remediation", "Duzeltme");
+    if (directionValue === "validation_plan") return t("direction.validationPlan", "Validation Plan");
+    if (directionValue === "evidence_risk_analysis") return t("direction.evidenceRisk", "Evidence & Risk Analysis");
+    if (directionValue === "remediation_plan") return t("direction.remediationPlan", "Remediation Plan");
     return t("tab.direction", "Ilerleme Yonu");
 }
 
 
 function getDirectionSelectionDetails() {
-    const categoryId = document.getElementById("nextTestCategory")?.value || "";
-    const testPreset = document.getElementById("nextTestPreset")?.value || "";
-    const manualTestName = document.getElementById("nextTestManualName")?.value.trim() || "";
-    const selectedCategory = getSelectedCategory(categoryId);
-    const categoryLabel = selectedCategory?.label || t("direction.noCategory", "Kategori secilmedi");
+    const categorySelect = document.getElementById("nextTestCategory");
+    const targetValue = document.getElementById("nextTestPreset")?.value || "";
+    const manualParams = document.getElementById("nextTestManualName")?.value.trim() || "";
+
+    const categoryLabel = categorySelect?.selectedOptions?.[0]?.textContent?.trim() || t("direction.noCategory", "Kategori secilmedi");
 
     let stepLabel = t("direction.noStep", "Adim secilmedi");
-    if (testPreset === "__other__") {
-        stepLabel = manualTestName || t("direction.manual", "Manuel test");
-    } else if (testPreset) {
-        stepLabel = testPreset;
+    if (targetValue) {
+        stepLabel = `Target: ${targetValue}`;
+    }
+    if (manualParams) {
+        stepLabel = `${stepLabel} | Params: ${manualParams}`;
     }
 
     return {
@@ -2258,7 +2395,8 @@ directionActions.addEventListener("click", async (event) => {
     }
 
     const selectedAction = button.getAttribute("data-direction");
-    if (!hasRole(selectedAction)) {
+    const requiredRole = roleForStage(selectedAction);
+    if (!hasRole(requiredRole)) {
         directionNote.innerText = "Bu yon icin yetkiniz bulunmuyor.";
         return;
     }
@@ -2278,34 +2416,25 @@ directionActions.addEventListener("click", async (event) => {
         testPlanPanel.style.display = "block";
     }
 
-    await ensureNextTestCatalogLoaded();
-    populateCategoryOptions();
-    const selectedCategoryId = document.getElementById("nextTestCategory")?.value || "";
-    populateTestOptions(selectedCategoryId);
-
-    directionNote.innerText = `${getDirectionLabel(selectedDirection)} ${t("direction.selectedLock", "secildi. Yeni Islem ile kilitle.")}`;
+    await fetchStageSuggestions();
+    directionNote.innerText = `${getDirectionLabel(selectedDirection)} ${t("direction.selectedLock", "secildi. AI onerisi yuklendi.")}`;
 });
 
 directionPanel.addEventListener("change", (event) => {
     const target = event.target;
 
     if (target.id === "nextTestCategory") {
-        populateTestOptions(target.value);
-        return;
-    }
-
-    if (target.id === "nextTestPreset") {
-        const manualWrap = document.getElementById("nextTestManualWrap");
+        const intent = getSelectedStageIntent();
+        const presetSelect = document.getElementById("nextTestPreset");
         const manualInput = document.getElementById("nextTestManualName");
-        const showManual = target.value === "__other__";
-
-        if (manualWrap) {
-            manualWrap.style.display = showManual ? "block" : "none";
+        if (presetSelect) {
+            const resolvedTarget = intent?.target || latestScanResult?.target || "authorized-target";
+            presetSelect.innerHTML = `<option value="${escapeHtml(resolvedTarget)}">${escapeHtml(resolvedTarget)}</option>`;
         }
-
-        if (!showManual && manualInput) {
-            manualInput.value = "";
+        if (manualInput) {
+            manualInput.value = JSON.stringify(intent?.parameters || {}, null, 0);
         }
+        return;
     }
 });
 
@@ -2337,15 +2466,56 @@ directionNextBtn.addEventListener("click", () => {
 
 
 if (directionProceedBtn) {
-    directionProceedBtn.addEventListener("click", () => {
+    directionProceedBtn.addEventListener("click", async () => {
         if (!selectedDirection) {
             directionNote.innerText = t("direction.selectFirst", "Lutfen once ilerleme yonu sec.");
+            return;
+        }
+
+        const selectedIntent = getSelectedStageIntent();
+        if (!selectedIntent) {
+            directionNote.innerText = "Calistirmak icin once bir AI action intent secin.";
+            return;
+        }
+
+        const userApproved = window.confirm("Bu action backend Tool Runner ile calistirilacak. Onayliyor musunuz?");
+        if (!userApproved) {
+            directionNote.innerText = "Islem kullanici tarafindan onaylanmadi.";
+            return;
+        }
+
+        const editableParams = parseParametersFromManualInput();
+        const payload = {
+            stage: selectedDirection,
+            action: selectedIntent.action,
+            target: selectedIntent.target || latestScanResult?.target || "authorized-target",
+            reason: selectedIntent.reason || "Stage execution requested by user",
+            parameters: editableParams,
+            approved: true,
+        };
+
+        let execution;
+        try {
+            execution = await apiRequest("/validation/execute", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+        } catch (error) {
+            directionNote.innerText = error.message || "Validation action calistirilamadi.";
             return;
         }
 
         const feedback = document.getElementById("nextTestFeedback");
         const details = getDirectionSelectionDetails();
         const completedDirection = selectedDirection;
+
+        const execResult = execution?.result || {};
+        const outputText = execResult?.output?.error
+            ? `Error: ${execResult.output.error}`
+            : `Tool: ${execResult.tool_name || "-"} | Status: ${execResult.status || "completed"}`;
+        appendStepOutput(`${getDirectionLabel(completedDirection)} - Tool Runner`, outputText);
+
         directionCompleted = true;
         directionProceedBtn.hidden = true;
         directionNextBtn.hidden = true;
@@ -2429,6 +2599,10 @@ form.addEventListener("submit", async (e) => {
     formData.append("language", currentLanguage);
 
     btn.disabled = true;
+    latestScanResult = null;
+    Object.keys(stageSuggestionsByStage).forEach((key) => {
+        delete stageSuggestionsByStage[key];
+    });
     statusText.innerText = t("status.preparing", "Durum: hazirlaniyor...");
     currentStep.innerText = "";
     aiOutput.innerText = t("right.ai.wait", "AI analizi bekleniyor...");
@@ -2499,26 +2673,42 @@ document.getElementById("target").addEventListener("input", () => {
 
 async function pollStatus(jobId) {
     const interval = setInterval(async () => {
-        const response = await fetch(`/status/${jobId}`);
-        const job = await response.json();
+        try {
+            const response = await fetch(`/status/${jobId}`);
+            const job = await response.json();
 
-        statusText.innerText = `${t("status.prefix", "Durum")}: ${translateJobStatus(job.status)}`;
-        currentStep.innerText = job.current_step || "";
+            statusText.innerText = `${t("status.prefix", "Durum")}: ${translateJobStatus(job.status)}`;
+            currentStep.innerText = job.current_step || "";
 
-        renderLogs(job.logs || []);
+            renderLogs(job.logs || []);
 
-        if (job.status === "finished") {
+            if (job.status === "finished") {
+                clearInterval(interval);
+                updateScanButtonState();
+                statusText.innerText = `${t("status.prefix", "Durum")}: ${translateJobStatus("finished")}`;
+                currentStep.innerText = t("scan.completed", "Tarama tamamlandi.");
+                renderResult(job.result);
+                ensureDirectionTab();
+                selectedDirection = "";
+                directionLocked = false;
+                directionCompleted = false;
+                renderDirectionState();
+                setActiveOperation("direction");
+                return;
+            }
+
+            if (job.status === "failed") {
+                clearInterval(interval);
+                updateScanButtonState();
+                statusText.innerText = `${t("status.prefix", "Durum")}: failed`;
+                currentStep.innerText = t("scan.result.error", "Tarama hata ile sonlandi.");
+                renderResult(job.result || { error: t("scan.result.error", "Tarama hata ile sonlandi.") });
+            }
+        } catch (error) {
             clearInterval(interval);
             updateScanButtonState();
-            statusText.innerText = `${t("status.prefix", "Durum")}: ${translateJobStatus("finished")}`;
-            currentStep.innerText = t("scan.completed", "Tarama tamamlandi.");
-            renderResult(job.result);
-            ensureDirectionTab();
-            selectedDirection = "";
-            directionLocked = false;
-            directionCompleted = false;
-            renderDirectionState();
-            setActiveOperation("direction");
+            statusText.innerText = `${t("status.prefix", "Durum")}: error`;
+            currentStep.innerText = error.message || "Durum sorgusu basarisiz.";
         }
     }, 1000);
 }
@@ -2558,6 +2748,8 @@ function renderResult(result) {
         appendStepOutput(t("scan.result.title", "Tarama Sonucu"), `${t("scan.error", "Hata")}: ${result.error}`);
         return;
     }
+
+    latestScanResult = result;
 
     if (result.ai_analysis) {
         aiOutput.innerText = result.ai_analysis;

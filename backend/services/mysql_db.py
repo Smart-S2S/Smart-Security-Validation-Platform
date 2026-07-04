@@ -113,4 +113,45 @@ def init_mysql_schema() -> None:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tool_registry (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    action_key VARCHAR(120) NOT NULL UNIQUE,
+                    display_name VARCHAR(160) NOT NULL,
+                    tool_name VARCHAR(120) NOT NULL,
+                    module_path VARCHAR(255) NOT NULL DEFAULT '',
+                    command_template TEXT NOT NULL,
+                    default_params_json LONGTEXT NOT NULL,
+                    risk_level VARCHAR(16) NOT NULL DEFAULT 'low',
+                    requires_approval TINYINT(1) NOT NULL DEFAULT 0,
+                    is_active TINYINT(1) NOT NULL DEFAULT 1,
+                    created_at VARCHAR(64) NOT NULL,
+                    updated_at VARCHAR(64) NOT NULL,
+                    INDEX idx_tool_registry_active (is_active),
+                    INDEX idx_tool_registry_risk (risk_level)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tool_execution_audit (
+                    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    action_key VARCHAR(120) NOT NULL,
+                    requested_by INT NULL,
+                    target VARCHAR(255) NOT NULL,
+                    reason TEXT NOT NULL,
+                    params_json LONGTEXT NOT NULL,
+                    risk_level VARCHAR(16) NOT NULL DEFAULT 'low',
+                    approval_required TINYINT(1) NOT NULL DEFAULT 0,
+                    approved TINYINT(1) NOT NULL DEFAULT 0,
+                    status VARCHAR(32) NOT NULL,
+                    result_json LONGTEXT NOT NULL,
+                    created_at VARCHAR(64) NOT NULL,
+                    INDEX idx_tool_execution_action (action_key),
+                    INDEX idx_tool_execution_status (status),
+                    INDEX idx_tool_execution_created (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
         conn.commit()
