@@ -342,12 +342,21 @@ class AISettingsUpdateRequest(BaseModel):
     timeout_sec: int = Field(ge=10, le=3600)
     use_fake_response: bool = False
     ollama_url: str = Field(min_length=1, max_length=300)
+    provider: str = Field(default="local", max_length=16)
+    cloud_api_url: str = Field(default="", max_length=400)
+    cloud_api_key: str = Field(default="", max_length=400)
+    cloud_model: str = Field(default="", max_length=128)
+    cloud_format: str = Field(default="openai", max_length=16)
 
 
 class ScanSettingsUpdateRequest(BaseModel):
     nmap_timeout_sec: int = Field(ge=10, le=7200)
     masscan_timeout_sec: int = Field(ge=10, le=7200)
     netdiscover_timeout_sec: int = Field(ge=10, le=7200)
+
+
+class WorkflowSettingsUpdateRequest(BaseModel):
+    mode: str = Field(default="manual", min_length=2, max_length=16)
 
 
 class DetectedStepItemParametersSaveRequest(BaseModel):
@@ -391,7 +400,7 @@ def _public_user(user: dict) -> dict:
 def settings_access(current_user: dict = Depends(get_current_user)):
     tabs = ["appearance", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "system", "ai", "scan", "tools", "progress-categories"]
+        tabs = ["appearance", "system", "ai", "scan", "toolsmgmt", "tools", "progress-categories"]
 
     return {
         "user": _public_user(current_user),
@@ -452,12 +461,47 @@ def update_my_appearance(
     return {"item": _public_user(updated)}
 
 
+def _mask_ai_secrets(ai_settings: dict) -> dict:
+    """Never send the stored cloud API key to the client; expose only a flag."""
+    ai = dict(ai_settings or {})
+    key = str(ai.get("cloud_api_key") or "")
+    ai["cloud_api_key"] = ""
+    ai["cloud_api_key_set"] = bool(key)
+    return ai
+
+
 @router.get("/settings/config")
 def settings_config(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
     settings = get_app_settings()
+    # The workflow mode drives the operation window for every role, so it is
+    # exposed to non-admins too (unlike the AI/scan tuning, which stays admin-only).
+    workflow = settings.get("workflow") or DEFAULT_SETTINGS.get("workflow", {"mode": "manual"})
     if current_user.get("is_admin"):
-        return settings
-    return {"ai": {}, "scan": {}}
+        result = dict(settings)
+        result["ai"] = _mask_ai_secrets(settings.get("ai", {}))
+        return result
+    # Non-admins get only the non-sensitive provider flag (drives UI copy), never
+    # URLs/keys/models.
+    provider = str(settings.get("ai", {}).get("provider") or "local").strip().lower()
+    return {"ai": {"provider": provider}, "scan": {}, "workflow": workflow}
+
+
+@router.patch("/settings/workflow")
+def settings_workflow_update(
+    request: Request,
+    payload: WorkflowSettingsUpdateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    mode = (payload.mode or "manual").strip().lower()
+    if mode not in {"manual", "ai"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidWorkflowMode", "Gecersiz ilerleme modu"))
+
+    settings = update_app_settings({"workflow": {"mode": mode}})
+    return {"workflow": settings["workflow"]}
 
 
 @router.get("/settings/system-info")
@@ -533,8 +577,164 @@ def settings_ai_update(
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
 
-    settings = update_app_settings({"ai": payload.model_dump()})
-    return {"ai": settings["ai"]}
+    data = payload.model_dump()
+    provider = (data.get("provider") or "local").strip().lower()
+    if provider not in {"local", "cloud"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidAiProvider", "Gecersiz AI saglayicisi"))
+    data["provider"] = provider
+
+    cloud_format = (data.get("cloud_format") or "openai").strip().lower()
+    if cloud_format not in {"openai", "anthropic"}:
+        cloud_format = "openai"
+    data["cloud_format"] = cloud_format
+
+    # An empty API key on save means "keep the stored key" (the client never
+    # receives it back, so a blank field must not wipe it).
+    if not str(data.get("cloud_api_key") or "").strip():
+        data["cloud_api_key"] = get_app_settings().get("ai", {}).get("cloud_api_key", "")
+
+    settings = update_app_settings({"ai": data})
+    return {"ai": _mask_ai_secrets(settings["ai"])}
+
+
+@router.post("/settings/ai/test")
+def settings_ai_test(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    from backend.ai.ollama_client import test_ai_connection
+
+    return test_ai_connection()
+
+
+class PentestToolActionRequest(BaseModel):
+    tool: str = Field(min_length=1, max_length=64)
+    action: str = Field(min_length=1, max_length=16)
+
+
+@router.get("/settings/pentest-tools")
+def settings_pentest_tools_list(
+    request: Request,
+    refresh: bool = False,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    from backend.services.pentest_tools import list_tools
+
+    # Page load reads the DB cache (fast); "Yenile" (refresh=1) syncs with the
+    # real server state.
+    return {"items": list_tools(reconcile=refresh), "reconciled": bool(refresh)}
+
+
+@router.post("/settings/pentest-tools/action")
+def settings_pentest_tools_action(
+    request: Request,
+    payload: PentestToolActionRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    from backend.services.pentest_tools import run_tool_action
+
+    return run_tool_action(payload.tool, payload.action)
+
+
+_MANAGED_SERVICES = {
+    "ollama": {"kind": "systemd", "unit": "ollama", "label": "Ollama"},
+    "open-webui": {"kind": "docker", "name": "open-webui", "label": "Open WebUI"},
+}
+
+
+class ServiceControlRequest(BaseModel):
+    service: str = Field(min_length=1, max_length=32)
+    action: str = Field(default="status", max_length=16)
+
+
+@router.post("/settings/service")
+def settings_service_control(
+    request: Request,
+    payload: ServiceControlRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Start/stop/status an allowlisted local service (systemd unit or docker
+    container) so an admin can free RAM/CPU by stopping what they don't use."""
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    svc = _MANAGED_SERVICES.get((payload.service or "").strip().lower())
+    if not svc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid service")
+    action = (payload.action or "status").strip().lower()
+    if action not in {"start", "stop", "status"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid action")
+
+    message = ""
+    running = False
+    try:
+        if svc["kind"] == "systemd":
+            if action in {"start", "stop"}:
+                result = subprocess.run(["sudo", "-n", "systemctl", action, svc["unit"]], capture_output=True, text=True, timeout=60)
+                if result.returncode != 0:
+                    combined = (result.stdout or "") + (result.stderr or "")
+                    message = "Sunucuda parolasiz sudo yok." if ("a password is required" in combined or "sudo:" in combined) else (combined or "systemctl basarisiz").strip()[:300]
+            state = subprocess.run(["systemctl", "is-active", svc["unit"]], capture_output=True, text=True, timeout=15)
+            running = (state.stdout or "").strip() == "active"
+        else:  # docker container
+            if action in {"start", "stop"}:
+                result = subprocess.run(["docker", action, svc["name"]], capture_output=True, text=True, timeout=120)
+                if result.returncode != 0:
+                    message = ((result.stdout or "") + (result.stderr or "")).strip()[:300] or "docker islemi basarisiz"
+            state = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", svc["name"]], capture_output=True, text=True, timeout=15)
+            running = (state.stdout or "").strip() == "true"
+        return {"ok": True, "service": payload.service, "running": running, "action": action, "message": message}
+    except Exception as exc:
+        return {"ok": False, "service": payload.service, "running": False, "action": action, "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+class OllamaServiceRequest(BaseModel):
+    action: str = Field(default="status", max_length=16)
+
+
+@router.post("/settings/ollama-service")
+def settings_ollama_service(
+    request: Request,
+    payload: OllamaServiceRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Start/stop the local Ollama systemd service (free RAM/CPU when on cloud)."""
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    action = (payload.action or "status").strip().lower()
+    if action not in {"start", "stop", "status"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid action")
+
+    message = ""
+    try:
+        if action in {"start", "stop"}:
+            result = subprocess.run(["sudo", "-n", "systemctl", action, "ollama"], capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                combined = (result.stdout or "") + (result.stderr or "")
+                if "a password is required" in combined or "sudo:" in combined:
+                    message = "Sunucuda parolasiz sudo yok."
+                else:
+                    message = (combined or "systemctl basarisiz").strip()[:300]
+        state = subprocess.run(["systemctl", "is-active", "ollama"], capture_output=True, text=True, timeout=15)
+        running = (state.stdout or "").strip() == "active"
+        return {"ok": True, "running": running, "action": action, "message": message}
+    except Exception as exc:
+        return {"ok": False, "running": False, "action": action, "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
 
 
 @router.get("/settings/ai-models")

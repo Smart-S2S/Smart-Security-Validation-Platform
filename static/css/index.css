@@ -1415,3 +1415,48 @@ body.light-theme .header-path-wrap {
 body.light-theme .stage-tab.active {
     background: rgba(99, 139, 196, 0.2);
 }
+
+/* In-window AI busy row + spinner (orchestrator operation window) */
+.operation-busy {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    background: rgba(99, 139, 196, 0.10);
+}
+
+.operation-busy[hidden] {
+    display: none;
+}
+
+.operation-busy-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.operation-busy button {
+    flex: 0 0 auto;
+}
+
+.ai-busy-spinner {
+    width: 46px;
+    height: 46px;
+    border: 4px solid rgba(148, 163, 184, 0.25);
+    border-top-color: #638bc4;
+    border-radius: 50%;
+    animation: ai-busy-spin 0.9s linear infinite;
+    flex: 0 0 auto;
+}
+
+.ai-busy-spinner--sm {
+    width: 26px;
+    height: 26px;
+    border-width: 3px;
+}
+
+@keyframes ai-busy-spin {
+    to { transform: rotate(360deg); }
+}

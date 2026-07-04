@@ -751,7 +751,7 @@ if (pathBreadcrumb) {
 
         const requested = String(window.location.hash || '').replace('#', '').trim().toLowerCase();
         const allowedTabs = currentUser?.is_admin
-            ? new Set(['profile', 'users', 'roles', 'offers'])
+            ? new Set(['profile', 'users', 'roles', 'offers', 'tools', 'progress-categories'])
             : new Set(['profile']);
         const targetTab = allowedTabs.has(requested) ? requested : 'profile';
         activateTab(targetTab);

@@ -1,5 +1,6 @@
 import json
 import re
+import time
 
 import requests
 
@@ -240,17 +241,26 @@ _VALID_EVAL_RISK = {"low", "medium", "high", "critical"}
 
 
 def _ollama_chat(prompt: str, *, expect_json: bool = True, num_predict: int = 800) -> str | None:
-    """Send a single-user-message chat request to Ollama; return content or None.
+    """Send a single-user-message chat request to the configured AI and return content.
 
-    Reasoning models (e.g. qwen3) otherwise spend minutes emitting a hidden
-    chain-of-thought before the answer, which pushes every call past the request
-    timeout and forces a fallback. We disable thinking, pin ``format=json`` when
-    a JSON answer is expected and cap ``num_predict`` so a result-evaluation call
-    returns in seconds instead of ~3 minutes. If the backend rejects ``think``
-    (older Ollama or a non-reasoning model) we retry once without it.
+    Dispatches to the local Ollama backend or a remote/cloud API based on
+    ``ai.provider`` in settings. Every higher-level AI helper routes through here,
+    so switching provider in Settings switches the whole platform. Returns None on
+    any failure so callers fall back to their deterministic paths.
     """
     settings = get_app_settings().get("ai", {})
     ai_defaults = DEFAULT_SETTINGS.get("ai", {})
+    provider = str(settings.get("provider") or ai_defaults.get("provider") or "local").strip().lower()
+
+    if provider == "cloud":
+        return _cloud_chat(settings, ai_defaults, prompt, expect_json=expect_json, num_predict=num_predict)
+    return _local_ollama_chat(settings, ai_defaults, prompt, expect_json=expect_json, num_predict=num_predict)
+
+
+def _local_ollama_chat(settings: dict, ai_defaults: dict, prompt: str, *, expect_json: bool, num_predict: int) -> str | None:
+    """Local Ollama chat. Disables reasoning `think` and pins `format=json` so a
+    result-evaluation call returns in seconds instead of minutes; retries once
+    without `think` if the backend rejects that flag."""
     ollama_url = settings.get("ollama_url") or ai_defaults.get("ollama_url")
     model_name = settings.get("model_name") or ai_defaults.get("model_name")
     timeout_sec = int(settings.get("timeout_sec") or ai_defaults.get("timeout_sec") or 240)
@@ -272,7 +282,6 @@ def _ollama_chat(prompt: str, *, expect_json: bool = True, num_predict: int = 80
     try:
         return _post({**base_body, "think": False})
     except requests.exceptions.HTTPError:
-        # Backend may not understand the `think` flag; retry once without it.
         try:
             return _post(base_body)
         except Exception:
@@ -281,9 +290,155 @@ def _ollama_chat(prompt: str, *, expect_json: bool = True, num_predict: int = 80
         return None
 
 
+def _cloud_chat(settings: dict, ai_defaults: dict, prompt: str, *, expect_json: bool, num_predict: int) -> str | None:
+    """Remote/cloud chat: OpenAI-compatible (default) or Anthropic messages API.
+
+    OpenAI-compatible covers OpenAI plus most gateways/self-hosted servers
+    (LiteLLM, LocalAI, Groq, Together, vLLM, …). The API key is sent per that
+    API's auth header. On a JSON-format rejection it retries once without
+    response_format so stricter-but-non-JSON-capable endpoints still work.
+    """
+    url = str(settings.get("cloud_api_url") or "").strip()
+    api_key = str(settings.get("cloud_api_key") or "").strip()
+    model = str(settings.get("cloud_model") or "").strip()
+    fmt = str(settings.get("cloud_format") or "openai").strip().lower()
+    timeout_sec = int(settings.get("timeout_sec") or ai_defaults.get("timeout_sec") or 300)
+
+    if not url or not model:
+        return None
+
+    try:
+        if fmt == "anthropic":
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            body = {
+                "model": model,
+                "max_tokens": int(num_predict),
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            response = requests.post(url, json=body, headers=headers, timeout=timeout_sec)
+            response.raise_for_status()
+            blocks = response.json().get("content") or []
+            return "".join(b.get("text", "") for b in blocks if isinstance(b, dict))
+
+        # OpenAI-compatible chat completions
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        base_body = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,
+            "max_tokens": int(num_predict),
+        }
+
+        def _post(body: dict) -> str:
+            response = requests.post(url, json=body, headers=headers, timeout=timeout_sec)
+            response.raise_for_status()
+            choices = response.json().get("choices") or [{}]
+            return choices[0].get("message", {}).get("content", "")
+
+        if expect_json:
+            try:
+                return _post({**base_body, "response_format": {"type": "json_object"}})
+            except requests.exceptions.HTTPError:
+                return _post(base_body)
+        return _post(base_body)
+    except Exception:
+        return None
+
+
 # Backwards-compatible alias for the evaluation path.
 def _call_ollama_chat(prompt: str) -> str | None:
     return _ollama_chat(prompt, expect_json=True, num_predict=800)
+
+
+def test_ai_connection() -> dict:
+    """Make one minimal real AI call with the SAVED settings and surface the
+    actual outcome (unlike `_ollama_chat`, which swallows errors to None).
+
+    Returns {ok, provider, model, message, detail?, status?, latency_ms?} so the
+    Settings UI can tell the operator exactly why a call fails (quota, wrong
+    model, bad key, unreachable host) instead of silently falling back.
+    """
+    settings = get_app_settings().get("ai", {})
+    ai_defaults = DEFAULT_SETTINGS.get("ai", {})
+    provider = str(settings.get("provider") or ai_defaults.get("provider") or "local").strip().lower()
+    # Cap the test wait so the UI never hangs on a slow local model.
+    timeout_sec = min(int(settings.get("timeout_sec") or ai_defaults.get("timeout_sec") or 60), 60)
+    prompt = 'Reply ONLY with compact JSON: {"ok": true}'
+
+    if bool(settings.get("use_fake_response")):
+        return {"ok": True, "provider": "demo", "message": "Demo yaniti aktif; gercek AI cagrilmadi."}
+
+    def _error_detail(response) -> str:
+        try:
+            data = response.json()
+            err = data.get("error")
+            if isinstance(err, dict):
+                return str(err.get("message") or err)
+            if err:
+                return str(err)
+            return json.dumps(data, ensure_ascii=False)[:400]
+        except Exception:
+            return (response.text or "")[:400]
+
+    started = time.time()
+    try:
+        if provider == "cloud":
+            url = str(settings.get("cloud_api_url") or "").strip()
+            model = str(settings.get("cloud_model") or "").strip()
+            fmt = str(settings.get("cloud_format") or "openai").strip().lower()
+            api_key = str(settings.get("cloud_api_key") or "").strip()
+            if not url or not model:
+                return {"ok": False, "provider": "cloud", "message": "API adresi veya model bos. Once kaydedin."}
+            if fmt == "anthropic":
+                headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+                body = {"model": model, "max_tokens": 20, "messages": [{"role": "user", "content": prompt}]}
+            else:
+                headers = {"Content-Type": "application/json"}
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+                body = {"model": model, "max_tokens": 20, "temperature": 0, "messages": [{"role": "user", "content": prompt}]}
+            response = requests.post(url, json=body, headers=headers, timeout=timeout_sec)
+        else:
+            url = settings.get("ollama_url") or ai_defaults.get("ollama_url")
+            model = settings.get("model_name") or ai_defaults.get("model_name")
+            body = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "options": {"num_predict": 20, "temperature": 0},
+            }
+            response = requests.post(url, json={**body, "think": False}, timeout=timeout_sec)
+            if response.status_code == 400:
+                # Model may not accept the `think` flag; retry without it.
+                response = requests.post(url, json=body, timeout=timeout_sec)
+
+        latency_ms = int((time.time() - started) * 1000)
+        if response.status_code >= 400:
+            return {
+                "ok": False,
+                "provider": provider,
+                "model": model,
+                "status": response.status_code,
+                "message": f"HTTP {response.status_code}",
+                "detail": _error_detail(response),
+            }
+        return {
+            "ok": True,
+            "provider": provider,
+            "model": model,
+            "latency_ms": latency_ms,
+            "message": f"Baglanti basarili ({latency_ms} ms).",
+        }
+    except requests.exceptions.Timeout:
+        return {"ok": False, "provider": provider, "message": f"Zaman asimi ({timeout_sec}s). Adres/erisim dogru mu?"}
+    except Exception as exc:
+        return {"ok": False, "provider": provider, "message": "Baglanti kurulamadi.", "detail": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
 
 def _fallback_result_evaluation(*, step: dict, action_key: str, target: str, process_logs: list[str], script_result: dict, language: str) -> dict:
@@ -451,3 +606,205 @@ def analyze_evidence_with_ai(target: str, evidence: list[dict], language: str = 
         },
     }
     return suggest_action_intents(scan_result, stage="remediation", language=language)
+
+
+_ORCHESTRATION_STAGES = ("scan", "attack", "remediation")
+
+
+def _fallback_orchestration(*, target: str, history: list[dict], catalog: list[dict], preferred_stage: str, language: str) -> dict:
+    """Deterministic next-operation plan used when the AI backend is unavailable."""
+    done_stages = {str(h.get("stage") or "").strip().lower() for h in history}
+    stage = str(preferred_stage or "").strip().lower()
+    if stage not in _ORCHESTRATION_STAGES:
+        # Advance to the first stage that has not produced any action yet.
+        stage = next((s for s in _ORCHESTRATION_STAGES if s not in done_stages), "scan")
+
+    operations = [
+        {"action": entry.get("action"), "step_key": entry.get("step_key"), "reason": entry.get("description") or "Dogrulama adimi", "parameters": {}}
+        for entry in catalog
+        if str(entry.get("stage") or "").strip().lower() == stage
+    ]
+
+    if language == "en":
+        plan = f"Rule-based plan: run the {stage} stage validations for {target}."
+    else:
+        plan = f"Kural tabanli plan: {target} icin {stage} asamasi dogrulamalarini calistir."
+
+    return {
+        "engine": "fallback",
+        "stage": stage,
+        "plan": plan,
+        "summary": plan,
+        "done": not operations,
+        "operations": operations,
+    }
+
+
+def _build_orchestration_prompt(*, language: str, target: str, history: list[dict], catalog: list[dict], user_instruction: str, preferred_stage: str, allowed_stages: list[str] | None = None) -> str:
+    history_json = json.dumps(history[-12:], ensure_ascii=False, indent=2)
+    catalog_json = json.dumps(catalog, ensure_ascii=False, indent=2)
+    instruction = (user_instruction or "").strip() or "-"
+    preferred = (preferred_stage or "").strip().lower() or "-"
+    allowed = ", ".join(allowed_stages or []) or "-"
+
+    return f"""
+Sen {_get_language_label(language)} konusan kidemli bir siber guvenlik dogrulama orkestratorusun.
+Bu calisma yalnizca izinli lab/sahip olunan sistemler icin ve savunma amaclidir.
+
+Gorevin: hedef icin bir sonraki DOGRULAMA adimini planlamak. Asamalar sirasi:
+scan (tarama/kesif) -> attack (yetkili aktif dogrulama) -> remediation (duzeltme/retest).
+Simdiye kadar yapilan islemlerin sonuclarina bakarak mantikli bir sonraki adimi sec.
+Yeni komut/exploit URETME; sadece asagidaki katalogdan gecerli action'lari sec.
+
+YETKI KISITI: Bu kullanicinin yetkili oldugu asamalar SADECE: {allowed}.
+Bu listede olmayan bir asamada (ornegin yetki yoksa attack) KESINLIKLE islem onerme;
+kullanici istese bile reddet ve done=true dondur. Katalogda zaten sadece izinli
+asamalarin action'lari var.
+
+Hedef: {target}
+Kullanici tercihi (asama, opsiyonel): {preferred}
+Kullanici talimati/onerisi (varsa dikkate al): {instruction}
+
+Simdiye kadarki islem gecmisi ve sonuclari:
+{history_json}
+
+Secebilecegin islem katalogu (yalnizca buradaki action + step_key ciftlerini kullan):
+{catalog_json}
+
+Sadece su JSON formatinda cevap ver:
+{{
+  "stage": "scan|attack|remediation",
+  "plan": "Bu adimda ne yapilacaginin kisa savunma odakli aciklamasi",
+  "done": false,
+  "operations": [
+    {{
+      "action": "katalogdaki_action_key",
+      "step_key": "katalogdaki_step_key",
+      "reason": "Bu islem neden simdi gerekli",
+      "parameters": {{}}
+    }}
+  ]
+}}
+
+Kurallar:
+- operations sadece katalogdaki action/step_key ciftlerinden secilmeli.
+- Tum asamalar tamamlandiysa veya yapilacak anlamli islem kalmadiysa done=true ve operations=[] dondur.
+- parameters alanini mumkun oldugunca MANTIKLI degerlerle DOLDUR: hedef/host/url alanlarina hedefi, port/rport alanlarina onceki sonuclardan cikan portlari, wordlist gibi alanlara tipik degerleri yaz. Emin olmadigin bir alani bos birak; sistem hedeften makul varsayilan uretir.
+- JSON disinda hicbir metin dondurme.
+- Yanitini {_get_language_label(language)} dilinde ver.
+"""
+
+
+def orchestrate_next_operation(
+    *,
+    target: str,
+    history: list[dict],
+    catalog: list[dict],
+    user_instruction: str = "",
+    preferred_stage: str = "",
+    allowed_stages: list[str] | None = None,
+    language: str = "tr",
+) -> dict:
+    """Let the AI choose the next validation stage + operations for a target.
+
+    Returns ``{engine, stage, plan, summary, done, operations[]}``. Operations
+    reference existing catalog ``action``/``step_key`` pairs so the caller can
+    build executable intents. Always falls back to a deterministic stage plan
+    when the AI backend is unavailable or returns unusable content.
+    """
+    history = [h for h in (history or []) if isinstance(h, dict)]
+    catalog = [c for c in (catalog or []) if isinstance(c, dict)]
+    # The catalog is pre-filtered to the caller's authorised stages; derive the
+    # allowed set from it so a role can never be widened here.
+    catalog_stages = {str(c.get("stage") or "").strip().lower() for c in catalog if c.get("stage")}
+    allowed_stages = sorted(catalog_stages & {str(s).strip().lower() for s in (allowed_stages or catalog_stages)})
+    if not allowed_stages:
+        allowed_stages = sorted(catalog_stages)
+    stage_of_action = {
+        str(c.get("action") or "").strip().lower(): str(c.get("stage") or "").strip().lower()
+        for c in catalog
+    }
+    valid_pairs = {
+        (str(c.get("action") or "").strip().lower(), str(c.get("step_key") or "").strip().lower())
+        for c in catalog
+    }
+    valid_actions = {action for action, _ in valid_pairs}
+
+    settings = get_app_settings().get("ai", {})
+    ai_defaults = DEFAULT_SETTINGS.get("ai", {})
+    use_fake = bool(settings.get("use_fake_response", ai_defaults.get("use_fake_response", False)))
+    if use_fake:
+        return _fallback_orchestration(
+            target=target, history=history, catalog=catalog,
+            preferred_stage=preferred_stage, language=language,
+        )
+
+    prompt = _build_orchestration_prompt(
+        language=language, target=target, history=history, catalog=catalog,
+        user_instruction=user_instruction, preferred_stage=preferred_stage,
+        allowed_stages=allowed_stages,
+    )
+    content = _ollama_chat(prompt, expect_json=True, num_predict=900)
+    parsed = None
+    if content:
+        json_text = _extract_first_json_block(content)
+        if json_text:
+            try:
+                parsed = json.loads(json_text)
+            except Exception:
+                parsed = None
+
+    if not isinstance(parsed, dict):
+        fallback = _fallback_orchestration(
+            target=target, history=history, catalog=catalog,
+            preferred_stage=preferred_stage, language=language,
+        )
+        fallback["engine"] = "fallback" if not content else "ai_unparsable"
+        return fallback
+
+    stage = str(parsed.get("stage") or "").strip().lower()
+    if stage not in _ORCHESTRATION_STAGES:
+        stage = str(preferred_stage or "scan").strip().lower()
+        if stage not in _ORCHESTRATION_STAGES:
+            stage = "scan"
+
+    # Keep only operations that map to a real catalog entry; recover the
+    # step_key from the catalog when the model omits or mismatches it.
+    step_key_by_action: dict[str, str] = {}
+    for c in catalog:
+        action = str(c.get("action") or "").strip().lower()
+        if action and action not in step_key_by_action:
+            step_key_by_action[action] = str(c.get("step_key") or "").strip().lower()
+
+    operations: list[dict] = []
+    for op in parsed.get("operations") or []:
+        if not isinstance(op, dict):
+            continue
+        action = str(op.get("action") or "").strip().lower()
+        if action not in valid_actions:
+            continue
+        # Belt-and-suspenders: never emit an operation outside the allowed stages.
+        if stage_of_action.get(action) not in allowed_stages:
+            continue
+        step_key = str(op.get("step_key") or "").strip().lower()
+        if (action, step_key) not in valid_pairs:
+            step_key = step_key_by_action.get(action, "")
+        parameters = op.get("parameters") if isinstance(op.get("parameters"), dict) else {}
+        operations.append({
+            "action": action,
+            "step_key": step_key,
+            "reason": str(op.get("reason") or "").strip() or "Dogrulama adimi",
+            "parameters": parameters,
+        })
+
+    plan = str(parsed.get("plan") or "").strip()
+    done = bool(parsed.get("done", False)) or not operations
+
+    return {
+        "engine": "ai",
+        "stage": stage,
+        "plan": plan or t(language, "ai.noResponse", "Yorumlama yapilamadi."),
+        "summary": plan,
+        "done": done,
+        "operations": operations,
+    }

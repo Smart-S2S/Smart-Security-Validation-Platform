@@ -1,5 +1,16 @@
+// Wrapped in an IIFE so this file can be loaded ALONGSIDE panel.js on the Panel
+// page without top-level identifier collisions (both declare apiRequest,
+// tabButtons, activateTab, setFeedback, currentUser, …). Nothing external
+// references these names (no inline handlers), so scoping them is safe.
+(function () {
 const THEME_STORAGE_KEY = "ssvp-theme";
 const LANGUAGE_STORAGE_KEY = "ssvp-language";
+
+// settings.js is also loaded on the Panel page, where it ONLY provides the
+// catalog editors (steps/items/scripts/params + progress categories). On that
+// page panel.js owns tabs/theme/access, so settings.js's own bootstrap and the
+// global tab handler below are skipped.
+const IS_PANEL_PAGE = Boolean(document.getElementById("panelMenuWrap"));
 
 const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
 const panels = Array.from(document.querySelectorAll(".panel"));
@@ -20,42 +31,49 @@ const projectInfoList = document.getElementById("projectInfoList");
 const hostInfoList = document.getElementById("hostInfoList");
 const resourceInfoList = document.getElementById("resourceInfoList");
 
-const profileForm = document.getElementById("profileForm");
-const profileUsername = document.getElementById("profileUsername");
-const profileFullName = document.getElementById("profileFullName");
-const profileJobTitle = document.getElementById("profileJobTitle");
-const profilePhone = document.getElementById("profilePhone");
-const profilePasswordForm = document.getElementById("profilePasswordForm");
-const profileCurrentPassword = document.getElementById("profileCurrentPassword");
-const profileNewPassword = document.getElementById("profileNewPassword");
-const profileNewPasswordConfirm = document.getElementById("profileNewPasswordConfirm");
+// User/role/profile management lives on the Panel page (owned by panel.js).
+// Those element IDs also exist there; resolve them to null on the Panel page so
+// this file's settings-page handlers never double-bind to the Panel's forms.
+function settingsOnlyEl(id) {
+    return IS_PANEL_PAGE ? null : document.getElementById(id);
+}
 
-const createUserForm = document.getElementById("createUserForm");
-const newUsername = document.getElementById("newUsername");
-const newFullName = document.getElementById("newFullName");
-const newJobTitle = document.getElementById("newJobTitle");
-const newPhone = document.getElementById("newPhone");
-const newPassword = document.getElementById("newPassword");
-const newPasswordConfirm = document.getElementById("newPasswordConfirm");
-const newIsAdmin = document.getElementById("newIsAdmin");
-const newUserRoles = document.getElementById("newUserRoles");
-const refreshUsersBtn = document.getElementById("refreshUsersBtn");
-const usersTbody = document.getElementById("usersTbody");
+const profileForm = settingsOnlyEl("profileForm");
+const profileUsername = settingsOnlyEl("profileUsername");
+const profileFullName = settingsOnlyEl("profileFullName");
+const profileJobTitle = settingsOnlyEl("profileJobTitle");
+const profilePhone = settingsOnlyEl("profilePhone");
+const profilePasswordForm = settingsOnlyEl("profilePasswordForm");
+const profileCurrentPassword = settingsOnlyEl("profileCurrentPassword");
+const profileNewPassword = settingsOnlyEl("profileNewPassword");
+const profileNewPasswordConfirm = settingsOnlyEl("profileNewPasswordConfirm");
 
-const editUserForm = document.getElementById("editUserForm");
-const editUserId = document.getElementById("editUserId");
-const editUsername = document.getElementById("editUsername");
-const editFullName = document.getElementById("editFullName");
-const editJobTitle = document.getElementById("editJobTitle");
-const editPhone = document.getElementById("editPhone");
-const editIsAdmin = document.getElementById("editIsAdmin");
-const editIsActive = document.getElementById("editIsActive");
-const editUserRoles = document.getElementById("editUserRoles");
-const editNewPassword = document.getElementById("editNewPassword");
-const editNewPasswordConfirm = document.getElementById("editNewPasswordConfirm");
-const cancelEditUserBtn = document.getElementById("cancelEditUserBtn");
+const createUserForm = settingsOnlyEl("createUserForm");
+const newUsername = settingsOnlyEl("newUsername");
+const newFullName = settingsOnlyEl("newFullName");
+const newJobTitle = settingsOnlyEl("newJobTitle");
+const newPhone = settingsOnlyEl("newPhone");
+const newPassword = settingsOnlyEl("newPassword");
+const newPasswordConfirm = settingsOnlyEl("newPasswordConfirm");
+const newIsAdmin = settingsOnlyEl("newIsAdmin");
+const newUserRoles = settingsOnlyEl("newUserRoles");
+const refreshUsersBtn = settingsOnlyEl("refreshUsersBtn");
+const usersTbody = settingsOnlyEl("usersTbody");
 
-const rolesTbody = document.getElementById("rolesTbody");
+const editUserForm = settingsOnlyEl("editUserForm");
+const editUserId = settingsOnlyEl("editUserId");
+const editUsername = settingsOnlyEl("editUsername");
+const editFullName = settingsOnlyEl("editFullName");
+const editJobTitle = settingsOnlyEl("editJobTitle");
+const editPhone = settingsOnlyEl("editPhone");
+const editIsAdmin = settingsOnlyEl("editIsAdmin");
+const editIsActive = settingsOnlyEl("editIsActive");
+const editUserRoles = settingsOnlyEl("editUserRoles");
+const editNewPassword = settingsOnlyEl("editNewPassword");
+const editNewPasswordConfirm = settingsOnlyEl("editNewPasswordConfirm");
+const cancelEditUserBtn = settingsOnlyEl("cancelEditUserBtn");
+
+const rolesTbody = settingsOnlyEl("rolesTbody");
 
 const aiSettingsForm = document.getElementById("aiSettingsForm");
 const aiModelSelect = document.getElementById("aiModelSelect");
@@ -259,6 +277,45 @@ const I18N = {
         "settings.ai.url": "Ollama URL",
         "settings.ai.useDemo": "Demo AI yanıtı kullan",
         "settings.ai.save": "AI Ayarlarını Kaydet",
+        "settings.ai.provider": "Kullanılacak AI Sağlayıcısı",
+        "settings.ai.providerLocal": "Yerel (Ollama)",
+        "settings.ai.providerCloud": "Bulut / Uzak AI",
+        "settings.ai.localTitle": "Yerel Model (Ollama)",
+        "settings.ai.cloudTitle": "Bulut / Uzak AI",
+        "settings.ai.cloudFormat": "API Formatı",
+        "settings.ai.cloudUrl": "API Adresi (endpoint)",
+        "settings.ai.cloudModel": "Model",
+        "settings.ai.cloudKey": "API Anahtarı",
+        "settings.ai.test": "Bağlantıyı Doğrula",
+        "settings.ai.ollamaStart": "Ollama'yı Başlat",
+        "settings.ai.ollamaStop": "Ollama'yı Durdur",
+        "settings.ai.ollamaHint": "Bulut AI kullanıyorsanız RAM/CPU boşaltmak için yerel Ollama servisini durdurabilirsiniz.",
+        "settings.services.title": "Servisler",
+        "settings.services.start": "Başlat",
+        "settings.services.stop": "Durdur",
+        "settings.services.hint": "Kullanmadığınız servisleri durdurarak RAM/CPU boşaltabilirsiniz.",
+        "settings.workflow.title": "İlerleme Modu",
+        "settings.workflow.mode": "İşlem penceresi ilerleme modu",
+        "settings.workflow.manual": "Manuel (3 ana yön sorulur)",
+        "settings.workflow.ai": "Yapay Zeka ile ilerle",
+        "settings.workflow.note": "Manuel modda kullanıcı tarama/atak/düzenleme yönlerinden birini seçer. Yapay zeka modunda işlem penceresi doğrudan AI orkestratörü ile ilerler.",
+        "settings.workflow.save": "İlerleme Modunu Kaydet",
+        "settings.tab.toolsmgmt": "Pentest Araçları",
+        "settings.toolsmgmt.title": "Pentest Araçları (Sunucu)",
+        "settings.toolsmgmt.note": "Sunucudaki güvenlik araçlarını görüntüle, kur, güncelle veya kaldır. İşlemler yalnızca izinli lab sunucusunda çalışır.",
+        "settings.toolsmgmt.refresh": "Listeyi Yenile",
+        "settings.toolsmgmt.tool": "Araç",
+        "settings.toolsmgmt.status": "Durum",
+        "settings.toolsmgmt.version": "Sürüm",
+        "settings.toolsmgmt.actions": "İşlemler",
+        "settings.toolsmgmt.install": "Kur",
+        "settings.toolsmgmt.update": "Güncelle",
+        "settings.toolsmgmt.remove": "Kaldır",
+        "settings.toolsmgmt.installed": "Kurulu",
+        "settings.toolsmgmt.notInstalled": "Kurulu değil",
+        "settings.toolsmgmt.check": "Kontrol Et",
+        "settings.toolsmgmt.logTitle": "İşlem Kaydı",
+        "settings.toolsmgmt.clearLog": "Temizle",
         "settings.scan.title": "Tarama Ayarları",
         "settings.scan.nmapTimeout": "Nmap Zaman Aşımı (sn)",
         "settings.scan.masscanTimeout": "Masscan Zaman Aşımı (sn)",
@@ -385,6 +442,45 @@ const I18N = {
         "settings.ai.url": "Ollama URL",
         "settings.ai.useDemo": "Use demo AI response",
         "settings.ai.save": "Save AI Settings",
+        "settings.ai.provider": "AI Provider to Use",
+        "settings.ai.providerLocal": "Local (Ollama)",
+        "settings.ai.providerCloud": "Cloud / Remote AI",
+        "settings.ai.localTitle": "Local Model (Ollama)",
+        "settings.ai.cloudTitle": "Cloud / Remote AI",
+        "settings.ai.cloudFormat": "API Format",
+        "settings.ai.cloudUrl": "API URL (endpoint)",
+        "settings.ai.cloudModel": "Model",
+        "settings.ai.cloudKey": "API Key",
+        "settings.ai.test": "Verify Connection",
+        "settings.ai.ollamaStart": "Start Ollama",
+        "settings.ai.ollamaStop": "Stop Ollama",
+        "settings.ai.ollamaHint": "If you use cloud AI, you can stop the local Ollama service to free RAM/CPU.",
+        "settings.services.title": "Services",
+        "settings.services.start": "Start",
+        "settings.services.stop": "Stop",
+        "settings.services.hint": "Stop services you are not using to free RAM/CPU.",
+        "settings.workflow.title": "Progression Mode",
+        "settings.workflow.mode": "Operation window progression mode",
+        "settings.workflow.manual": "Manual (asks one of 3 directions)",
+        "settings.workflow.ai": "Drive with AI",
+        "settings.workflow.note": "In manual mode the user picks scan/attack/remediation. In AI mode the operation window is driven directly by the AI orchestrator.",
+        "settings.workflow.save": "Save Progression Mode",
+        "settings.tab.toolsmgmt": "Pentest Tools",
+        "settings.toolsmgmt.title": "Pentest Tools (Server)",
+        "settings.toolsmgmt.note": "View, install, update or remove security tools on the server. Actions run only on the authorized lab server.",
+        "settings.toolsmgmt.refresh": "Refresh List",
+        "settings.toolsmgmt.tool": "Tool",
+        "settings.toolsmgmt.status": "Status",
+        "settings.toolsmgmt.version": "Version",
+        "settings.toolsmgmt.actions": "Actions",
+        "settings.toolsmgmt.install": "Install",
+        "settings.toolsmgmt.update": "Update",
+        "settings.toolsmgmt.remove": "Remove",
+        "settings.toolsmgmt.installed": "Installed",
+        "settings.toolsmgmt.notInstalled": "Not installed",
+        "settings.toolsmgmt.check": "Check",
+        "settings.toolsmgmt.logTitle": "Operation Log",
+        "settings.toolsmgmt.clearLog": "Clear",
         "settings.scan.title": "Scan Settings",
         "settings.scan.nmapTimeout": "Nmap Timeout (sec)",
         "settings.scan.masscanTimeout": "Masscan Timeout (sec)",
@@ -2510,12 +2606,42 @@ function hydrateAdminSettingsForms() {
         aiUrl.value = settingsConfig.ai.ollama_url || "http://localhost:11434/api/chat";
         aiFakeResponse.checked = Boolean(settingsConfig.ai.use_fake_response);
         aiModelManual.value = settingsConfig.ai.model_name || "";
+
+        const providerSelect = document.getElementById("aiProvider");
+        if (providerSelect) {
+            providerSelect.value = settingsConfig.ai.provider === "cloud" ? "cloud" : "local";
+        }
+        const cloudFormat = document.getElementById("aiCloudFormat");
+        if (cloudFormat) {
+            cloudFormat.value = settingsConfig.ai.cloud_format === "anthropic" ? "anthropic" : "openai";
+        }
+        const cloudUrl = document.getElementById("aiCloudUrl");
+        if (cloudUrl) {
+            cloudUrl.value = settingsConfig.ai.cloud_api_url || "";
+        }
+        const cloudModel = document.getElementById("aiCloudModel");
+        if (cloudModel) {
+            cloudModel.value = settingsConfig.ai.cloud_model || "";
+        }
+        const keyState = document.getElementById("aiCloudKeyState");
+        if (keyState) {
+            keyState.innerText = settingsConfig.ai.cloud_api_key_set
+                ? "Kayıtlı bir API anahtarı var. Değiştirmek için yenisini girin, aynı kalması için boş bırakın."
+                : "Henüz API anahtarı kaydedilmemiş.";
+        }
+        updateAiProviderVisibility();
     }
 
     if (settingsConfig.scan) {
         nmapTimeout.value = settingsConfig.scan.nmap_timeout_sec || 600;
         masscanTimeout.value = settingsConfig.scan.masscan_timeout_sec || 600;
         netdiscoverTimeout.value = settingsConfig.scan.netdiscover_timeout_sec || 180;
+    }
+
+    const workflowModeSelect = document.getElementById("workflowMode");
+    if (workflowModeSelect) {
+        const mode = String(settingsConfig.workflow?.mode || "manual").toLowerCase();
+        workflowModeSelect.value = mode === "ai" ? "ai" : "manual";
     }
 }
 
@@ -2587,6 +2713,9 @@ async function initializeAccess() {
 
 tabButtons.forEach((button) => {
     button.addEventListener("click", async () => {
+        if (IS_PANEL_PAGE) {
+            return;
+        }
         const tab = button.dataset.tab;
         activateTab(tab);
 
@@ -2615,6 +2744,14 @@ tabButtons.forEach((button) => {
 
         if (tab === "progress-categories" && hasTab("progress-categories")) {
             await loadProgressCategories();
+        }
+
+        if (tab === "toolsmgmt" && hasTab("toolsmgmt")) {
+            await loadPentestTools();
+        }
+
+        if (tab === "ai" && hasTab("ai")) {
+            refreshOllamaStatus("status");
         }
     });
 });
@@ -2948,6 +3085,103 @@ if (aiModelSelect && aiModelManual) {
 }
 
 
+function updateAiProviderVisibility() {
+    const provider = document.getElementById("aiProvider")?.value === "cloud" ? "cloud" : "local";
+    const localFields = document.getElementById("aiLocalFields");
+    const cloudFields = document.getElementById("aiCloudFields");
+    if (localFields) {
+        localFields.style.display = provider === "cloud" ? "none" : "grid";
+    }
+    if (cloudFields) {
+        cloudFields.style.display = provider === "cloud" ? "grid" : "none";
+    }
+}
+
+const aiProviderSelect = document.getElementById("aiProvider");
+if (aiProviderSelect) {
+    aiProviderSelect.addEventListener("change", updateAiProviderVisibility);
+}
+
+// Local Ollama systemd service control (stop it to free RAM/CPU on cloud).
+const MANAGED_SERVICES = {
+    ollama: { statusId: "ollamaServiceStatus", startId: "ollamaStartBtn", stopId: "ollamaStopBtn", label: "Ollama" },
+    "open-webui": { statusId: "openwebuiServiceStatus", startId: "openwebuiStartBtn", stopId: "openwebuiStopBtn", label: "Open WebUI" },
+};
+
+// Show only the relevant action: Durdur when running, Başlat when stopped.
+// running === null means the status is unknown → show both.
+function setServiceButtons(meta, running) {
+    const startBtn = document.getElementById(meta.startId);
+    const stopBtn = document.getElementById(meta.stopId);
+    if (startBtn) {
+        startBtn.style.display = running === true ? "none" : "";
+    }
+    if (stopBtn) {
+        stopBtn.style.display = running === false ? "none" : "";
+    }
+}
+
+async function refreshServiceStatus(service, action = "status") {
+    const meta = MANAGED_SERVICES[service];
+    if (!meta) {
+        return;
+    }
+    const el = document.getElementById(meta.statusId);
+    if (el) {
+        el.innerText = "…";
+        el.style.color = "";
+    }
+    try {
+        const res = await apiRequest("/settings/service", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ service, action }),
+        });
+        if (el) {
+            el.innerText = res.running ? "çalışıyor" : "durduruldu";
+            el.style.color = res.running ? "#22c55e" : "#ef4444";
+        }
+        setServiceButtons(meta, Boolean(res.running));
+        if (res.message) {
+            setFeedback(res.message, !res.ok);
+        }
+    } catch (error) {
+        if (el) {
+            el.innerText = "durum alınamadı";
+            el.style.color = "";
+        }
+        setServiceButtons(meta, null);
+    }
+}
+
+// Backwards-compatible alias used by the AI-tab open handler.
+function refreshOllamaStatus() {
+    refreshServiceStatus("ollama", "status");
+    refreshServiceStatus("open-webui", "status");
+}
+
+function bindServiceButtons(service, startId, stopId) {
+    const startBtn = document.getElementById(startId);
+    if (startBtn) {
+        startBtn.addEventListener("click", async () => {
+            startBtn.disabled = true;
+            await refreshServiceStatus(service, "start");
+            startBtn.disabled = false;
+        });
+    }
+    const stopBtn = document.getElementById(stopId);
+    if (stopBtn) {
+        stopBtn.addEventListener("click", async () => {
+            stopBtn.disabled = true;
+            await refreshServiceStatus(service, "stop");
+            stopBtn.disabled = false;
+        });
+    }
+}
+
+bindServiceButtons("ollama", "ollamaStartBtn", "ollamaStopBtn");
+bindServiceButtons("open-webui", "openwebuiStartBtn", "openwebuiStopBtn");
+
 if (aiSettingsForm) {
     aiSettingsForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -2956,27 +3190,246 @@ if (aiSettingsForm) {
             return;
         }
 
-        const modelName = (aiModelManual.value || aiModelSelect.value || "").trim();
+        const provider = document.getElementById("aiProvider")?.value === "cloud" ? "cloud" : "local";
+        const cloudUrl = (document.getElementById("aiCloudUrl")?.value || "").trim();
+        const cloudModel = (document.getElementById("aiCloudModel")?.value || "").trim();
+
+        // Ollama model stays required for local; for cloud it is not used, so we
+        // keep the stored/placeholder value to satisfy the backend's min length.
+        let modelName = (aiModelManual.value || aiModelSelect.value || "").trim();
         if (!modelName) {
-            setFeedback(t("settings.error.modelRequired"), true);
+            if (provider === "local") {
+                setFeedback(t("settings.error.modelRequired"), true);
+                return;
+            }
+            modelName = (settingsConfig?.ai?.model_name || "local-model").trim();
+        }
+
+        if (provider === "cloud" && (!cloudUrl || !cloudModel)) {
+            setFeedback(t("settings.ai.cloudRequired", "Bulut AI icin API adresi ve model zorunlu."), true);
             return;
         }
 
         try {
-            await apiRequest("/settings/ai", {
+            const result = await apiRequest("/settings/ai", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     model_name: modelName,
                     timeout_sec: Number(aiTimeout.value || 240),
                     use_fake_response: Boolean(aiFakeResponse.checked),
-                    ollama_url: aiUrl.value.trim(),
+                    ollama_url: (aiUrl.value || "http://localhost:11434/api/chat").trim(),
+                    provider,
+                    cloud_api_url: cloudUrl,
+                    cloud_model: cloudModel,
+                    cloud_format: document.getElementById("aiCloudFormat")?.value || "openai",
+                    cloud_api_key: document.getElementById("aiCloudKey")?.value || "",
                 }),
             });
 
+            if (settingsConfig && result?.ai) {
+                settingsConfig.ai = result.ai;
+            }
+            const keyField = document.getElementById("aiCloudKey");
+            if (keyField) {
+                keyField.value = "";
+            }
+            hydrateAdminSettingsForms();
             setFeedback(t("aiSaved"));
         } catch (error) {
             setFeedback(error.message || t("settings.error.aiSave"), true);
+        }
+    });
+}
+
+
+const aiTestBtn = document.getElementById("aiTestBtn");
+if (aiTestBtn) {
+    aiTestBtn.addEventListener("click", async () => {
+        if (!hasTab("ai")) {
+            return;
+        }
+        const resultEl = document.getElementById("aiTestResult");
+        aiTestBtn.disabled = true;
+        if (resultEl) {
+            resultEl.style.color = "";
+            resultEl.innerText = t("settings.ai.testing", "Doğrulanıyor… (kaydedilen ayar test ediliyor)");
+        }
+        try {
+            const res = await apiRequest("/settings/ai/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            if (resultEl) {
+                const ok = Boolean(res && res.ok);
+                resultEl.style.color = ok ? "#4ade80" : "#f87171";
+                const parts = [(ok ? "✓ " : "✗ ") + String(res?.message || (ok ? "Başarılı" : "Başarısız"))];
+                if (res?.provider) {
+                    parts.push(`Sağlayıcı: ${res.provider}${res.model ? " • " + res.model : ""}`);
+                }
+                if (res?.detail) {
+                    parts.push(`Detay: ${res.detail}`);
+                }
+                if (!ok) {
+                    parts.push("Not: doğrulama kaydedilen ayarları test eder; değişiklik yaptıysanız önce kaydedin.");
+                }
+                resultEl.innerText = parts.join("\n");
+            }
+        } catch (error) {
+            if (resultEl) {
+                resultEl.style.color = "#f87171";
+                resultEl.innerText = "✗ " + (error.message || "Doğrulama başarısız.");
+            }
+        } finally {
+            aiTestBtn.disabled = false;
+        }
+    });
+}
+
+
+// --- Pentest tools management (install/update/remove server tools) ----------
+function escPentest(value) {
+    return String(value ?? "")
+        .split("&").join("&amp;")
+        .split("<").join("&lt;")
+        .split(">").join("&gt;")
+        .split('"').join("&quot;")
+        .split("'").join("&#39;");
+}
+
+// Persistent, scrollable operation log — entries stay until "Temizle" or reload.
+function pentestLog(message, kind = "") {
+    const box = document.getElementById("pentestToolsLog");
+    if (!box) {
+        return;
+    }
+    const time = new Date().toLocaleTimeString("tr-TR", { hour12: false });
+    const line = document.createElement("div");
+    if (kind === "ok") {
+        line.style.color = "#22c55e";
+    } else if (kind === "error") {
+        line.style.color = "#ef4444";
+    } else if (kind === "run") {
+        line.style.color = "#3b82f6";
+    }
+    line.textContent = `[${time}] ${String(message ?? "")}`;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+}
+
+async function loadPentestTools(reconcile = false) {
+    const tbody = document.getElementById("pentestToolsTbody");
+    if (!tbody) {
+        return;
+    }
+    // Only show a loading placeholder on the very first load; on refresh keep the
+    // existing rows in place until the new data arrives so the layout doesn't
+    // collapse and jump.
+    if (!tbody.children.length) {
+        tbody.innerHTML = `<tr><td colspan="4" class="muted">…</td></tr>`;
+    }
+    if (reconcile) {
+        pentestLog("Sunucu ile eşitleniyor… (kurulu araçlar taranıyor)", "run");
+    }
+    try {
+        const url = reconcile ? "/settings/pentest-tools?refresh=1" : "/settings/pentest-tools";
+        const data = await apiRequest(url, { cache: "no-store" });
+        renderPentestToolsTable(Array.isArray(data.items) ? data.items : []);
+        pentestLog(reconcile
+            ? "Sunucudaki kurulu araçlar tarandı ve veritabanı güncellendi."
+            : "Liste veritabanından yüklendi.");
+    } catch (error) {
+        pentestLog(error.message || "Araç listesi alınamadı.", "error");
+    }
+}
+
+function renderPentestToolsTable(items) {
+    const tbody = document.getElementById("pentestToolsTbody");
+    if (!tbody) {
+        return;
+    }
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="4" class="muted">Araç bulunamadı.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = items.map((tool) => {
+        const installed = Boolean(tool.installed);
+        const statusText = installed ? t("settings.toolsmgmt.installed") : t("settings.toolsmgmt.notInstalled");
+        const statusColor = installed ? "#4ade80" : "#f87171";
+        const version = escPentest(tool.installed_version || (tool.candidate_version ? "aday: " + tool.candidate_version : "-"));
+        const key = escPentest(tool.key);
+        const label = escPentest(tool.label || tool.key);
+        const pkg = escPentest(tool.package);
+        const updateBadge = tool.update_available ? ` <span style="color:#fbbf24;">• güncelleme var</span>` : "";
+        let actions = "";
+        if (installed) {
+            // Update-check first (item 2); the actual Güncelle button only shows
+            // once a check found an update.
+            actions += `<button type="button" class="btn ghost" data-tool="${key}" data-action="check">${escPentest(t("settings.toolsmgmt.check"))}</button> `;
+            if (tool.update_available) {
+                actions += `<button type="button" class="btn" data-tool="${key}" data-action="update">${escPentest(t("settings.toolsmgmt.update"))}</button> `;
+            }
+            actions += `<button type="button" class="btn ghost" data-tool="${key}" data-action="remove">${escPentest(t("settings.toolsmgmt.remove"))}</button>`;
+        } else {
+            actions += `<button type="button" class="btn" data-tool="${key}" data-action="install">${escPentest(t("settings.toolsmgmt.install"))}</button>`;
+        }
+        return `<tr>
+            <td>${label}<div class="muted" style="font-size:12px;">${pkg}</div></td>
+            <td style="color:${statusColor};">${escPentest(statusText)}${updateBadge}</td>
+            <td>${version}</td>
+            <td>${actions}</td>
+        </tr>`;
+    }).join("");
+}
+
+const PENTEST_ACTION_LABELS = { install: "Kurulum", update: "Güncelleme", remove: "Kaldırma", check: "Güncelleme kontrolü" };
+
+async function runPentestToolAction(toolKey, action) {
+    const label = PENTEST_ACTION_LABELS[action] || action;
+    pentestLog(`${label} başladı: ${toolKey}… (uzun sürebilir, lütfen bekleyin)`, "run");
+    try {
+        const res = await apiRequest("/settings/pentest-tools/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: toolKey, action }),
+        });
+        pentestLog(`${label} (${toolKey}): ${res?.message || (res?.ok ? "tamam" : "başarısız")}`, res && res.ok ? "ok" : "error");
+        if (res?.output) {
+            String(res.output).split("\n").slice(-40).forEach((ln) => {
+                if (ln.trim()) {
+                    pentestLog("  " + ln);
+                }
+            });
+        }
+        await loadPentestTools();
+    } catch (error) {
+        pentestLog(`${label} (${toolKey}) hata: ${error.message || "işlem başarısız"}`, "error");
+    }
+}
+
+const pentestToolsTbody = document.getElementById("pentestToolsTbody");
+if (pentestToolsTbody) {
+    pentestToolsTbody.addEventListener("click", async (event) => {
+        const btn = event.target.closest("button[data-tool][data-action]");
+        if (!btn) {
+            return;
+        }
+        btn.disabled = true;
+        await runPentestToolAction(btn.dataset.tool, btn.dataset.action);
+    });
+}
+
+const pentestToolsRefreshBtn = document.getElementById("pentestToolsRefreshBtn");
+if (pentestToolsRefreshBtn) {
+    pentestToolsRefreshBtn.addEventListener("click", () => loadPentestTools(true));
+}
+
+const pentestToolsClearLogBtn = document.getElementById("pentestToolsClearLogBtn");
+if (pentestToolsClearLogBtn) {
+    pentestToolsClearLogBtn.addEventListener("click", () => {
+        const box = document.getElementById("pentestToolsLog");
+        if (box) {
+            box.innerHTML = "";
         }
     });
 }
@@ -3004,6 +3457,34 @@ if (scanSettingsForm) {
             setFeedback(t("scanSaved"));
         } catch (error) {
             setFeedback(error.message || t("settings.error.scanSave"), true);
+        }
+    });
+}
+
+
+const workflowSettingsForm = document.getElementById("workflowSettingsForm");
+if (workflowSettingsForm) {
+    workflowSettingsForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        if (!hasTab("ai")) {
+            return;
+        }
+
+        const workflowModeSelect = document.getElementById("workflowMode");
+        const mode = workflowModeSelect?.value === "ai" ? "ai" : "manual";
+        try {
+            const result = await apiRequest("/settings/workflow", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode }),
+            });
+            if (settingsConfig) {
+                settingsConfig.workflow = result.workflow;
+            }
+            setFeedback(t("settings.workflow.saved", "Ilerleme modu kaydedildi."));
+        } catch (error) {
+            setFeedback(error.message || t("settings.workflow.saveError", "Ilerleme modu kaydedilemedi."), true);
         }
     });
 }
@@ -4229,6 +4710,25 @@ if (stepForm) {
 
 (async function bootstrap() {
     try {
+        if (IS_PANEL_PAGE) {
+            // Panel page: only wire the catalog editors. panel.js owns tabs,
+            // theme and access; here we just enable the two catalog tabs and
+            // load their data when clicked (panel.js's handler shows the panel).
+            ensureScriptEditor();
+            accessTabs = ["tools", "progress-categories"];
+            tabButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    const tab = button.dataset.tab;
+                    if (tab === "tools") {
+                        loadProgressCategories();
+                        loadSteps();
+                    } else if (tab === "progress-categories") {
+                        loadProgressCategories();
+                    }
+                });
+            });
+            return;
+        }
         applyThemeAndLanguage();
         ensureScriptEditor();
         await initializeAccess();
@@ -4239,4 +4739,6 @@ if (stepForm) {
             window.location.href = "/?login=1";
         }
     }
+})();
+
 })();

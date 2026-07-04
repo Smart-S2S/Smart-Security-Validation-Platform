@@ -39,6 +39,7 @@
     </div>
 </div>
 
+
 <header class="top-header">
     <div class="header-left">
         <div class="header-menu-wrap" id="networkSummaryMenu">
@@ -140,6 +141,11 @@
                     <h3></h3>
                     <p class="muted"></p>
                     <div id="directionSelectionWrap">
+                        <div id="aiOrchestrateRestartWrap" class="next-test-panel" style="display:none;">
+                            <h4 style="margin:0 0 6px 0;">Yapay Zeka Orkestratörü</h4>
+                            <p class="muted" style="margin:0 0 10px 0;">Yapay zeka bir sonraki işlemi önerir; onaylar, öneri verir veya yönlendirirsiniz.</p>
+                            <button id="aiOrchestrateRestartBtn" type="button">Yapay Zeka ile İlerle</button>
+                        </div>
                         <div id="directionActions" class="action-grid">
                             <button type="button" class="action-card" data-direction="scan">
                                 <p class="action-title"></p>
@@ -153,6 +159,49 @@
                                 <p class="action-title"></p>
                                 <p class="action-description"></p>
                             </button>
+                        </div>
+                    </div>
+
+                    <div id="orchestratorContainer" style="display:none;">
+                        <div class="next-test-panel">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                                <h4 style="margin:0;">Yapay Zeka Orkestratörü</h4>
+                                <span id="orchestratorStageBadge" style="display:none; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; background:rgba(99,139,196,0.18); border:1px solid #334155;"></span>
+                            </div>
+                            <p id="orchestratorPlan" class="muted" style="margin:8px 0;">Yapay zeka planı burada görünür.</p>
+                            <div id="orchestratorOps" class="dynamic-param-grid" style="margin-top:6px;"></div>
+                            <div id="operationBusy" class="operation-busy" hidden>
+                                <span class="ai-busy-spinner ai-busy-spinner--sm" aria-hidden="true"></span>
+                                <div class="operation-busy-text">
+                                    <p id="aiBusyTitle" style="margin:0; font-weight:600;">Yapay zeka calisiyor...</p>
+                                    <p id="aiBusyMessage" class="muted" style="margin:2px 0 0 0;">Islem devam ederken lutfen yeni bir islem baslatmayin.</p>
+                                </div>
+                                <button id="aiBusyStopBtn" type="button">Durdur</button>
+                            </div>
+                            <div class="direction-global-actions" style="margin-top:12px;">
+                                <button id="orchestratorApproveBtn" type="button">Onayla ve Çalıştır</button>
+                            </div>
+                            <p id="orchestratorNote" class="action-note"></p>
+                        </div>
+
+                        <div class="next-test-panel">
+                            <label for="orchestratorInstruction" class="muted" style="display:block;">Yapay zekaya öneri / yönlendirme (opsiyonel)</label>
+                            <textarea id="orchestratorInstruction" rows="2" placeholder="Örn: önce port taraması yap / bu adımı atla / şu parametreyi kullan" style="width:100%;"></textarea>
+                            <div class="direction-global-actions" style="margin-top:10px;">
+                                <button id="orchestratorSuggestBtn" type="button">Öneriyle Yeniden Planla</button>
+                            </div>
+                        </div>
+
+                        <div class="next-test-panel">
+                            <div class="direction-global-actions" style="flex-wrap:wrap; gap:8px;">
+                                <select id="orchestratorRedirect" class="field-select" style="max-width:220px;">
+                                    <option value="">Yönlendir (aşama)…</option>
+                                    <option value="scan">Tarama</option>
+                                    <option value="attack">Atak</option>
+                                    <option value="remediation">Düzenleme</option>
+                                </select>
+                                <button id="orchestratorExitBtn" type="button">Çık</button>
+                            </div>
                         </div>
                     </div>
 

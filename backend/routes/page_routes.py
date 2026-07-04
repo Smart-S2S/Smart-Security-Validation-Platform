@@ -9,6 +9,11 @@ from backend.services.auth_store import get_user_by_session
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
+# Logged-in app pages must never be served from browser cache, otherwise UI
+# changes (and their versioned CSS/JS URLs) don't reach the user until a hard
+# refresh.
+_NO_STORE = {"Cache-Control": "no-store, must-revalidate"}
+
 
 def _current_user_from_request(request: Request) -> tuple[str | None, dict | None]:
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
@@ -59,6 +64,7 @@ def app_page(request: Request):
         request=request,
         name="app.html",
         context={"current_user": current_user},
+        headers=_NO_STORE,
     )
 
 
@@ -77,6 +83,7 @@ def settings_page(request: Request):
         request=request,
         name="settings.html",
         context={"current_user": current_user},
+        headers=_NO_STORE,
     )
 
 
@@ -95,6 +102,7 @@ def panel_page(request: Request):
         request=request,
         name="panel.html",
         context={"current_user": current_user},
+        headers=_NO_STORE,
     )
 
 

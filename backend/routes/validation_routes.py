@@ -14,6 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from backend.ai.ollama_client import (
     analyze_evidence_with_ai,
     evaluate_script_result,
+    orchestrate_next_operation,
     suggest_action_intents,
 )
 from backend.auth import require_roles
@@ -31,8 +32,12 @@ from backend.services.orchestrator_store import (
 )
 from backend.services.validation_execution_store import (
     append_log,
+    clear_process,
     create_execution,
     get_execution,
+    is_cancel_requested,
+    register_process,
+    request_stop,
     set_error,
     set_result,
     set_status,
@@ -42,6 +47,10 @@ from backend.services.validation_execution_store import (
 router = APIRouter()
 
 _SCRIPT_TEMPLATE_VERSION = "SSVP_SCRIPT_TEMPLATE_V1"
+
+
+class _ExecutionCancelled(Exception):
+    """Raised inside a run job when the user requested the execution stop."""
 
 # Parameter keys whose values can be carried forward from prior stage results.
 _PREFILL_FACT_KEYS = (
@@ -249,6 +258,160 @@ def _default_parameters_from_schema(schema: list[dict]) -> dict:
     return defaults
 
 
+def _user_can_access_step(step: dict, current_user: dict) -> bool:
+    if current_user.get("is_admin"):
+        return True
+    role_required = (step.get("role_required") or "test").strip().lower()
+    if not role_required:
+        return True
+    return role_required in set(current_user.get("roles") or [])
+
+
+def _build_action_catalog(current_user: dict) -> tuple[list[dict], dict]:
+    """Enumerate every executable script action the user may run, by stage.
+
+    Returns (catalog, index) where catalog is a JSON-friendly list of
+    {stage, step_key, action, display_name, description} for the AI prompt, and
+    index maps action_key -> {stage, step, item} for building executable intents.
+    """
+    catalog: list[dict] = []
+    index: dict = {}
+    for step in list_workflow_steps(active_only=True):
+        if not _user_can_access_step(step, current_user):
+            continue
+        stage = str(step.get("workflow_key") or "scan").strip().lower()
+        for item in _step_script_items(step):
+            action = _normalize_action(item.get("item_key"))
+            if not action or action in index:
+                continue
+            catalog.append(
+                {
+                    "stage": stage,
+                    "step_key": step.get("step_key"),
+                    "action": action,
+                    "display_name": item.get("display_name") or item.get("item_key"),
+                    "description": item.get("description") or "",
+                }
+            )
+            index[action] = {"stage": stage, "step": step, "item": item}
+    return catalog, index
+
+
+def _build_orchestration_history(target: str, stage_by_action: dict) -> list[dict]:
+    """Compact, AI-friendly summary of what already ran for a target."""
+    history: list[dict] = []
+    try:
+        actions = list_validation_actions(target=target)
+    except Exception:
+        return history
+
+    for action in actions[:20]:
+        ai = action.get("ai_analysis") if isinstance(action.get("ai_analysis"), dict) else {}
+        evaluation = ai.get("evaluation") if isinstance(ai.get("evaluation"), dict) else {}
+        evidence = action.get("evidence") if isinstance(action.get("evidence"), dict) else {}
+        result = evidence.get("result") if isinstance(evidence.get("result"), dict) else {}
+        action_key = _normalize_action(action.get("action_key"))
+        result_facts = {
+            key: result.get(key)
+            for key in _PREFILL_FACT_KEYS
+            if result.get(key) not in (None, "", [], {})
+        }
+        history.append(
+            {
+                "action": action_key,
+                "stage": stage_by_action.get(action_key, ""),
+                "status": action.get("status") or "unknown",
+                "risk_level": ai.get("risk_level") or evaluation.get("risk_level") or "",
+                "summary": str(ai.get("summary") or evaluation.get("summary") or "")[:280],
+                "result_facts": result_facts,
+            }
+        )
+
+    history.reverse()  # oldest-first reads more naturally for the model
+    return history
+
+
+_SMART_URL_KEYS = {"url", "base_url", "target_url", "login_endpoint", "endpoint", "target_uri"}
+_SMART_HOST_KEYS = {"host", "target_host", "rhost", "rhosts", "ip", "target_ip", "hosts", "target"}
+
+
+def _target_as_url(target: str) -> str:
+    token = str(target or "").strip()
+    if not token:
+        return ""
+    if token.startswith("http://") or token.startswith("https://"):
+        return token
+    return "http://" + token
+
+
+def _apply_smart_defaults(schema: list[dict], params: dict, target: str) -> dict:
+    """Fill still-empty params with sensible values derived from the target.
+
+    Runs after registry defaults / AI suggestions / prior-data prefill, so it
+    only touches keys nothing else populated. Keeps required host/URL inputs from
+    landing on the user empty (Requirement: auto-fill sensible values).
+    """
+    for field in schema:
+        key = str(field.get("key") or "").strip()
+        if not key:
+            continue
+        value = params.get(key)
+        if value not in (None, "", [], {}):
+            continue
+        low = key.lower()
+        if low in _SMART_URL_KEYS:
+            params[key] = _target_as_url(target)
+        elif low in _SMART_HOST_KEYS:
+            params[key] = str(target or "").strip()
+    return params
+
+
+def _intent_from_item(
+    step: dict,
+    item: dict,
+    target: str,
+    prior_values: dict,
+    prior_sources: dict,
+    ai_params: dict,
+    reason_override: str = "",
+) -> dict:
+    """Build an executable intent (schema + prefilled params) for one script item."""
+    action_key = _normalize_action(item.get("item_key"))
+    item_type = str(item.get("item_type") or "script").strip().lower()
+    schema = _build_parameter_schema(
+        int(item.get("id") or 0),
+        item_type,
+        str(item.get("script_path") or "").strip(),
+    )
+    defaults = _default_parameters_from_schema(schema)
+    ai_params = ai_params if isinstance(ai_params, dict) else {}
+    schema_keys = {str(field.get("key") or "").strip() for field in schema}
+    prefill = {key: value for key, value in prior_values.items() if key in schema_keys}
+    prefill_meta = {key: prior_sources.get(key, "prior_result") for key in prefill}
+    ai_filtered = {key: value for key, value in ai_params.items() if key in schema_keys}
+    merged_params = {**defaults, **ai_filtered, **prefill}
+    merged_params = _apply_smart_defaults(schema, merged_params, target)
+
+    return {
+        "action": action_key,
+        "step_key": step.get("step_key"),
+        "target": str(target).strip(),
+        "reason": str(reason_override or item.get("description") or "Script dogrulama aksiyonu").strip(),
+        "parameters": merged_params,
+        "parameter_schema": schema,
+        "prefill": prefill,
+        "prefill_sources": prefill_meta,
+        "item_type": item_type,
+        "executable": item_type == "script",
+        "template_version": _SCRIPT_TEMPLATE_VERSION,
+        "script": {
+            "item_id": int(item.get("id") or 0),
+            "display_name": item.get("display_name") or item.get("item_key"),
+            "item_type": item_type,
+        },
+    }
+
+
 def _build_ai_guidance(*, step: dict, action_key: str, target: str, process_logs: list[str], script_result, language: str = "tr") -> dict:
     last_log = process_logs[-1] if process_logs else ""
     success = bool(isinstance(script_result, dict) and script_result.get("ok", False))
@@ -382,9 +545,14 @@ def _run_script_execution_job(
 
         reader = threading.Thread(target=_pump_output, args=(process.stdout,), daemon=True)
         reader.start()
+        register_process(execution_id, process)
 
         start_time = time.time()
         while True:
+            if is_cancel_requested(execution_id):
+                process.kill()
+                raise _ExecutionCancelled()
+
             try:
                 raw_line = line_queue.get(timeout=0.2)
             except queue.Empty:
@@ -464,6 +632,32 @@ def _run_script_execution_job(
             },
         )
         set_status(execution_id, "finished", "script completed")
+    except _ExecutionCancelled:
+        append_log(execution_id, "execution stopped by user")
+        set_result(
+            execution_id,
+            {
+                "status": "cancelled",
+                "output": {
+                    "template_version": _SCRIPT_TEMPLATE_VERSION,
+                    "process_logs": process_logs,
+                    "result": script_result or {"ok": False, "cancelled": True},
+                    "ai_guidance": {
+                        "template_version": _SCRIPT_TEMPLATE_VERSION,
+                        "success": False,
+                        "next_stage": "remediation",
+                        "summary": "Islem kullanici tarafindan durduruldu.",
+                        "context_for_ai": {
+                            "step_key": step.get("step_key"),
+                            "action": action_key,
+                            "target": target,
+                            "cancelled": True,
+                        },
+                    },
+                },
+            },
+        )
+        set_status(execution_id, "cancelled", "execution stopped")
     except Exception as exc:
         error_text = str(exc) or "Script execution failed"
         append_log(execution_id, f"error: {error_text}")
@@ -492,6 +686,8 @@ def _run_script_execution_job(
             },
         )
         set_status(execution_id, "failed", "script failed")
+    finally:
+        clear_process(execution_id)
 
 
 class WorkflowStepSuggestionRequest(BaseModel):
@@ -522,6 +718,12 @@ class ExecuteIntentRequest(BaseModel):
 class EvidenceAnalysisRequest(BaseModel):
     target: str = Field(min_length=1, max_length=255)
     evidence: list[dict] = Field(default_factory=list)
+
+
+class OrchestrateRequest(BaseModel):
+    target: str = Field(min_length=1, max_length=255)
+    user_instruction: str = Field(default="", max_length=2000)
+    preferred_stage: str = Field(default="", max_length=32)
 
 
 def _require_step(step_key: str, language: str) -> dict:
@@ -645,6 +847,7 @@ def validation_step_intents(
         prefill = {key: value for key, value in prior_values.items() if key in schema_keys}
         prefill_meta = {key: prior_sources.get(key, "prior_result") for key in prefill}
         merged_params = {**defaults, **ai_params, **prefill}
+        merged_params = _apply_smart_defaults(schema, merged_params, payload.target)
 
         intents.append(
             {
@@ -747,6 +950,105 @@ def validation_execute_intent(
     }
 
 
+@router.post("/validation/ai-orchestrate")
+def validation_ai_orchestrate(
+    request: Request,
+    payload: OrchestrateRequest,
+    current_user: dict = Depends(require_roles(ROLE_TEST, ROLE_REMEDIATION, ROLE_ATTACK)),
+):
+    """AI-driven loop step: decide the next stage + operations for a target.
+
+    The local LLM picks the next validation operations (from the executable
+    catalog the user is allowed to run) and their parameters; the response
+    carries fully-formed, prefilled intents so the UI can present them as
+    editable inputs for the user to approve, tweak, or redirect.
+    """
+    language = request_lang(request)
+
+    catalog, index = _build_action_catalog(current_user)
+    if not catalog:
+        return {
+            "stage": "",
+            "plan": t(language, "orchestrate.noCatalog", "Calistirilabilir script bulunamadi."),
+            "summary": t(language, "orchestrate.noCatalog", "Calistirilabilir script bulunamadi."),
+            "done": True,
+            "engine": "none",
+            "recommended_action": "",
+            "intents": [],
+            "template": {"version": _SCRIPT_TEMPLATE_VERSION},
+        }
+
+    stage_by_action = {entry["action"]: entry["stage"] for entry in catalog}
+    history = _build_orchestration_history(payload.target, stage_by_action)
+
+    # The catalog is already role-filtered, so the stages present in it are
+    # exactly the ones this user is authorised for. A redirect to any other
+    # stage (e.g. a test-only user asking for "attack") is refused here — the AI
+    # never even sees it as an option.
+    allowed_stages = sorted({entry["stage"] for entry in catalog})
+    requested_stage = _normalize_action(payload.preferred_stage)
+    role_note = ""
+    if requested_stage and requested_stage not in allowed_stages:
+        role_note = t(
+            language,
+            "orchestrate.roleDenied",
+            f"'{requested_stage}' asamasi icin yetkiniz yok; bu asama atlandi.",
+        )
+        requested_stage = ""
+
+    decision = orchestrate_next_operation(
+        target=payload.target,
+        history=history,
+        catalog=catalog,
+        user_instruction=payload.user_instruction,
+        preferred_stage=requested_stage,
+        allowed_stages=allowed_stages,
+        language=language,
+    )
+
+    prior_values, prior_sources = _collect_prefill_from_prior(payload.target)
+
+    intents: list[dict] = []
+    for operation in decision.get("operations") or []:
+        action = _normalize_action(operation.get("action"))
+        info = index.get(action)
+        if not info:
+            continue
+        intents.append(
+            _intent_from_item(
+                info["step"],
+                info["item"],
+                payload.target,
+                prior_values,
+                prior_sources,
+                operation.get("parameters"),
+                reason_override=operation.get("reason") or "",
+            )
+        )
+
+    plan_text = decision.get("plan") or ""
+    if role_note:
+        plan_text = f"{role_note}\n{plan_text}".strip()
+
+    return {
+        "stage": decision.get("stage") or "",
+        "plan": plan_text,
+        "summary": plan_text,
+        "done": bool(decision.get("done")) or not intents,
+        "engine": decision.get("engine") or "ai",
+        "allowed_stages": allowed_stages,
+        "role_note": role_note,
+        "recommended_action": intents[0]["action"] if intents else "",
+        "intents": intents,
+        "template": {
+            "version": _SCRIPT_TEMPLATE_VERSION,
+            "log_channel": "process_logs",
+            "result_channel": "result",
+            "ai_guidance_channel": "ai_guidance",
+        },
+    }
+
+
 @router.get("/validation/executions/{execution_id}")
 def validation_execution_status(
     execution_id: str,
@@ -757,6 +1059,17 @@ def validation_execution_status(
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution not found")
     return item
+
+
+@router.post("/validation/executions/{execution_id}/stop")
+def validation_execution_stop(
+    execution_id: str,
+    current_user: dict = Depends(require_roles(ROLE_TEST, ROLE_REMEDIATION, ROLE_ATTACK)),
+):
+    del current_user
+    if not request_stop(execution_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution not found")
+    return {"execution_id": execution_id, "status": "stopping"}
 
 
 @router.post("/validation/evidence-analysis")

@@ -1196,8 +1196,10 @@ function clearIntentSelectionUi() {
 }
 
 
-function renderOperationWindowIntents(intents) {
-    if (!directionOperationWindow) {
+function renderOperationWindowIntents(intents, options = {}) {
+    const container = options.container || directionOperationWindow;
+    const showStartButton = options.showStartButton !== false;
+    if (!container) {
         return;
     }
 
@@ -1206,7 +1208,7 @@ function renderOperationWindowIntents(intents) {
     operationWindowRunning = false;
 
     if (!operationWindowIntents.length) {
-        directionOperationWindow.innerHTML = `
+        container.innerHTML = `
             <h4 style="margin:0 0 8px 0;">${escapeHtml(t("direction.newOperation", "Yeni Islem"))}</h4>
             <p class="muted" style="margin:0;">AI bu adim icin kayitli gorev/script bulamadi.</p>
         `;
@@ -1369,13 +1371,20 @@ function renderOperationWindowIntents(intents) {
         `;
     }).join("");
 
-    directionOperationWindow.innerHTML = `
-        <h4 style="margin:0 0 8px 0;">${escapeHtml(t("direction.newOperation", "Yeni Islem"))}</h4>
-        <p class="muted" style="margin:0 0 8px 0;">Bu adimdaki tum gorev/scriptler yüklendi. Parametreleri girip baslatabilirsiniz.</p>
+    const headerHtml = showStartButton
+        ? `<h4 style="margin:0 0 8px 0;">${escapeHtml(t("direction.newOperation", "Yeni Islem"))}</h4>
+           <p class="muted" style="margin:0 0 8px 0;">Bu adimdaki tum gorev/scriptler yüklendi. Parametreleri girip baslatabilirsiniz.</p>`
+        : "";
+    const startBtnHtml = showStartButton
+        ? `<div class="direction-global-actions" style="margin-top:12px;">
+               <button id="directionStartBtn" type="button">${escapeHtml(t("direction.start", "Baslat"))}</button>
+           </div>`
+        : "";
+
+    container.innerHTML = `
+        ${headerHtml}
         ${cardsHtml}
-        <div class="direction-global-actions" style="margin-top:12px;">
-            <button id="directionStartBtn" type="button">${escapeHtml(t("direction.start", "Baslat"))}</button>
-        </div>
+        ${startBtnHtml}
     `;
 
     if (directionProceedBtn) {
@@ -1384,7 +1393,7 @@ function renderOperationWindowIntents(intents) {
 }
 
 
-function collectWindowIntentParameters(intent, intentIndex) {
+function collectWindowIntentParameters(intent, intentIndex, container = directionOperationWindow) {
     const schema = Array.isArray(intent?.parameter_schema) ? intent.parameter_schema : [];
     const values = {};
 
@@ -1396,7 +1405,7 @@ function collectWindowIntentParameters(intent, intentIndex) {
 
         const type = normalizeDynamicParamType(item?.type);
         const required = Boolean(item?.required);
-        const node = directionOperationWindow?.querySelector(`[data-intent-index="${intentIndex}"][data-param-key="${CSS.escape(key)}"]`);
+        const node = (container || directionOperationWindow)?.querySelector(`[data-intent-index="${intentIndex}"][data-param-key="${CSS.escape(key)}"]`);
         if (!node) {
             continue;
         }
@@ -2359,6 +2368,9 @@ function setActiveOperation(opName) {
     });
 
     renderPathNavigation(opName);
+
+    // Self-guards on direction-panel visibility + AI mode + orchestrator state.
+    maybeAutoStartOrchestrator();
 }
 
 
@@ -2569,6 +2581,7 @@ function renderDirectionState() {
         }
         directionOperationDetails = null;
         directionNote.innerText = t("direction.waiting", "Yon secimi bekleniyor.");
+        applyWorkflowMode();
         return;
     }
 
@@ -3288,7 +3301,7 @@ async function pollValidationExecution(executionId, directionLabel) {
             lastLogIndex += 1;
         }
 
-        if (state.status === "finished") {
+        if (state.status === "finished" || state.status === "cancelled") {
             return state;
         }
         if (state.status === "failed") {
@@ -3363,7 +3376,7 @@ async function executeOperationWindowIntents() {
             }
 
             const payload = {
-                step_key: selectedDirectionStepKey,
+                step_key: intent.step_key || selectedDirectionStepKey,
                 action: intent.action,
                 target: resolvedTarget,
                 reason: intent.reason || "Stage execution requested by user",
@@ -3468,7 +3481,493 @@ if (directionOperationWindow) {
         if (!button) {
             return;
         }
+        if (orchestratorActive) {
+            // In orchestrator mode the AI proposal is run via its own approve
+            // button; ignore the manual start button rendered in the window.
+            return;
+        }
         await executeOperationWindowIntents();
+    });
+}
+
+
+// ---------------------------------------------------------------------------
+// AI Orchestrator: the local LLM drives the workflow one turn at a time. Each
+// turn it proposes the next operations + parameters (shown as editable inputs);
+// the user approves, tweaks, suggests, or redirects, then results feed back and
+// the next turn is requested. A busy overlay blocks new operations while the AI
+// works or a script runs, and any running script can be stopped.
+// ---------------------------------------------------------------------------
+const orchestratorContainer = document.getElementById("orchestratorContainer");
+const orchestratorOps = document.getElementById("orchestratorOps");
+const orchestratorPlan = document.getElementById("orchestratorPlan");
+const orchestratorInstruction = document.getElementById("orchestratorInstruction");
+const orchestratorApproveBtn = document.getElementById("orchestratorApproveBtn");
+const orchestratorSuggestBtn = document.getElementById("orchestratorSuggestBtn");
+const orchestratorRedirect = document.getElementById("orchestratorRedirect");
+const orchestratorExitBtn = document.getElementById("orchestratorExitBtn");
+const orchestratorNote = document.getElementById("orchestratorNote");
+const orchestratorStageBadge = document.getElementById("orchestratorStageBadge");
+const operationBusy = document.getElementById("operationBusy");
+const aiBusyTitle = document.getElementById("aiBusyTitle");
+const aiBusyMessage = document.getElementById("aiBusyMessage");
+const aiBusyStopBtn = document.getElementById("aiBusyStopBtn");
+
+let orchestratorActive = false;
+let orchestratorBusy = false;
+let orchestratorStopRequested = false;
+let orchestratorRunningExecutionId = "";
+let orchestratorAbort = null;
+let workflowMode = "manual";
+let aiProvider = "local";
+
+function aiWorkingMessage() {
+    return aiProvider === "cloud"
+        ? t("orchestrate.busyCloud", "Bulut yapay zeka calisiyor, lutfen bekleyin.")
+        : t("orchestrate.busyLocal", "Yerel model calisiyor, bu birkac dakika surebilir.");
+}
+
+const STAGE_LABELS = { scan: "Tarama", attack: "Atak", remediation: "Düzenleme" };
+
+function stageLabel(stage) {
+    const key = String(stage || "").trim().toLowerCase();
+    return STAGE_LABELS[key] || "";
+}
+
+// Show the active stage in parentheses on the direction tab, e.g. "İlerleme Yönü (Tarama)".
+function setDirectionTabStage(stage) {
+    const tab = document.getElementById("directionTab");
+    if (!tab) {
+        return;
+    }
+    const prefix = getTabOrderPrefix(tab.innerText);
+    const base = t("tab.direction", "Ilerleme Yonu");
+    const label = stageLabel(stage);
+    const text = label ? `${base} (${label})` : base;
+    tab.innerText = prefix ? `${prefix}. ${text}` : text;
+}
+
+function applyWorkflowMode() {
+    const aiMode = workflowMode === "ai";
+    if (directionActions) {
+        directionActions.style.display = aiMode ? "none" : "grid";
+    }
+    // In AI mode the direction cards are replaced by a single "start AI" affordance,
+    // shown only when the orchestrator is not already open.
+    const restartWrap = document.getElementById("aiOrchestrateRestartWrap");
+    if (restartWrap) {
+        restartWrap.style.display = aiMode && !orchestratorActive ? "block" : "none";
+    }
+    if (aiMode && directionNextBtn && !directionLocked) {
+        directionNextBtn.hidden = true;
+    }
+    // Leaving AI mode while the orchestrator is open returns to manual selection.
+    if (!aiMode && orchestratorActive) {
+        exitOrchestrator();
+    }
+}
+
+// Auto-open the orchestrator when the user lands on the direction panel in AI
+// mode (Requirement: don't ask with a button, open the orchestrator directly).
+function maybeAutoStartOrchestrator() {
+    if (workflowMode !== "ai") {
+        return;
+    }
+    if (orchestratorActive || orchestratorBusy || directionLocked) {
+        return;
+    }
+    if (!directionPanel || directionPanel.style.display === "none") {
+        return;
+    }
+    startOrchestrator();
+}
+
+async function loadWorkflowMode() {
+    try {
+        const cfg = await apiRequest("/settings/config");
+        const mode = String(cfg?.workflow?.mode || "manual").toLowerCase();
+        workflowMode = mode === "ai" ? "ai" : "manual";
+        aiProvider = String(cfg?.ai?.provider || "local").toLowerCase() === "cloud" ? "cloud" : "local";
+    } catch (_) {
+        workflowMode = "manual";
+    }
+    applyWorkflowMode();
+}
+
+function setOrchestratorNote(text, isError = false) {
+    if (!orchestratorNote) {
+        return;
+    }
+    orchestratorNote.classList.toggle("error", Boolean(isError));
+    orchestratorNote.innerText = String(text || "");
+}
+
+function showAiBusy(title, message, allowStop = true) {
+    if (!operationBusy) {
+        return;
+    }
+    if (aiBusyTitle) {
+        aiBusyTitle.innerText = title || t("orchestrate.busyTitle", "Yapay zeka calisiyor...");
+    }
+    if (aiBusyMessage) {
+        aiBusyMessage.innerText = message || t("orchestrate.busyMessage", "Islem devam ederken lutfen yeni bir islem baslatmayin.");
+    }
+    if (aiBusyStopBtn) {
+        aiBusyStopBtn.disabled = !allowStop;
+    }
+    operationBusy.hidden = false;
+}
+
+function hideAiBusy() {
+    if (operationBusy) {
+        operationBusy.hidden = true;
+    }
+}
+
+function resolveOperationTarget() {
+    return latestScanResult?.target || document.getElementById("target")?.value.trim() || "authorized-target";
+}
+
+function startOrchestrator() {
+    if (orchestratorBusy) {
+        return;
+    }
+    orchestratorActive = true;
+    orchestratorStopRequested = false;
+    operationWindowIntents = [];
+    operationWindowExecuted = false;
+
+    if (directionSelectionWrap) {
+        directionSelectionWrap.style.display = "none";
+    }
+    if (testPlanPanel) {
+        testPlanPanel.style.display = "none";
+    }
+    if (directionNextBtn) {
+        directionNextBtn.hidden = true;
+    }
+    if (directionProceedBtn) {
+        directionProceedBtn.hidden = true;
+    }
+    if (directionLockedWrap) {
+        directionLockedWrap.style.display = "none";
+    }
+    if (orchestratorContainer) {
+        orchestratorContainer.style.display = "block";
+    }
+    orchestratorTurn("", "");
+}
+
+function exitOrchestrator() {
+    orchestratorActive = false;
+    orchestratorStopRequested = true;
+    orchestratorRunningExecutionId = "";
+    if (orchestratorContainer) {
+        orchestratorContainer.style.display = "none";
+    }
+    if (orchestratorOps) {
+        orchestratorOps.innerHTML = "";
+    }
+    operationWindowIntents = [];
+    hideAiBusy();
+    setDirectionTabStage("");
+    if (workflowMode === "ai") {
+        // Stay in AI mode: show the "start AI" affordance again.
+        if (directionSelectionWrap) {
+            directionSelectionWrap.style.display = "block";
+        }
+        applyWorkflowMode();
+    } else {
+        renderDirectionState();
+    }
+}
+
+async function orchestratorTurn(userInstruction, preferredStage) {
+    if (!orchestratorActive || orchestratorBusy) {
+        return;
+    }
+    orchestratorBusy = true;
+    orchestratorStopRequested = false;
+    orchestratorAbort = new AbortController();
+    setOrchestratorControlsEnabled(false);
+    showAiBusy(
+        t("orchestrate.planningTitle", "Yapay zeka bir sonraki islemi planliyor..."),
+        aiWorkingMessage(),
+        true,
+    );
+    appendProcessLog("AI Orkestrator: sonraki islem plani isteniyor.");
+
+    try {
+        const data = await apiRequest("/validation/ai-orchestrate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                target: resolveOperationTarget(),
+                user_instruction: String(userInstruction || ""),
+                preferred_stage: String(preferredStage || ""),
+            }),
+            signal: orchestratorAbort.signal,
+        });
+        hideAiBusy();
+        renderOrchestratorProposal(data);
+    } catch (error) {
+        hideAiBusy();
+        if (error?.name === "AbortError" || orchestratorStopRequested) {
+            setOrchestratorNote(t("orchestrate.stopped", "Islem durduruldu."));
+            appendProcessLog("AI Orkestrator: planlama durduruldu.");
+        } else {
+            setOrchestratorNote(error?.message || t("orchestrate.planError", "Yapay zeka plani alinamadi."), true);
+            appendProcessLog(`AI Orkestrator: plan hatasi. ${error?.message || "Bilinmeyen hata"}`);
+        }
+    } finally {
+        orchestratorBusy = false;
+        orchestratorAbort = null;
+        setOrchestratorControlsEnabled(true);
+    }
+}
+
+function renderOrchestratorProposal(data) {
+    const plan = String(data?.plan || data?.summary || "").trim();
+    const stage = String(data?.stage || "").trim();
+    const intents = Array.isArray(data?.intents) ? data.intents : [];
+    const done = Boolean(data?.done);
+
+    if (orchestratorPlan) {
+        orchestratorPlan.innerText = plan || t("orchestrate.noPlan", "Yapay zeka plan uretemedi.");
+    }
+    const label = stageLabel(stage);
+    if (orchestratorStageBadge) {
+        if (label) {
+            orchestratorStageBadge.style.display = "inline-block";
+            orchestratorStageBadge.innerText = label;
+        } else {
+            orchestratorStageBadge.style.display = "none";
+        }
+    }
+    // Reflect the active stage in the direction tab, e.g. "İlerleme Yönü (Atak)".
+    setDirectionTabStage(stage);
+    if (plan) {
+        appendAiEvaluation(t("orchestrate.aiTitle", "AI Orkestrator Plani"), plan);
+    }
+
+    if (done || !intents.length) {
+        operationWindowIntents = [];
+        if (orchestratorOps) {
+            orchestratorOps.innerHTML = "";
+        }
+        if (orchestratorApproveBtn) {
+            orchestratorApproveBtn.disabled = true;
+        }
+        setOrchestratorNote(t("orchestrate.done", "Yapay zeka bu hedef icin yapilacak baska islem gormuyor. Oneri verebilir veya cikabilirsiniz."));
+        return;
+    }
+
+    // Reuse the intent renderer (editable param inputs) into the orchestrator's
+    // own operations container; no manual start button here.
+    renderOperationWindowIntents(intents, { container: orchestratorOps, showStartButton: false });
+    if (orchestratorApproveBtn) {
+        orchestratorApproveBtn.disabled = false;
+    }
+    setOrchestratorNote(t("orchestrate.review", "Parametreleri gozden gecirip Onayla ve Calistir'a basin ya da oneri/yonlendirme verin."));
+}
+
+async function runOrchestratorProposal() {
+    if (!orchestratorActive || orchestratorBusy) {
+        return;
+    }
+    if (!operationWindowIntents.length) {
+        setOrchestratorNote(t("orchestrate.nothingToRun", "Calistirilacak bir islem yok."), true);
+        return;
+    }
+
+    const resolvedTarget = resolveOperationTarget();
+    const prepared = [];
+    for (let i = 0; i < operationWindowIntents.length; i += 1) {
+        const intent = operationWindowIntents[i];
+        const collected = collectWindowIntentParameters(intent, i, orchestratorOps);
+        if (collected.error) {
+            setOrchestratorNote(collected.error, true);
+            return;
+        }
+        prepared.push({ intent, parameters: { ...(intent?.parameters || {}), ...collected.values } });
+    }
+
+    orchestratorBusy = true;
+    orchestratorStopRequested = false;
+    setOrchestratorControlsEnabled(false);
+
+    try {
+        for (const { intent, parameters } of prepared) {
+            if (orchestratorStopRequested) {
+                break;
+            }
+
+            const executable = Boolean(intent?.executable ?? (String(intent?.item_type || "script").toLowerCase() === "script"));
+            if (!executable) {
+                appendStepOutput(`AI Orkestrator - Manuel Gorev (${intent.action})`, JSON.stringify({ target: resolvedTarget, parameters }, null, 2));
+                continue;
+            }
+
+            showAiBusy(
+                t("orchestrate.runningTitle", "Islem calistiriliyor..."),
+                `${intent.action} — ${resolvedTarget}`,
+                true,
+            );
+            appendProcessLog(`AI Orkestrator: ${intent.action} calistiriliyor.`);
+
+            const executionStart = await apiRequest("/validation/execute-intent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    step_key: intent.step_key || selectedDirectionStepKey,
+                    action: intent.action,
+                    target: resolvedTarget,
+                    reason: intent.reason || "AI orchestrator step",
+                    parameters,
+                    approved: true,
+                }),
+            });
+
+            orchestratorRunningExecutionId = executionStart.execution_id;
+            let executionState;
+            try {
+                executionState = await pollValidationExecution(executionStart.execution_id, "AI Orkestrator");
+            } finally {
+                orchestratorRunningExecutionId = "";
+            }
+
+            const execResult = executionState?.result || {};
+            const execOutput = execResult?.output || {};
+
+            if (executionState?.status === "cancelled" || execResult?.status === "cancelled") {
+                appendStepOutput(`AI Orkestrator - Durduruldu (${intent.action})`, t("orchestrate.stopped", "Islem durduruldu."));
+                orchestratorStopRequested = true;
+                break;
+            }
+
+            const outputText = execOutput?.result?.error
+                ? `Error: ${execOutput.result.error}`
+                : `Action: ${intent.action || "-"} | Status: ${execResult.status || "completed"}`;
+            appendStepOutput(`AI Orkestrator - Tool Runner (${intent.action})`, outputText);
+
+            if (execOutput.result && typeof execOutput.result === "object") {
+                appendStepOutput(`AI Orkestrator - Script Result (${intent.action})`, JSON.stringify(execOutput.result, null, 2));
+            }
+
+            const guidance = execOutput.ai_guidance || {};
+            const evaluation = guidance.evaluation || {};
+            if (guidance.summary || evaluation.summary) {
+                const riskLabel = String(guidance.risk_level || evaluation.risk_level || "").trim();
+                const findings = Array.isArray(evaluation.findings) ? evaluation.findings.filter(Boolean) : [];
+                const nextSteps = Array.isArray(evaluation.recommended_next_steps) ? evaluation.recommended_next_steps.filter(Boolean) : [];
+                const lines = [];
+                if (riskLabel) {
+                    lines.push(`Risk seviyesi: ${riskLabel}`);
+                }
+                lines.push(String(guidance.summary || evaluation.summary || "").trim());
+                if (findings.length) {
+                    lines.push("Bulgular:");
+                    findings.forEach((item) => lines.push(`- ${String(item).trim()}`));
+                }
+                if (nextSteps.length) {
+                    lines.push("Onerilen sonraki adimlar:");
+                    nextSteps.forEach((item) => lines.push(`- ${String(item).trim()}`));
+                }
+                appendAiEvaluation(`Script Degerlendirmesi (${intent.action})`, lines.join("\n"));
+            }
+        }
+    } catch (error) {
+        setOrchestratorNote(error?.message || t("orchestrate.runError", "Islem calistirilamadi."), true);
+        appendProcessLog(`AI Orkestrator: calistirma hatasi. ${error?.message || "Bilinmeyen hata"}`);
+        hideAiBusy();
+        orchestratorBusy = false;
+        setOrchestratorControlsEnabled(true);
+        return;
+    }
+
+    hideAiBusy();
+    orchestratorBusy = false;
+    setOrchestratorControlsEnabled(true);
+
+    if (orchestratorStopRequested) {
+        setOrchestratorNote(t("orchestrate.stoppedContinue", "Islem durduruldu. Oneri verip devam edebilir veya cikabilirsiniz."));
+        return;
+    }
+
+    // Results are in hand; ask the AI for the next turn.
+    if (orchestratorActive) {
+        orchestratorTurn("", "");
+    }
+}
+
+async function stopOrchestrator() {
+    orchestratorStopRequested = true;
+    if (orchestratorAbort) {
+        try {
+            orchestratorAbort.abort();
+        } catch (_) {
+            // ignore
+        }
+    }
+    if (orchestratorRunningExecutionId) {
+        try {
+            await apiRequest(`/validation/executions/${encodeURIComponent(orchestratorRunningExecutionId)}/stop`, { method: "POST" });
+            appendProcessLog("AI Orkestrator: durdurma istegi gonderildi.");
+        } catch (error) {
+            appendProcessLog(`AI Orkestrator: durdurma hatasi. ${error?.message || "Bilinmeyen hata"}`);
+        }
+    }
+    hideAiBusy();
+}
+
+function setOrchestratorControlsEnabled(enabled) {
+    [orchestratorApproveBtn, orchestratorSuggestBtn, orchestratorRedirect, orchestratorExitBtn].forEach((el) => {
+        if (el) {
+            el.disabled = !enabled;
+        }
+    });
+}
+
+const aiOrchestrateRestartBtn = document.getElementById("aiOrchestrateRestartBtn");
+if (aiOrchestrateRestartBtn) {
+    aiOrchestrateRestartBtn.addEventListener("click", () => {
+        startOrchestrator();
+    });
+}
+if (orchestratorApproveBtn) {
+    orchestratorApproveBtn.addEventListener("click", () => {
+        runOrchestratorProposal();
+    });
+}
+if (orchestratorSuggestBtn) {
+    orchestratorSuggestBtn.addEventListener("click", () => {
+        const instruction = String(orchestratorInstruction?.value || "").trim();
+        if (!instruction) {
+            setOrchestratorNote(t("orchestrate.needSuggestion", "Once bir oneri/talimat yazin."), true);
+            return;
+        }
+        orchestratorTurn(instruction, "");
+    });
+}
+if (orchestratorRedirect) {
+    orchestratorRedirect.addEventListener("change", () => {
+        const stage = String(orchestratorRedirect.value || "").trim();
+        if (!stage) {
+            return;
+        }
+        const instruction = String(orchestratorInstruction?.value || "").trim();
+        orchestratorTurn(instruction, stage);
+        orchestratorRedirect.value = "";
+    });
+}
+if (orchestratorExitBtn) {
+    orchestratorExitBtn.addEventListener("click", () => {
+        exitOrchestrator();
+    });
+}
+if (aiBusyStopBtn) {
+    aiBusyStopBtn.addEventListener("click", () => {
+        stopOrchestrator();
     });
 }
 
@@ -3954,6 +4453,7 @@ async function bootstrapApp() {
     applyStaticTranslations();
     await setLanguage(userLang);
     applyRoleRestrictions();
+    await loadWorkflowMode();
 
     if (hasAcceptedLegalNotice()) {
         if (legalConsent) {

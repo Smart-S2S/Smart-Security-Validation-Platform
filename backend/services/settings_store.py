@@ -7,15 +7,27 @@ from backend.services.mysql_db import init_mysql_schema, mysql_conn
 
 DEFAULT_SETTINGS = {
     "ai": {
+        # Which backend serves AI calls: "local" (Ollama) or "cloud" (remote API).
+        "provider": "local",
         "ollama_url": "http://localhost:11434/api/chat",
         "model_name": "freehuntx/qwen3-coder:8b",
         "timeout_sec": 300,
         "use_fake_response": False,
+        # Remote/cloud AI (used when provider == "cloud").
+        "cloud_api_url": "",
+        "cloud_api_key": "",
+        "cloud_model": "",
+        "cloud_format": "openai",
     },
     "scan": {
         "nmap_timeout_sec": 600,
         "masscan_timeout_sec": 600,
         "netdiscover_timeout_sec": 180,
+    },
+    "workflow": {
+        # How the operation window progresses: "manual" (user picks one of the
+        # three directions) or "ai" (the AI orchestrator drives each turn).
+        "mode": "manual",
     },
 }
 

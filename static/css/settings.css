@@ -344,8 +344,29 @@ button:disabled {
 }
 
 .compact-settings-card {
-    max-width: 580px;
+    max-width: 620px;
     width: 100%;
+}
+
+/* AI settings + progression/services shown as two top-aligned columns.
+   minmax(0, …) lets each column shrink cleanly so content can never overflow
+   and ride over the neighbouring column. Stacks (AI first) on narrow screens. */
+.ai-two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) minmax(0, 420px);
+    gap: 75px;
+    align-items: start;
+    justify-content: start;
+}
+
+.ai-two-col > div {
+    min-width: 0;
+}
+
+@media (max-width: 980px) {
+    .ai-two-col {
+        grid-template-columns: 1fr;
+    }
 }
 
 .card-header {
@@ -360,6 +381,23 @@ button:disabled {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-width: 0;
+}
+
+/* Keep form controls inside their card: without min-width:0 a long <select>
+   option / long value has a wide min-content and, when the column shrinks,
+   overflows and rides over the neighbouring column. */
+.form-grid input,
+.form-grid select,
+.form-grid textarea,
+.form-grid fieldset,
+.compact-settings-card input,
+.compact-settings-card select,
+.compact-settings-card textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .form-grid > button[type="submit"] {

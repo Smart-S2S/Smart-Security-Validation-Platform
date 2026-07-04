@@ -639,10 +639,15 @@ def init_mysql_schema() -> None:
 
             cur.execute("DROP TABLE IF EXISTS workflow_steps")
             # Command/task subsystem was removed. Keep related tables dropped.
-            cur.execute("DROP TABLE IF EXISTS tool_parameters")
-            cur.execute("DROP TABLE IF EXISTS tool_scripts")
-            cur.execute("DROP TABLE IF EXISTS tool_execution_audit")
-            cur.execute("DROP TABLE IF EXISTS tool_registry")
-            cur.execute("DROP TABLE IF EXISTS tool_runs")
-            cur.execute("DROP TABLE IF EXISTS tools")
+            # FK checks are disabled around the drops so ordering / a concurrent
+            # schema-init (e.g. a seed script run while the server is up) can never
+            # leave "Cannot drop table 'tools' referenced by a foreign key" and
+            # crash startup.
+            cur.execute("SET FOREIGN_KEY_CHECKS=0")
+            for legacy_table in (
+                "tool_parameters", "tool_scripts", "tool_execution_audit",
+                "tool_registry", "tool_runs", "tools",
+            ):
+                cur.execute(f"DROP TABLE IF EXISTS {legacy_table}")
+            cur.execute("SET FOREIGN_KEY_CHECKS=1")
         conn.commit()
