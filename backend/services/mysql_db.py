@@ -366,13 +366,27 @@ def init_mysql_schema() -> None:
                     INDEX idx_validation_actions_step_key (step_key),
                     INDEX idx_validation_actions_target (target),
                     INDEX idx_validation_actions_status (status),
-                    INDEX idx_validation_actions_created (created_at),
-                    CONSTRAINT fk_validation_actions_run
-                        FOREIGN KEY (tool_run_id) REFERENCES tool_runs(id)
-                        ON DELETE SET NULL
+                    INDEX idx_validation_actions_created (created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """
             )
+
+            # The tool_runs subsystem was removed; tool_run_id remains only as a
+            # nullable reference column. Drop any legacy FK so tool_runs can be
+            # dropped cleanly below (otherwise fresh installs crash here).
+            cur.execute(
+                """
+                SELECT CONSTRAINT_NAME
+                FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'validation_actions'
+                  AND REFERENCED_TABLE_NAME = 'tool_runs'
+                LIMIT 1
+                """
+            )
+            run_fk = cur.fetchone()
+            if run_fk and run_fk.get("CONSTRAINT_NAME"):
+                cur.execute(f"ALTER TABLE validation_actions DROP FOREIGN KEY {run_fk['CONSTRAINT_NAME']}")
 
             # Backward-compatible migrations for existing installations.
             cur.execute("SHOW COLUMNS FROM tools LIKE 'workflow_key'")

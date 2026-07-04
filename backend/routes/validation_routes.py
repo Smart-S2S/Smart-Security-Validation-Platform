@@ -1,21 +1,25 @@
 import json
 import os
-import re
+import queue
 import subprocess
 import sys
+import threading
 import time
-import ast
 import hashlib
-from ast import literal_eval
 
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
-from backend.ai.ollama_client import analyze_evidence_with_ai, suggest_action_intents
+from backend.ai.ollama_client import (
+    analyze_evidence_with_ai,
+    evaluate_script_result,
+    suggest_action_intents,
+)
 from backend.auth import require_roles
 from backend.i18n import request_lang, t
 from backend.services.auth_store import ROLE_ATTACK, ROLE_REMEDIATION, ROLE_TEST
+from backend.services.param_inference import infer_parameter_schema
 from backend.services.orchestrator_store import (
     create_validation_action,
     get_step_item_script_content,
@@ -38,7 +42,12 @@ from backend.services.validation_execution_store import (
 router = APIRouter()
 
 _SCRIPT_TEMPLATE_VERSION = "SSVP_SCRIPT_TEMPLATE_V1"
-_PARAM_GET_PATTERN = re.compile(r"(?:params|parameters)\.get\(\s*['\"]([a-zA-Z0-9_\-\.]+)['\"](?:\s*,\s*(.+?))?\s*\)")
+
+# Parameter keys whose values can be carried forward from prior stage results.
+_PREFILL_FACT_KEYS = (
+    "ports", "open_ports", "scan_ports", "hosts", "live_hosts",
+    "endpoints", "api_endpoints", "urls", "login_paths", "services",
+)
 
 
 def _normalize_action(value: str | None) -> str:
@@ -99,282 +108,6 @@ def _resolve_script_item(step: dict, action_key: str) -> dict | None:
     return None
 
 
-def _infer_param_type(default_value) -> str:
-    if isinstance(default_value, bool):
-        return "boolean"
-    if isinstance(default_value, (int, float)):
-        return "number"
-    if isinstance(default_value, list):
-        return "list"
-    if isinstance(default_value, dict):
-        return "object"
-    return "string"
-
-
-def _safe_literal(default_expr):
-    if default_expr is None:
-        return ""
-
-    if isinstance(default_expr, ast.AST):
-        try:
-            return literal_eval(default_expr)
-        except Exception:
-            return ""
-
-    token = str(default_expr).strip()
-    if not token:
-        return ""
-
-    try:
-        return literal_eval(token)
-    except Exception:
-        return token.strip("\"'")
-
-
-def _node_str_key(node) -> str:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return str(node.value).strip()
-    return ""
-
-
-def _extract_assign_target_names(node) -> list[str]:
-    if isinstance(node, ast.Name):
-        return [node.id]
-    if isinstance(node, (ast.Tuple, ast.List)):
-        names: list[str] = []
-        for item in node.elts:
-            names.extend(_extract_assign_target_names(item))
-        return names
-    return []
-
-
-def _is_load_call(node) -> bool:
-    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_load"
-
-
-def _payload_get_key(node) -> str:
-    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get"):
-        return ""
-
-    if not node.args:
-        return ""
-
-    return _node_str_key(node.args[0])
-
-
-def _is_parameters_lookup(node, payload_aliases: set[str]) -> bool:
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
-        receiver = node.func.value
-        if not isinstance(receiver, ast.Name) or receiver.id not in payload_aliases:
-            return False
-
-        if not node.args:
-            return False
-        key = _node_str_key(node.args[0])
-        return key == "parameters"
-
-    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
-        key = _node_str_key(node.slice)
-        return key == "parameters"
-
-    return False
-
-
-def _register_param_candidate(bucket: dict[str, dict], order: list[str], *, key: str, default_value, required: bool) -> None:
-    normalized = str(key or "").strip()
-    if not normalized:
-        return
-
-    if normalized not in bucket:
-        bucket[normalized] = {
-            "key": normalized,
-            "label": normalized.replace("_", " ").strip().title(),
-            "type": _infer_param_type(default_value),
-            "required": bool(required),
-            "default": default_value,
-            "sort_order": len(order) * 10,
-        }
-        order.append(normalized)
-        return
-
-    current = bucket[normalized]
-    current["required"] = bool(current.get("required") or required)
-    if current.get("default") in ("", None) and default_value not in ("", None):
-        current["default"] = default_value
-        current["type"] = _infer_param_type(default_value)
-
-
-def _infer_parameter_schema_from_ast(source: str) -> list[dict]:
-    try:
-        tree = ast.parse(source)
-    except Exception:
-        return []
-
-    payload_aliases: set[str] = {"payload"}
-    param_aliases: set[str] = {"params", "parameters"}
-    saw_parameters_container = False
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            value = node.value
-            target_names: list[str] = []
-            for target in node.targets:
-                target_names.extend(_extract_assign_target_names(target))
-
-            if _is_load_call(value):
-                for name in target_names:
-                    payload_aliases.add(name)
-                continue
-
-            if isinstance(value, ast.Name) and value.id in payload_aliases:
-                for name in target_names:
-                    payload_aliases.add(name)
-                continue
-
-        if isinstance(node, ast.AnnAssign):
-            value = node.value
-            if value is None:
-                continue
-
-            target_names = _extract_assign_target_names(node.target)
-            if _is_load_call(value):
-                for name in target_names:
-                    payload_aliases.add(name)
-                continue
-
-            if isinstance(value, ast.Name) and value.id in payload_aliases:
-                for name in target_names:
-                    payload_aliases.add(name)
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            value = node.value
-            target_names: list[str] = []
-            for target in node.targets:
-                target_names.extend(_extract_assign_target_names(target))
-
-            if _is_parameters_lookup(value, payload_aliases):
-                saw_parameters_container = True
-                for name in target_names:
-                    param_aliases.add(name)
-                continue
-
-            if isinstance(value, ast.Name) and value.id in param_aliases:
-                for name in target_names:
-                    param_aliases.add(name)
-                continue
-
-        if isinstance(node, ast.AnnAssign):
-            target_names = _extract_assign_target_names(node.target)
-            value = node.value
-            if value is None:
-                continue
-
-            if _is_parameters_lookup(value, payload_aliases):
-                saw_parameters_container = True
-                for name in target_names:
-                    param_aliases.add(name)
-                continue
-
-            if isinstance(value, ast.Name) and value.id in param_aliases:
-                for name in target_names:
-                    param_aliases.add(name)
-
-    found: dict[str, dict] = {}
-    order: list[str] = []
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
-            receiver = node.func.value
-            if not isinstance(receiver, ast.Name) or receiver.id not in param_aliases:
-                continue
-
-            if not node.args:
-                continue
-
-            key = _node_str_key(node.args[0])
-            if not key:
-                continue
-
-            default_expr = node.args[1] if len(node.args) > 1 else None
-            required = default_expr is None
-            default_value = _safe_literal(default_expr)
-            _register_param_candidate(found, order, key=key, default_value=default_value, required=required)
-            continue
-
-        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in param_aliases:
-            key = _node_str_key(node.slice)
-            if key:
-                _register_param_candidate(found, order, key=key, default_value="", required=True)
-            continue
-
-        if isinstance(node, ast.Compare) and node.ops:
-            if not isinstance(node.left, ast.Constant) or not isinstance(node.left.value, str):
-                continue
-            key = str(node.left.value).strip()
-            if not key:
-                continue
-            for comparator in node.comparators:
-                if isinstance(comparator, ast.Name) and comparator.id in param_aliases:
-                    _register_param_candidate(found, order, key=key, default_value="", required=False)
-                    break
-
-    discovered = [found[key] for key in order]
-    if discovered:
-        return discovered
-
-    if saw_parameters_container:
-        return [
-            {
-                "key": "parameters",
-                "label": "Parameters",
-                "type": "object",
-                "required": False,
-                "default": {},
-                "sort_order": 0,
-            }
-        ]
-
-    return []
-
-
-def _infer_parameter_schema_with_regex(source: str) -> list[dict]:
-    discovered: list[dict] = []
-    by_key: dict[str, dict] = {}
-
-    for line in source.splitlines():
-        match = _PARAM_GET_PATTERN.search(line)
-        if not match:
-            continue
-
-        key = str(match.group(1) or "").strip()
-        if not key:
-            continue
-
-        default_expr = match.group(2)
-        default_value = _safe_literal(default_expr) if default_expr else ""
-        inferred = {
-            "key": key,
-            "label": key.replace("_", " ").strip().title(),
-            "type": _infer_param_type(default_value),
-            "required": False,
-            "default": default_value,
-            "sort_order": len(discovered) * 10,
-        }
-
-        existing = by_key.get(key)
-        if existing is None:
-            discovered.append(inferred)
-            by_key[key] = inferred
-            continue
-
-        if existing.get("default") in ("", None) and inferred.get("default") not in ("", None):
-            existing["default"] = inferred.get("default")
-            existing["type"] = inferred.get("type")
-
-    return discovered
-
-
 def _load_script_source(item_id: int, script_path: str = "") -> str:
     direct_path = str(script_path or "").strip()
     if direct_path:
@@ -386,18 +119,23 @@ def _load_script_source(item_id: int, script_path: str = "") -> str:
         except Exception:
             pass
 
-    payload = get_step_item_script_content(int(item_id))
-    content = str(payload.get("content") or "")
-    if content.strip():
-        return content
+    try:
+        payload = get_step_item_script_content(int(item_id))
+    except Exception:
+        # Non-script items (tasks) or missing files have no inferable source.
+        return ""
+    # get_step_item_script_content returns the source under "script_source".
+    source = str(payload.get("script_source") or payload.get("content") or "")
+    if source.strip():
+        return source
 
     item = payload.get("item") or {}
-    script_path = str(item.get("script_path") or "").strip()
-    if not script_path:
+    fallback_path = str(item.get("script_path") or "").strip()
+    if not fallback_path:
         return ""
 
     try:
-        with open(script_path, "r", encoding="utf-8") as handle:
+        with open(fallback_path, "r", encoding="utf-8") as handle:
             return handle.read()
     except Exception:
         return ""
@@ -405,48 +143,100 @@ def _load_script_source(item_id: int, script_path: str = "") -> str:
 
 def _infer_parameter_schema_from_script(item_id: int, script_path: str = "") -> list[dict]:
     source = _load_script_source(item_id, script_path)
-    if not source.strip():
-        return []
-
-    discovered = _infer_parameter_schema_from_ast(source)
-    regex_candidates = _infer_parameter_schema_with_regex(source)
-
-    if not discovered:
-        return regex_candidates
-
-    known_keys = {str(item.get("key") or "").strip() for item in discovered}
-    next_order = max([int(item.get("sort_order") or 0) for item in discovered], default=0) + 10
-    for candidate in regex_candidates:
-        key = str(candidate.get("key") or "").strip()
-        if not key or key in known_keys:
-            continue
-        candidate["sort_order"] = next_order
-        next_order += 10
-        discovered.append(candidate)
-        known_keys.add(key)
-
-    return discovered
+    return infer_parameter_schema(source)
 
 
 def _build_parameter_schema(item_id: int, item_type: str = "script", script_path: str = "") -> list[dict]:
-    del item_type
-    del script_path
+    """Build the parameter schema for a step item.
+
+    Priority: explicit DB-defined parameters first (admin curated); then any
+    parameters auto-detected from the script source that were not already
+    covered. This is what makes freshly uploaded scripts expose their inputs
+    without manual configuration.
+    """
     rows = list_step_item_parameters(int(item_id))
     schema: list[dict] = []
+    known_keys: set[str] = set()
     for row in rows:
+        key = str(row.get("param_key") or "").strip()
+        if not key:
+            continue
+        known_keys.add(key)
         schema.append(
             {
-                "key": row.get("param_key"),
-                "label": row.get("label") or row.get("param_key"),
+                "key": key,
+                "label": row.get("label") or key,
                 "type": row.get("param_type") or "string",
                 "required": bool(row.get("is_required")),
                 "default": _coerce_default_value(row.get("param_type"), row.get("default_value")),
                 "description": row.get("description") or "",
                 "options_json": row.get("options_json") if isinstance(row.get("options_json"), (list, dict)) else [],
                 "sort_order": int(row.get("sort_order") or 100),
+                "source": "registry",
             }
         )
+
+    if str(item_type or "script").strip().lower() != "script":
+        return schema
+
+    next_order = max([int(item.get("sort_order") or 0) for item in schema], default=0) + 10
+    for candidate in _infer_parameter_schema_from_script(int(item_id), script_path):
+        key = str(candidate.get("key") or "").strip()
+        if not key or key in known_keys:
+            continue
+        known_keys.add(key)
+        schema.append(
+            {
+                "key": key,
+                "label": candidate.get("label") or key,
+                "type": candidate.get("type") or "string",
+                "required": bool(candidate.get("required")),
+                "default": candidate.get("default"),
+                "description": "",
+                "options_json": [],
+                "sort_order": next_order,
+                "source": "auto_detected",
+            }
+        )
+        next_order += 10
+
     return schema
+
+
+def _collect_prefill_from_prior(target: str) -> tuple[dict, dict]:
+    """Gather known values for a target from prior validation actions.
+
+    Returns (values_by_key, source_by_key). Used so a new operation stage is
+    pre-populated with data already in hand (previously entered parameters and
+    facts discovered by earlier scripts), which the user can still edit.
+    """
+    values: dict = {}
+    source: dict = {}
+    try:
+        actions = list_validation_actions(target=target)
+    except Exception:
+        return values, source
+
+    # list_validation_actions returns newest-first; walk oldest-first so the
+    # most recent value for a repeated key wins.
+    for action in reversed(actions):
+        params = action.get("parameters") if isinstance(action.get("parameters"), dict) else {}
+        for key, value in params.items():
+            if value in (None, "", [], {}):
+                continue
+            values[key] = value
+            source[key] = "previous_input"
+
+        evidence = action.get("evidence") if isinstance(action.get("evidence"), dict) else {}
+        result = evidence.get("result") if isinstance(evidence.get("result"), dict) else {}
+        for fact_key in _PREFILL_FACT_KEYS:
+            fact_value = result.get(fact_key)
+            if fact_value in (None, "", [], {}):
+                continue
+            values[fact_key] = fact_value
+            source[fact_key] = "prior_result"
+
+    return values, source
 
 
 def _default_parameters_from_schema(schema: list[dict]) -> dict:
@@ -459,29 +249,44 @@ def _default_parameters_from_schema(schema: list[dict]) -> dict:
     return defaults
 
 
-def _build_ai_guidance(*, step: dict, action_key: str, target: str, process_logs: list[str], script_result) -> dict:
+def _build_ai_guidance(*, step: dict, action_key: str, target: str, process_logs: list[str], script_result, language: str = "tr") -> dict:
     last_log = process_logs[-1] if process_logs else ""
     success = bool(isinstance(script_result, dict) and script_result.get("ok", False))
-    next_stage = {
+    default_next = {
         "scan": "attack",
         "attack": "remediation",
         "remediation": "remediation",
     }.get(str(step.get("workflow_key") or "scan").strip().lower(), "remediation")
 
-    hint_lines = [
-        f"Step: {step.get('step_name') or step.get('step_key')}",
-        f"Action: {action_key}",
-        f"Target: {target}",
-        f"Success: {'yes' if success else 'no'}",
-        f"Last log: {last_log or '-'}",
-        f"Next suggested stage: {next_stage}",
-    ]
+    # Real AI assessment of what the script produced (never raises: has fallback).
+    evaluation = evaluate_script_result(
+        step=step,
+        action_key=action_key,
+        target=target,
+        process_logs=process_logs,
+        script_result=script_result if isinstance(script_result, dict) else {"raw": script_result},
+        language=language,
+    )
+
+    summary = evaluation.get("summary") or ""
+    if not summary.strip():
+        summary = "\n".join(
+            [
+                f"Step: {step.get('step_name') or step.get('step_key')}",
+                f"Action: {action_key}",
+                f"Target: {target}",
+                f"Success: {'yes' if success else 'no'}",
+                f"Last log: {last_log or '-'}",
+            ]
+        )
 
     return {
         "template_version": _SCRIPT_TEMPLATE_VERSION,
-        "success": success,
-        "next_stage": next_stage,
-        "summary": "\n".join(hint_lines),
+        "success": bool(evaluation.get("success", success)),
+        "risk_level": evaluation.get("risk_level", "low"),
+        "next_stage": evaluation.get("next_stage", default_next),
+        "summary": summary,
+        "evaluation": evaluation,
         "context_for_ai": {
             "step_key": step.get("step_key"),
             "step_name": step.get("step_name"),
@@ -560,33 +365,52 @@ def _run_script_execution_job(
             env=env,
         )
 
+        # A background reader pushes every line onto a queue and signals EOF with
+        # a None sentinel. Draining until that sentinel guarantees the final
+        # SSVP_RESULT_JSON line is captured even when the script exits instantly
+        # (polling process.poll() in the read loop would race past it and lose
+        # the result). The queue timeout still lets us enforce the wall-clock
+        # limit while the script is silent.
+        line_queue: "queue.Queue[str | None]" = queue.Queue()
+
+        def _pump_output(stream) -> None:
+            try:
+                for raw in iter(stream.readline, ""):
+                    line_queue.put(raw)
+            finally:
+                line_queue.put(None)
+
+        reader = threading.Thread(target=_pump_output, args=(process.stdout,), daemon=True)
+        reader.start()
+
         start_time = time.time()
         while True:
-            if process.stdout is None:
+            try:
+                raw_line = line_queue.get(timeout=0.2)
+            except queue.Empty:
+                if time.time() - start_time > timeout_sec:
+                    process.kill()
+                    raise TimeoutError(f"Script timeout ({timeout_sec}s)")
+                continue
+
+            if raw_line is None:
                 break
 
-            raw_line = process.stdout.readline()
-            if raw_line:
-                line = raw_line.rstrip("\n").strip()
-                if line:
-                    if line.startswith("SSVP_RESULT_JSON:"):
-                        raw_result = line.split("SSVP_RESULT_JSON:", 1)[1].strip()
-                        try:
-                            script_result = json.loads(raw_result)
-                        except Exception:
-                            script_result = {"ok": False, "error": "Script result JSON parse failed", "raw": raw_result}
-                    else:
-                        process_logs.append(line)
-                        append_log(execution_id, line)
-
-            if process.poll() is not None:
-                break
+            line = raw_line.rstrip("\n").strip()
+            if line:
+                if line.startswith("SSVP_RESULT_JSON:"):
+                    raw_result = line.split("SSVP_RESULT_JSON:", 1)[1].strip()
+                    try:
+                        script_result = json.loads(raw_result)
+                    except Exception:
+                        script_result = {"ok": False, "error": "Script result JSON parse failed", "raw": raw_result}
+                else:
+                    process_logs.append(line)
+                    append_log(execution_id, line)
 
             if time.time() - start_time > timeout_sec:
                 process.kill()
                 raise TimeoutError(f"Script timeout ({timeout_sec}s)")
-
-            time.sleep(0.05)
 
         return_code = int(process.wait(timeout=5))
         if script_result is None:
@@ -797,6 +621,8 @@ def validation_step_intents(
             recommended_action = normalized
             break
 
+    prior_values, prior_sources = _collect_prefill_from_prior(payload.target)
+
     intents = []
     for item in step_items:
         action_key = _normalize_action(item.get("item_key"))
@@ -812,7 +638,13 @@ def validation_step_intents(
         defaults = _default_parameters_from_schema(schema)
         ai_match = ai_action_map.get(action_key) or {}
         ai_params = ai_match.get("parameters") if isinstance(ai_match.get("parameters"), dict) else {}
-        merged_params = {**defaults, **ai_params}
+
+        # Prefill only keys this action actually understands, using data already
+        # in hand. Precedence: schema defaults < AI suggestion < prior data.
+        schema_keys = {str(field.get("key") or "").strip() for field in schema}
+        prefill = {key: value for key, value in prior_values.items() if key in schema_keys}
+        prefill_meta = {key: prior_sources.get(key, "prior_result") for key in prefill}
+        merged_params = {**defaults, **ai_params, **prefill}
 
         intents.append(
             {
@@ -821,6 +653,8 @@ def validation_step_intents(
                 "reason": str(ai_match.get("reason") or item.get("description") or "Script dogrulama aksiyonu").strip(),
                 "parameters": merged_params,
                 "parameter_schema": schema,
+                "prefill": prefill,
+                "prefill_sources": prefill_meta,
                 "item_type": item_type,
                 "executable": item_type == "script",
                 "template_version": _SCRIPT_TEMPLATE_VERSION,

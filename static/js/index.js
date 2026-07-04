@@ -3393,8 +3393,32 @@ async function executeOperationWindowIntents() {
                 );
             }
 
-            if (execOutput.ai_guidance?.summary) {
-                appendAiEvaluation("Execution Guidance", execOutput.ai_guidance.summary);
+            const guidance = execOutput.ai_guidance || {};
+            const evaluation = guidance.evaluation || {};
+            if (guidance.summary || evaluation.summary) {
+                const riskLabel = String(guidance.risk_level || evaluation.risk_level || "").trim();
+                const nextStage = String(guidance.next_stage || evaluation.next_stage || "").trim();
+                const findings = Array.isArray(evaluation.findings) ? evaluation.findings.filter(Boolean) : [];
+                const nextSteps = Array.isArray(evaluation.recommended_next_steps)
+                    ? evaluation.recommended_next_steps.filter(Boolean)
+                    : [];
+                const lines = [];
+                if (riskLabel) {
+                    lines.push(`Risk seviyesi: ${riskLabel}`);
+                }
+                lines.push(String(guidance.summary || evaluation.summary || "").trim());
+                if (findings.length) {
+                    lines.push("Bulgular:");
+                    findings.forEach((item) => lines.push(`- ${String(item).trim()}`));
+                }
+                if (nextSteps.length) {
+                    lines.push("Onerilen sonraki adimlar:");
+                    nextSteps.forEach((item) => lines.push(`- ${String(item).trim()}`));
+                }
+                if (nextStage) {
+                    lines.push(`Sonraki asama onerisi: ${nextStage}`);
+                }
+                appendAiEvaluation(`Script Degerlendirmesi (${intent.action})`, lines.join("\n"));
             }
 
             try {

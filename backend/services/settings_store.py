@@ -8,8 +8,8 @@ from backend.services.mysql_db import init_mysql_schema, mysql_conn
 DEFAULT_SETTINGS = {
     "ai": {
         "ollama_url": "http://localhost:11434/api/chat",
-        "model_name": "qwen2.5-coder:7b",
-        "timeout_sec": 240,
+        "model_name": "freehuntx/qwen3-coder:8b",
+        "timeout_sec": 300,
         "use_fake_response": False,
     },
     "scan": {

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.services.mysql_db import init_mysql_schema, mysql_conn
+from backend.services.param_inference import infer_parameter_schema
 
 
 _LOCK = threading.Lock()
@@ -1175,6 +1176,13 @@ def upload_step_item_script(item_id: int, *, filename: str, content: bytes) -> d
             Path(old_path).unlink(missing_ok=True)
         except Exception:
             pass
+
+    # Auto-detect and persist parameters from the freshly uploaded script.
+    try:
+        autodetect_step_item_parameters(int(item_id))
+    except Exception:
+        pass
+
     return _step_item_row_to_dict(item_row)
 
 
@@ -1267,7 +1275,75 @@ def save_step_item_script_content(item_id: int, script_source: str) -> dict:
             )
         conn.commit()
 
+    # Auto-detect and persist parameters when the script is saved from the editor.
+    try:
+        autodetect_step_item_parameters(int(item_id))
+    except Exception:
+        pass
+
     return get_step_item_script_content(item_id)
+
+
+def autodetect_step_item_parameters(item_id: int, *, only_if_empty: bool = True) -> list[dict]:
+    """Detect parameters from an item's script source and persist new ones.
+
+    Runs the static inference over the uploaded script and stores any keys not
+    already present so admins can review/edit them in the registry. When
+    ``only_if_empty`` is True (default), it does nothing if the item already has
+    parameters, so it never overwrites curated definitions.
+    """
+    existing = list_step_item_parameters(int(item_id))
+    if existing and only_if_empty:
+        return existing
+
+    payload = get_step_item_script_content(int(item_id))
+    source = str(payload.get("script_source") or "")
+    inferred = infer_parameter_schema(source)
+    if not inferred:
+        return existing
+
+    existing_keys = {str(row.get("param_key") or "").strip() for row in existing}
+    now = _utc_now_iso()
+    inserted = False
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            for candidate in inferred:
+                key = _slugify(candidate.get("key"), "param")
+                if not key or key in existing_keys:
+                    continue
+                existing_keys.add(key)
+                default_value = candidate.get("default")
+                if isinstance(default_value, (dict, list)):
+                    default_value = json.dumps(default_value, ensure_ascii=False)
+                elif default_value is None:
+                    default_value = ""
+                cur.execute(
+                    """
+                    INSERT INTO step_item_parameters (
+                        item_id, param_key, label, param_type,
+                        default_value, description, options_json, is_required, sort_order,
+                        created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE item_id = item_id
+                    """,
+                    (
+                        int(item_id),
+                        key,
+                        _normalize_text(candidate.get("label"), key),
+                        _normalize_text(candidate.get("type"), "string").lower(),
+                        _normalize_text(str(default_value), ""),
+                        "",
+                        json.dumps([], ensure_ascii=False),
+                        1 if candidate.get("required") else 0,
+                        int(candidate.get("sort_order") or 100),
+                        now,
+                        now,
+                    ),
+                )
+                inserted = True
+        conn.commit()
+
+    return list_step_item_parameters(int(item_id)) if inserted else existing
 
 
 def list_step_item_parameters(item_id: int) -> list[dict]:
