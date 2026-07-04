@@ -1,0 +1,277 @@
+{
+  "categories": [
+    {
+      "id": "network-validation",
+      "label": "Ağ Doğrulama Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Açık port doğrulama ve servis gereklilik analizi",
+        "Yönetim portları için erişim kuralı doğrulaması",
+        "SMB/SSH/RDP sertleştirme kontrolü",
+        "Güvenlik duvarı kural etkinlik ve kapsam doğrulaması",
+        "Ağ segmentasyonu ve yatay hareket engeli doğrulaması",
+        "DNS yapılandırması ve bölge aktarımı güvenlik kontrolü",
+        "NTP/SNMP servislerinin güvenli yapılandırma doğrulaması",
+        "Ağ cihazlarında yönetim arayüzü maruziyeti kontrolü"
+      ]
+    },
+    {
+      "id": "web-validation",
+      "label": "Web Uygulama Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Giriş uç noktalarında kimlik doğrulama zorunluluğu testi",
+        "Hız sınırlama ve kaba kuvvet koruma doğrulaması",
+        "Oturum yönetimi ve çerez güvenlik bayrakları kontrolü",
+        "Girdi doğrulama ve temel OWASP kontrolleri",
+        "Hata mesajlarında bilgi sızıntısı doğrulaması",
+        "Yetkilendirme atlama ve rol tabanlı erişim kontrol testi",
+        "Dosya yükleme güvenliği ve içerik türü doğrulaması",
+        "CSRF/XSS/SQL enjeksiyonuna karşı temel dayanıklılık kontrolü"
+      ]
+    },
+    {
+      "id": "system-hardening",
+      "label": "Sistem Sertleştirme Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Gereksiz servislerin devre dışı bırakılma doğrulaması",
+        "Paket güncellik ve kritik yama seviyesi kontrolü",
+        "Parola politikası ve çok faktörlü kimlik doğrulama gereksinimi",
+        "Log toplama ve merkezi izleme doğrulaması",
+        "Dosya izinleri ve ayrıcalık sınırlandırma kontrolü",
+        "Uzak yönetim servisleri için güvenli yapılandırma doğrulaması",
+        "Çekirdek ve işletim sistemi güvenlik parametreleri kontrolü",
+        "Zararlı yazılım koruma ve olay kaydı bütünlük doğrulaması"
+      ]
+    },
+    {
+      "id": "container-validation",
+      "label": "Konteyner ve Orkestrasyon Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Konteyner ayrıcalık ayarları ve yetenek kontrolü",
+        "İmaj kaynak ve imza doğrulaması",
+        "Gizli bilgi yönetimi ve ortam değişkeni sızıntı kontrolü",
+        "Konteyner ağ politikası doğrulaması",
+        "Çalışma zamanı güvenlik profili kontrolü",
+        "Konteynerler arası ağ izolasyonu doğrulaması",
+        "Kubernetes rol ve servis hesabı yetki doğrulaması",
+        "Kayıt deposu erişim kontrolü ve imaj tarama doğrulaması"
+      ]
+    },
+    {
+      "id": "identity-access",
+      "label": "Kimlik ve Erişim Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "En az yetki prensibi rol matrisi doğrulaması",
+        "Yetki yükseltme yolları için erişim kontrol testi",
+        "Servis hesapları anahtar ve token yaşam döngüsü kontrolü",
+        "Yetkisiz endpoint erişim doğrulaması",
+        "Kullanıcı yaşam döngüsü yönetimi kontrolü",
+        "Tek oturum açma akışı ve oturum sonlandırma doğrulaması",
+        "Hesap kilitleme ve başarısız giriş politikası testi"
+      ]
+    },
+    {
+      "id": "api-validation",
+      "label": "API Güvenlik Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "API kimlik doğrulama ve yetkilendirme kontrolü",
+        "Nesne düzeyi yetki kontrolü doğrulaması",
+        "Hız sınırlama ve kötüye kullanım koruması testi",
+        "Hata yanıtlarında hassas veri sızıntısı kontrolü",
+        "API sürümleme ve eski uç nokta maruziyeti doğrulaması",
+        "JSON şema ve girdi doğrulama dayanıklılık testi"
+      ]
+    },
+    {
+      "id": "wireless-validation",
+      "label": "Kablosuz Ağ Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Kablosuz şifreleme protokolü doğrulaması",
+        "Misafir ağı izolasyonu ve erişim sınırı kontrolü",
+        "Kablosuz istemci ayrıştırma doğrulaması",
+        "Erişim noktası yönetim arayüzü güvenlik kontrolü",
+        "Kurumsal kimlik doğrulama yapılandırma doğrulaması"
+      ]
+    },
+    {
+      "id": "active-directory-validation",
+      "label": "Dizin Servisi Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Parola politikası ve hesap kilitleme yapılandırma doğrulaması",
+        "Ayrıcalıklı grup üyeliklerinin gözden geçirilmesi",
+        "Eski protokol ve zayıf kimlik doğrulama kullanım kontrolü",
+        "Grup ilkesi güvenlik ayarları doğrulaması",
+        "Paylaşım ve dosya izinlerinde yetki yayılımı kontrolü"
+      ]
+    },
+    {
+      "id": "cloud-validation",
+      "label": "Bulut Güvenlik Testleri",
+      "flows": [
+        "test"
+      ],
+      "tests": [
+        "Kimlik ve rol yetkilendirme yapılandırması doğrulaması",
+        "Nesne depolama genel erişim maruziyeti kontrolü",
+        "Ağ güvenlik grubu ve erişim kuralı doğrulaması",
+        "Anahtar yönetimi ve gizli bilgi depolama kontrolü",
+        "Bulut denetim kaydı ve izleme kapsamı doğrulaması",
+        "Sunucusuz fonksiyonlar için yetki ve tetikleyici güvenlik testi"
+      ]
+    },
+    {
+      "id": "attack-surface-validation",
+      "label": "Yuzey ve Erişim Adımları",
+      "flows": [
+        "attack"
+      ],
+      "tests": [
+        "Disa acik servisler icin kontrollu erisim dogrulamasi",
+        "Kimlik dogrulama noktalarinda kaba kuvvet dayanimi olcumu",
+        "Yetkisiz endpoint erisim denemesi ve sonuc siniflandirma",
+        "Servis bannner/baslik bilgisinden bilgi sizintisi degerlendirmesi",
+        "Parola politikasi zayifliklarina karsi kontrollu test",
+        "Dusuk riskli payload ile temel exploitability kontrolu",
+        "Yonetim arayuzlerinde MFA zorunlulugu atlatma denemesi",
+        "Ayricalik sinirlarinda yatay hareket olasiligi dogrulamasi"
+      ]
+    },
+    {
+      "id": "attack-web-scenarios",
+      "label": "Web Senaryolari",
+      "flows": [
+        "attack"
+      ],
+      "tests": [
+        "Kimliksiz erisimle kritik endpoint cagri denemesi",
+        "Rol degisimi ile IDOR benzeri erisim senaryosu",
+        "Rate limit asimi icin kontrollu istek yogunlugu testi",
+        "Hata yanitlarindan stack/config sizintisi avcisi",
+        "Dosya yukleme hattinda uzanti/MIME atlatma kontrolu",
+        "CSRF token dogrulama atlatma denemesi",
+        "XSS filtreleme dayanimi icin zararsiz payload testi",
+        "SQLi sinyali icin hataya dayali guvenli dogrulama"
+      ]
+    },
+    {
+      "id": "attack-internal-pivoting",
+      "label": "Ic Ag ve Pivot Adimlari",
+      "flows": [
+        "attack"
+      ],
+      "tests": [
+        "Segmentler arasi ACL atlatma olasiligi kontrolu",
+        "SMB paylasimlarinda anonim/yanlis yetki denemesi",
+        "RDP/SSH servisi icin guvenli kimlik denemesi",
+        "SNMP community string guclulugu dogrulamasi",
+        "DNS zone transfer denemesi ve kayit ifsasi kontrolu",
+        "LDAP/AD endpointlerinde anonim bind kontrolu",
+        "Yonetim portlarinda kaynak IP kisiti bypass testi",
+        "Lateral movement path haritalama (kontrollu)"
+      ]
+    },
+    {
+      "id": "remediation-network-hardening",
+      "label": "Ag Sertlestirme",
+      "flows": [
+        "remediation"
+      ],
+      "tests": [
+        "Gereksiz acik port kapatma aksiyonu olustur",
+        "Firewall kural daraltma ve allowlist tanimi",
+        "Yonetim portlari icin VPN/segment zorunlulugu",
+        "SMBv1 ve zayif sifreleme protokollerini devre disi birak",
+        "DNS/NTP/SNMP servislerinde guvenli konfigurasyon sablonu",
+        "Misafir ve uretim agi izolasyon plana ekle",
+        "ACL politika revizyonu ve degisiklik takvimi",
+        "Ag cihazlari yonetim arayuzu erisim kisitlama"
+      ]
+    },
+    {
+      "id": "remediation-application-security",
+      "label": "Uygulama Guvenligi",
+      "flows": [
+        "remediation"
+      ],
+      "tests": [
+        "Kimlik dogrulama zorunlulugu olmayan endpointleri kapat",
+        "Rol tabanli yetki matrisini sertlestir",
+        "Hata mesaji sanitizasyonu ve bilgi sizintisi azaltimi",
+        "Rate limit ve captcha politikasi iyilestirme",
+        "Guvenli cerez bayraklari (HttpOnly/Secure/SameSite) uygulama",
+        "Girdi dogrulama katmanini merkezilestir",
+        "Dosya yukleme guvenlik politikasi guncelle",
+        "CSRF/XSS/SQLi koruma middleware kontrolleri"
+      ]
+    },
+    {
+      "id": "remediation-identity-governance",
+      "label": "Kimlik ve Erisim Yonetimi",
+      "flows": [
+        "remediation"
+      ],
+      "tests": [
+        "Ayricalikli hesaplar icin MFA zorunlulugu",
+        "Parola politikasi ve hesap kilitleme esiklerini sertlestir",
+        "Servis hesaplari icin token/anahtar rotasyonu",
+        "En az yetki prensibi icin rol temizligi",
+        "Yetki yukseltme yolaklarini kapatma aksiyon plani",
+        "Inaktif hesap temizligi ve otomatik kapanis",
+        "SSO oturum sonlandirma iyilestirmesi",
+        "Denetim loglarinda IAM olay alarmlari tanimla"
+      ]
+    },
+    {
+      "id": "remediation-cloud-container",
+      "label": "Bulut ve Konteyner",
+      "flows": [
+        "remediation"
+      ],
+      "tests": [
+        "Public bucket/policy maruziyetlerini kapat",
+        "Cloud security group kurallarini daralt",
+        "KMS anahtar erisim politikasi revizyonu",
+        "Konteyner calisma zamaninda root yetkisini kaldir",
+        "Kubernetes RBAC izinlerini en aza indir",
+        "Image signing ve registry policy zorunlulugu",
+        "Secret yonetimini merkezi kasaya tasima",
+        "CI/CD guvenlik taramalarini pipeline zorunlulugu yap"
+      ]
+    },
+    {
+      "id": "custom",
+      "label": "Özel Test",
+      "flows": [
+        "test",
+        "attack",
+        "remediation"
+      ],
+      "tests": [
+        "Diğer"
+      ]
+    }
+  ]
+}

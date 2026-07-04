@@ -1,0 +1,7 @@
+{
+  "default": "tr",
+  "supported": [
+    { "code": "tr", "label": "Turkce" },
+    { "code": "en", "label": "English" }
+  ]
+}

@@ -1,0 +1,128 @@
+#ssvp-toast-root {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2200;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(380px, calc(100vw - 24px));
+    pointer-events: none;
+}
+
+.ssvp-toast {
+    pointer-events: auto;
+    border: 1px solid #d0d5dd;
+    border-left-width: 5px;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 14px 32px rgba(16, 24, 40, 0.18);
+    overflow: hidden;
+    transform: translateX(24px);
+    opacity: 0;
+    transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.ssvp-toast.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.ssvp-toast.hiding {
+    transform: translateX(26px);
+    opacity: 0;
+}
+
+.ssvp-toast-body {
+    padding: 10px 12px 12px 12px;
+}
+
+.ssvp-toast-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.ssvp-toast-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.ssvp-toast-close {
+    border: 0;
+    background: transparent;
+    color: #667085;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.ssvp-toast-message {
+    margin: 0;
+    color: #344054;
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.ssvp-toast.info {
+    border-left-color: #1570ef;
+}
+
+.ssvp-toast.info .ssvp-toast-title {
+    color: #175cd3;
+}
+
+.ssvp-toast.success {
+    border-left-color: #12b76a;
+}
+
+.ssvp-toast.success .ssvp-toast-title {
+    color: #039855;
+}
+
+.ssvp-toast.warning {
+    border-left-color: #f79009;
+}
+
+.ssvp-toast.warning .ssvp-toast-title {
+    color: #b54708;
+}
+
+.ssvp-toast.error {
+    border-left-color: #f04438;
+}
+
+.ssvp-toast.error .ssvp-toast-title {
+    color: #b42318;
+}
+
+body.light-theme .ssvp-toast {
+    background: #ffffff;
+}
+
+body:not(.light-theme) .ssvp-toast {
+    background: #0f1720;
+    border-color: #2a3642;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.42);
+}
+
+body:not(.light-theme) .ssvp-toast-message {
+    color: #d0d8e2;
+}
+
+body:not(.light-theme) .ssvp-toast-close {
+    color: #a8b6c8;
+}
+
+@media (max-width: 640px) {
+    #ssvp-toast-root {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        bottom: 12px;
+    }
+}

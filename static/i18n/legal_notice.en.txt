@@ -1,0 +1,46 @@
+Risk, Outcomes, and Legal Terms
+
+This platform may include active network scanning, service detection, port discovery, and related technical validation steps.
+Such operations may generate log records on target systems, trigger security alerts,
+cause performance degradation, or lead to interruptions in misconfigured environments.
+For this reason, before starting the scan steps, the scope, time window, impact level, and rollback plan
+must be clearly defined.
+
+1) Authorization and Usage Boundary
+- Use this platform only on systems you own or in environments where you have explicit written permission.
+- Do not perform unauthorized tests against third-party networks, production systems, or publicly accessible services.
+- Targeting systems beyond the approved scope may be considered an unauthorized access attempt.
+- Where necessary, keep internal approval, contracts, pentest scope documents, and change records.
+
+2) Operational Risks
+- Intensive scanning may consume bandwidth and strain network devices.
+- IDS/IPS, WAF, SIEM, or EDR systems may interpret the scan as hostile activity.
+- Incorrect parameter selections may cause timeouts, delays, or temporary access issues in services.
+- Multiple targets, broad CIDR ranges, or aggressive speed settings significantly increase the risk level.
+
+3) Data Security and Privacy
+- Collected technical outputs (IP, port, banner, service version, etc.) may be considered sensitive information.
+- Share results only with authorized persons; apply masking or anonymization when needed.
+- Store output files in secure storage and apply access controls against unauthorized access.
+- Handle log records that may contain personal data in accordance with applicable regulations.
+
+4) Interpretation of Results
+- Scan outputs are not definitive proof, but a technical indicator.
+- False positives and false negatives are possible; verify critical findings with a second method.
+- Do not make a final security decision based on a single tool or a single parameter set.
+- Clearly state assumptions, scope, and limitations during the reporting phase.
+
+5) Legal and Organizational Obligations
+- Local laws, organizational policy, and contractual obligations take priority.
+- Unauthorized access, discovery, or testing attempts may lead to legal and criminal liability.
+- The capabilities provided by this platform should be used for defense, validation, and improvement.
+- The user accepts responsibility for the actions they perform.
+
+6) Safe Working Practices
+- Start with low-impact settings first, then increase them in a controlled manner when needed.
+- If possible, test in an isolated lab environment first, then move to the target environment.
+- Avoid aggressive scanning during critical times such as high-traffic or operational hours.
+- Keep a record of the start time, scope, parameters, and results for each test session.
+
+By checking the approval box, you declare that you have read,
+understood, and will act only within authorized/approved usage of these risks, limits, and responsibilities.

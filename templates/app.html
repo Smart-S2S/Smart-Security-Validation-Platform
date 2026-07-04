@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Security Validation Platform (SSVP v1.0)</title>
+    <link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
+</head>
+<body>
+<div id="authOverlay" class="auth-overlay" hidden>
+    <div class="auth-card">
+        <h2>Giris Yap</h2>
+        <p id="authMessage" class="muted">Devam etmek icin oturum acman gerekiyor.</p>
+        <form id="loginForm" class="auth-form">
+            <label for="loginUsername">Kullanici adi</label>
+            <input id="loginUsername" name="username" type="text" autocomplete="username" required>
+            <label for="loginPassword">Sifre</label>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+            <button id="loginSubmit" type="submit">Giris</button>
+        </form>
+        <form id="changePasswordForm" class="auth-form" style="display:none; margin-top:10px;">
+            <label for="newPassword">Yeni sifre</label>
+            <input id="newPassword" name="newPassword" type="password" minlength="8" autocomplete="new-password" required>
+            <label for="confirmNewPassword">Yeni sifre (dogrula)</label>
+            <input id="confirmNewPassword" name="confirmNewPassword" type="password" minlength="8" autocomplete="new-password" required>
+            <button id="changePasswordSubmit" type="submit">Sifreyi Degistir</button>
+        </form>
+    </div>
+</div>
+
+<header class="top-header">
+    <div class="header-left">
+        <div class="header-menu-wrap" id="networkSummaryMenu">
+            <button id="networkSummaryToggle" type="button" class="icon-btn" title="" aria-label="">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="5" cy="12" r="2"></circle>
+                    <circle cx="12" cy="6" r="2"></circle>
+                    <circle cx="19" cy="12" r="2"></circle>
+                    <circle cx="12" cy="18" r="2"></circle>
+                    <line x1="6.6" y1="10.8" x2="10.4" y2="7.2"></line>
+                    <line x1="13.6" y1="7.2" x2="17.4" y2="10.8"></line>
+                    <line x1="17.4" y1="13.2" x2="13.6" y2="16.8"></line>
+                    <line x1="10.4" y1="16.8" x2="6.6" y2="13.2"></line>
+                </svg>
+            </button>
+            <div id="networkSummaryPopover" class="header-popover" hidden>
+                <h3></h3>
+                <p id="networkSummaryText" class="muted"></p>
+            </div>
+        </div>
+    </div>
+
+    <h1 class="header-title" title=""></h1>
+
+    <div class="header-menu-wrap" id="profileMenuWrap">
+        <button id="profileMenuToggle" type="button" class="avatar-btn" title="" aria-label="">U</button>
+        <div id="profileMenuPopover" class="header-popover menu-popover" hidden>
+            <button type="button" class="menu-item" id="profileMenuProfile"></button>
+            <button type="button" class="menu-item" id="profileMenuUsers" data-i18n="menu.users">Ayarlar</button>
+            <button type="button" class="menu-item" id="profileMenuPanel" style="display:none;">Panel</button>
+            <button type="button" class="menu-item" id="profileMenuNewTest"></button>
+            <button type="button" class="menu-item" id="profileMenuLogout"></button>
+        </div>
+    </div>
+</header>
+
+<div class="app-grid">
+    <div class="card workspace-card">
+        <div class="workflow-shell">
+            <aside class="stage-sidebar">
+                <h3></h3>
+                <div id="operationTabs" class="stage-tab-list">
+                    <div class="stage-tab-row">
+                        <button type="button" class="stage-tab active" data-op="legal">1. Yasal Sorumluluk</button>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="stage-main">
+                <section id="precheckPanel" class="wizard-section operation-panel" data-op-panel="legal">
+                    <h3></h3>
+                    <pre id="legalNoticeText" class="legal-scroll-box"></pre>
+                    <label class="check-chip" style="margin-top:10px; display:flex;">
+                        <input id="legalConsent" type="checkbox">
+                        <span></span>
+                    </label>
+                    <button id="legalContinue" type="button" class="legal-continue-btn" disabled></button>
+                </section>
+
+                <form id="scanForm" class="operation-panel" data-op-panel="scan" style="display:none;">
+                    <section class="wizard-section">
+                        <h3></h3>
+                        <label for="target" class="muted"></label>
+                        <textarea id="target" name="target" rows="3" placeholder="" required>172.31.7.145</textarea>
+                        <p class="muted" style="margin-top:8px;"></p>
+                    </section>
+
+                    <section class="wizard-section">
+                        <h3></h3>
+                        <p class="muted"></p>
+                        <div id="toolOptions" class="option-grid"></div>
+                    </section>
+
+                    <section class="wizard-section">
+                        <h3></h3>
+                        <p class="muted"></p>
+                        <div id="paramOptions" class="checkbox-grid"></div>
+                        <p id="paramConflictNote" class="muted" style="margin-top:10px;"></p>
+                    </section>
+
+                    <section class="wizard-section">
+                        <h3></h3>
+                        <p class="muted"></p>
+                        <div id="portOptions" class="checkbox-grid"></div>
+                    </section>
+
+                    <section class="wizard-section">
+                        <h3></h3>
+                        <p id="scanConfigNote" class="muted"></p>
+                        <button id="scanBtn" type="submit"></button>
+                    </section>
+                </form>
+
+                <section id="directionPanel" class="wizard-section operation-panel" data-op-panel="direction" style="display:none;">
+                    <h3></h3>
+                    <p class="muted"></p>
+                    <div id="directionSelectionWrap">
+                        <div id="directionActions" class="action-grid">
+                            <button type="button" class="action-card" data-direction="test">
+                                <p class="action-title"></p>
+                                <p class="action-description"></p>
+                            </button>
+                            <button type="button" class="action-card" data-direction="attack">
+                                <p class="action-title"></p>
+                                <p class="action-description"></p>
+                            </button>
+                            <button type="button" class="action-card" data-direction="remediation">
+                                <p class="action-title"></p>
+                                <p class="action-description"></p>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="directionLockedWrap" style="display:none;">
+                        <p id="directionLockedText" class="muted"></p>
+                        <div id="directionOperationWindow" class="next-test-panel" style="display:none; margin-top:10px;"></div>
+                    </div>
+
+                    <div id="testPlanPanel" class="next-test-panel" style="display:none;">
+                        <form id="nextTestForm">
+                            <label for="nextTestCategory"></label>
+                            <select id="nextTestCategory" name="nextTestCategory" class="field-select" required></select>
+
+                            <label for="nextTestPreset"></label>
+                            <select id="nextTestPreset" name="nextTestPreset" class="field-select" required></select>
+
+                            <div id="nextTestManualWrap" style="display:none;">
+                                <label for="nextTestManualName"></label>
+                                <input id="nextTestManualName" name="nextTestManualName" placeholder="" />
+                            </div>
+                        </form>
+                        <p id="nextTestFeedback" class="action-note"></p>
+                    </div>                    
+                    <div class="direction-global-actions">
+                        <button id="directionNextBtn" type="button" disabled></button>
+                    </div>
+                    <p id="directionNote" class="action-note"></p>
+                    <div class="direction-global-actions">
+                        <div class="panel-actions-right">
+                            <button id="directionProceedBtn" type="button" disabled></button>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="userAdminPanel" class="wizard-section operation-panel" data-op-panel="users" style="display:none;">
+                    <h3 data-i18n="users.panel.title">Kullanıcı ve Rol Yönetimi</h3>
+                    <p id="userAdminInfo" class="muted" data-i18n="users.panel.note">Sadece yetkili hesaplar bu paneli kullanabilir.</p>
+
+                    <div class="user-admin-grid">
+                        <section class="next-test-panel" style="margin-top:0;">
+                            <h4 style="margin:0 0 10px 0;" data-i18n="users.panel.createTitle">Yeni Kullanıcı Oluştur</h4>
+                            <form id="userCreateForm" class="auth-form" autocomplete="off">
+                                <label for="userCreateUsername" data-i18n="users.field.username">Kullanıcı adı</label>
+                                <input id="userCreateUsername" name="username" type="text" minlength="3" maxlength="64" required>
+
+                                <label for="userCreatePassword" data-i18n="users.field.password">Şifre</label>
+                                <input id="userCreatePassword" name="password" type="password" minlength="8" required>
+
+                                <label for="userCreatePasswordConfirm" data-i18n="users.field.passwordConfirm">Şifre (doğrula)</label>
+                                <input id="userCreatePasswordConfirm" name="passwordConfirm" type="password" minlength="8" required>
+
+                                <label class="check-chip">
+                                    <input id="userCreateIsAdmin" name="is_admin" type="checkbox">
+                                    <span data-i18n="users.field.admin">Yönetici</span>
+                                </label>
+
+                                <div>
+                                    <p class="muted" style="margin:0 0 8px 0;" data-i18n="users.field.roles">Roller</p>
+                                    <div id="userCreateRoles" class="checkbox-grid user-role-grid"></div>
+                                </div>
+
+                                <button id="userCreateSubmit" type="submit" data-i18n="users.action.create">Kullanıcı Ekle</button>
+                            </form>
+                        </section>
+
+                        <section class="next-test-panel" style="margin-top:0;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                                <h4 style="margin:0;" data-i18n="users.panel.listTitle">Kullanıcı Listesi</h4>
+                                <button id="usersRefreshBtn" type="button" data-i18n="users.action.refresh">Yenile</button>
+                            </div>
+
+                            <div style="overflow:auto;">
+                                <table id="usersTable">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="users.table.username">Kullanıcı</th>
+                                            <th data-i18n="users.table.admin">Yönetici</th>
+                                            <th data-i18n="users.table.status">Durum</th>
+                                            <th data-i18n="users.table.roles">Roller</th>
+                                            <th data-i18n="users.table.actions">İşlemler</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <section id="userEditPanel" class="next-test-panel" style="display:none; margin-top:12px;">
+                        <h4 style="margin:0 0 10px 0;" data-i18n="users.panel.editTitle">Kullanıcı Düzenle</h4>
+                        <form id="userEditForm" class="auth-form" autocomplete="off">
+                            <input id="userEditId" type="hidden">
+
+                            <label for="userEditUsername" data-i18n="users.field.username">Kullanıcı adı</label>
+                            <input id="userEditUsername" name="username" type="text" minlength="3" maxlength="64" required>
+
+                            <label class="check-chip">
+                                <input id="userEditIsAdmin" name="is_admin" type="checkbox">
+                                <span data-i18n="users.field.admin">Yönetici</span>
+                            </label>
+
+                            <label class="check-chip">
+                                <input id="userEditIsActive" name="is_active" type="checkbox">
+                                <span data-i18n="users.field.active">Aktif</span>
+                            </label>
+
+                            <div>
+                                <p class="muted" style="margin:0 0 8px 0;" data-i18n="users.field.roles">Roller</p>
+                                <div id="userEditRoles" class="checkbox-grid user-role-grid"></div>
+                            </div>
+
+                            <div class="user-edit-actions">
+                                <button id="userEditSaveBtn" type="submit" data-i18n="users.action.save">Kaydet</button>
+                                <button id="userEditCancelBtn" type="button" data-i18n="users.action.cancel">İptal</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <p id="userAdminFeedback" class="action-note"></p>
+                </section>
+            </section>
+        </div>
+    </div>
+
+    <aside class="card right-rail">
+        <h2 class="right-rail-title"></h2>
+        <p id="currentStep" class="current"></p>
+        <div id="logs" class="logbox"></div>
+
+        <h2 style="margin-top:18px;"></h2>
+        <pre id="aiOutput" class="ai-box"></pre>
+
+        <h2 style="margin-top:18px;"></h2>
+        <div class="report-actions">
+            <button id="exportPdfBtn" type="button" class="report-btn"></button>
+        </div>
+        <div id="stepOutputs" class="step-outputs"></div>
+    </aside>
+</div>
+
+<script src="/static/js/notify.js?v=20260703b"></script>
+<script src="/static/js/index.js?v=20260703b"></script>
+
+</body>
+</html>

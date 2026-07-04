@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="settings.meta.title">SSVP Ayarlar</title>
+    <link rel="stylesheet" href="/static/css/settings.css">
+    <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
+</head>
+<body>
+<header class="settings-header">
+    <h1 data-i18n="settings.header.title">Ayarlar</h1>
+    <div class="header-menu-wrap" id="settingsMenuWrap">
+        <button id="settingsMenuToggle" type="button" class="avatar-btn" aria-label="Menu" title="Menu">U</button>
+        <div id="settingsMenuPopover" class="header-popover menu-popover" hidden>
+            <button type="button" class="menu-item" id="settingsMenuProfile">Profil</button>
+            <button type="button" class="menu-item" id="settingsMenuSystem">Ayarlar</button>
+            <button type="button" class="menu-item" id="settingsMenuPanel" style="display:none;">Panel</button>
+            <button type="button" class="menu-item" id="settingsMenuApp">Pentest</button>
+            <button type="button" class="menu-item" id="settingsLogoutBtn" data-i18n="settings.header.logout">Çıkış Yap</button>
+        </div>
+    </div>
+</header>
+
+<main class="settings-shell">
+    <aside class="settings-tabs">
+        <button class="tab-btn" data-tab="appearance" data-i18n="settings.tab.appearance">Görünüm</button>
+        {% if current_user and current_user.is_admin %}
+        <button class="tab-btn" data-tab="ai" data-i18n="settings.tab.ai">AI Model</button>
+        <button class="tab-btn" data-tab="scan" data-i18n="settings.tab.scan">Tarama Ayarları</button>
+        {% endif %}
+        <button class="tab-btn" data-tab="system" data-i18n="settings.tab.system">Sistem ve Proje</button>
+    </aside>
+
+    <section class="settings-content">
+        <p id="settingsInfo" class="muted"></p>
+
+        <section class="panel" data-panel="appearance" hidden>
+            <h2 data-i18n="settings.appearance.title">Görünüm</h2>
+            <form id="appearanceForm" class="form-grid card appearance-card">
+                <label for="appearanceTheme" data-i18n="settings.appearance.theme">Tema</label>
+                <select id="appearanceTheme">
+                    <option value="dark" data-i18n="settings.appearance.theme.dark">Koyu</option>
+                    <option value="light" data-i18n="settings.appearance.theme.light">Açık</option>
+                </select>
+
+                <label for="appearanceLanguage" data-i18n="settings.appearance.language">Dil</label>
+                <select id="appearanceLanguage">
+                    <option value="tr" data-i18n="settings.appearance.language.tr">Türkçe</option>
+                    <option value="en" data-i18n="settings.appearance.language.en">English</option>
+                </select>
+
+                <button type="submit" data-i18n="settings.appearance.save">Görünüm Ayarlarını Uygula</button>
+            </form>
+        </section>
+
+        <section class="panel" data-panel="system" hidden>
+            <h2 data-i18n="settings.system.title">Sistem ve Proje Bilgileri</h2>
+            <p class="muted" data-i18n="settings.system.note">Sunucudan alınan güncel sistem ve proje özeti.</p>
+
+            <div class="system-info-grid">
+                <section class="card">
+                    <h3 data-i18n="settings.system.project">Proje</h3>
+                    <dl class="info-list" id="projectInfoList"></dl>
+                </section>
+
+                <section class="card">
+                    <h3 data-i18n="settings.system.host">Sunucu</h3>
+                    <dl class="info-list" id="hostInfoList"></dl>
+                </section>
+
+                <section class="card">
+                    <h3 data-i18n="settings.system.resources">Kaynaklar</h3>
+                    <dl class="info-list" id="resourceInfoList"></dl>
+                </section>
+            </div>
+        </section>
+
+        {% if current_user and current_user.is_admin %}
+        <section class="panel" data-panel="ai" hidden>
+            <h2 data-i18n="settings.ai.title">AI Model Ayarları</h2>
+            <form id="aiSettingsForm" class="form-grid card compact-settings-card">
+                <label for="aiModelSelect" data-i18n="settings.ai.installedModel">Sunucuda Yüklü Model</label>
+                <select id="aiModelSelect"></select>
+                <label for="aiModelManual" data-i18n="settings.ai.modelManual">Model Adı (manuel)</label>
+                <input id="aiModelManual" type="text" maxlength="128">
+                <label for="aiTimeout" data-i18n="settings.ai.timeout">AI Timeout (sn)</label>
+                <input id="aiTimeout" type="number" min="10" max="3600" required>
+                <label for="aiUrl" data-i18n="settings.ai.url">Ollama URL</label>
+                <input id="aiUrl" type="text" maxlength="300" required>
+                <label class="chip"><input id="aiFakeResponse" type="checkbox"> <span data-i18n="settings.ai.useDemo">Demo AI yanıtı kullan</span></label>
+                <button type="submit" data-i18n="settings.ai.save">AI Ayarlarını Kaydet</button>
+            </form>
+        </section>
+
+        <section class="panel" data-panel="scan" hidden>
+            <h2 data-i18n="settings.scan.title">Tarama Ayarları</h2>
+            <form id="scanSettingsForm" class="form-grid card compact-settings-card">
+                <label for="nmapTimeout" data-i18n="settings.scan.nmapTimeout">Nmap Timeout (sn)</label>
+                <input id="nmapTimeout" type="number" min="10" max="7200" required>
+                <label for="masscanTimeout" data-i18n="settings.scan.masscanTimeout">Masscan Timeout (sn)</label>
+                <input id="masscanTimeout" type="number" min="10" max="7200" required>
+                <label for="netdiscoverTimeout" data-i18n="settings.scan.netdiscoverTimeout">Netdiscover Timeout (sn)</label>
+                <input id="netdiscoverTimeout" type="number" min="10" max="7200" required>
+                <button type="submit" data-i18n="settings.scan.save">Tarama Ayarlarını Kaydet</button>
+            </form>
+        </section>
+        {% endif %}
+
+        <p id="settingsFeedback" class="feedback"></p>
+    </section>
+</main>
+
+<script src="/static/js/notify.js?v=20260703b"></script>
+<script src="/static/js/settings.js?v=20260703g"></script>
+</body>
+</html>

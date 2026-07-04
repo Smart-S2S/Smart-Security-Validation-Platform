@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSVP Panel</title>
+    <link rel="stylesheet" href="/static/css/settings.css?v=20260703">
+    <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
+</head>
+<body>
+<header class="settings-header">
+    <h1>Yönetim Paneli</h1>
+    <div class="header-menu-wrap" id="panelMenuWrap">
+        <button id="panelMenuToggle" type="button" class="avatar-btn" aria-label="Menu" title="Menu">U</button>
+        <div id="panelMenuPopover" class="header-popover menu-popover" hidden>
+            <button type="button" class="menu-item" id="panelMenuProfile">Profil</button>
+            <button type="button" class="menu-item" id="panelMenuSettings">Ayarlar</button>
+            <button type="button" class="menu-item" id="panelMenuPanel">Panel</button>
+            <button type="button" class="menu-item" id="panelMenuApp">Pentest</button>
+            <button id="panelLogoutBtn" type="button" class="menu-item">Çıkış Yap</button>
+        </div>
+    </div>
+</header>
+
+<main class="settings-shell">
+    <aside class="settings-tabs">
+        <button class="tab-btn" data-tab="profile" active>Profil</button>
+        {% if current_user.is_admin %}
+        <button class="tab-btn" data-tab="users">Kullanıcı Yönetimi</button>
+        <button class="tab-btn" data-tab="roles">Rol Yönetimi</button>
+        <button class="tab-btn" data-tab="offers">Teklifler</button>
+        {% endif %}
+    </aside>
+
+    <section class="settings-content">
+        <section class="panel" data-panel="profile">
+            <h2>Profil Düzenle</h2>
+            <div class="profile-two-col">
+                <form id="profileForm" class="form-grid">
+                    <label for="profileUsername">Kullanıcı Adı</label>
+                    <input id="profileUsername" type="text" minlength="3" maxlength="64" required>
+                    <label for="profileFullName">Ad Soyad</label>
+                    <input id="profileFullName" type="text" maxlength="120">
+                    <label for="profileJobTitle">İş / Ünvan</label>
+                    <input id="profileJobTitle" type="text" maxlength="120">
+                    <label for="profilePhone">Telefon</label>
+                    <input id="profilePhone" type="text" maxlength="40">
+                    <button class="btn" type="submit">Profili Kaydet</button>
+                </form>
+
+                <form id="profilePasswordForm" class="form-grid">
+                    <label for="profileCurrentPassword">Mevcut Şifre</label>
+                    <input id="profileCurrentPassword" type="password" required>
+                    <label for="profileNewPassword">Yeni Şifre</label>
+                    <input id="profileNewPassword" type="password" minlength="8" required>
+                    <label for="profileNewPasswordConfirm">Yeni Şifre (Doğrula)</label>
+                    <input id="profileNewPasswordConfirm" type="password" minlength="8" required>
+                    <button class="btn" type="submit">Şifreyi Güncelle</button>
+                </form>
+            </div>
+        </section>
+
+        {% if current_user.is_admin %}
+        <section class="panel" data-panel="offers" hidden>
+            <div class="card-header">
+                <h2>Teklif Başvuruları</h2>
+                <button id="refreshOffersBtn" type="button" class="btn">Yenile</button>
+            </div>
+            <p id="panelFeedback" class="muted"></p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tarih</th>
+                            <th>Ad Soyad</th>
+                            <th>E-posta</th>
+                            <th>Şirket</th>
+                            <th>Telefon</th>
+                            <th>Mesaj</th>
+                            <th>Durum</th>
+                            <th>Kaydet</th>
+                        </tr>
+                    </thead>
+                    <tbody id="offersTbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" data-panel="users" hidden>
+            <h2>Kullanıcı Yönetimi</h2>
+            <div class="two-col">
+                <div class="user-left-stack">
+                    <form id="createUserForm" class="form-grid">
+                        <label for="newUsername">Kullanıcı Adı</label>
+                        <input id="newUsername" type="text" minlength="3" maxlength="64" required>
+                        <label for="newFullName">Ad Soyad</label>
+                        <input id="newFullName" type="text" maxlength="120">
+                        <label for="newJobTitle">İş / Ünvan</label>
+                        <input id="newJobTitle" type="text" maxlength="120">
+                        <label for="newPhone">Telefon</label>
+                        <input id="newPhone" type="text" maxlength="40">
+                        <label for="newPassword">Şifre</label>
+                        <input id="newPassword" type="password" minlength="8" required>
+                        <label for="newPasswordConfirm">Şifre (Doğrula)</label>
+                        <input id="newPasswordConfirm" type="password" minlength="8" required>
+                        <label><input id="newIsAdmin" type="checkbox"> Yönetici</label>
+                        <div>
+                            <p class="muted">Roller</p>
+                            <div id="newUserRoles" class="roles-grid"></div>
+                        </div>
+                        <button class="btn" type="submit">Kullanıcı Ekle</button>
+                    </form>
+
+                    <form id="editUserForm" class="form-grid" hidden>
+                        <h3>Kullanıcı Düzenle</h3>
+                        <input id="editUserId" type="hidden">
+                        <label for="editUsername">Kullanıcı Adı</label>
+                        <input id="editUsername" type="text" minlength="3" maxlength="64" required>
+                        <label for="editFullName">Ad Soyad</label>
+                        <input id="editFullName" type="text" maxlength="120">
+                        <label for="editJobTitle">İş / Ünvan</label>
+                        <input id="editJobTitle" type="text" maxlength="120">
+                        <label for="editPhone">Telefon</label>
+                        <input id="editPhone" type="text" maxlength="40">
+                        <label><input id="editIsAdmin" type="checkbox"> Yönetici</label>
+                        <label><input id="editIsActive" type="checkbox"> Aktif</label>
+                        <div>
+                            <p class="muted">Roller</p>
+                            <div id="editUserRoles" class="roles-grid"></div>
+                        </div>
+                        <label for="editNewPassword">Yeni Şifre (opsiyonel)</label>
+                        <input id="editNewPassword" type="password" minlength="8">
+                        <label for="editNewPasswordConfirm">Yeni Şifre (Doğrula)</label>
+                        <input id="editNewPasswordConfirm" type="password" minlength="8">
+                        <div class="actions">
+                            <button class="btn" type="submit">Değişiklikleri Kaydet</button>
+                            <button id="cancelEditUserBtn" class="btn ghost" type="button">İptal</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div>
+                    <div class="card-header">
+                        <h3>Kullanıcılar</h3>
+                        <button id="refreshUsersBtn" type="button" class="btn">Yenile</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Kullanıcı</th>
+                                    <th>Ad Soyad</th>
+                                    <th>Yönetici</th>
+                                    <th>Durum</th>
+                                    <th>Roller</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" data-panel="roles" hidden>
+            <h2>Rol Yönetimi</h2>
+            <p class="muted">Yönetici, bu sekmede kullanıcı rollerini toplu olarak düzenleyebilir.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Kullanıcı</th>
+                            <th>Yönetici</th>
+                            <th>Roller</th>
+                            <th>Kaydet</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rolesTbody"></tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+    </section>
+</main>
+
+<script src="/static/js/notify.js?v=20260703b"></script>
+<script src="/static/js/panel.js?v=20260703b"></script>
+</body>
+</html>

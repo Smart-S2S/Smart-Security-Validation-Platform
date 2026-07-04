@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+.venv
+.env
+logs/
+scans/
+*.log
+.DS_Store
+AI_RULES.md
+README_LOCAL.md
+run.sh
+push.sh
+setup/

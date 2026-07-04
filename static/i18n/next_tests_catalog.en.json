@@ -1,0 +1,233 @@
+{
+  "categories": [
+    {
+      "id": "network-validation",
+      "label": "Network Validation Tests",
+      "flows": ["test"],
+      "tests": [
+        "Open port validation and service requirement analysis",
+        "Access rule validation for management ports",
+        "SMB/SSH/RDP hardening verification",
+        "Firewall rule effectiveness and scope validation",
+        "Network segmentation and lateral movement prevention check",
+        "DNS configuration and zone transfer security check",
+        "Secure configuration validation for NTP/SNMP services",
+        "Management interface exposure check on network devices"
+      ]
+    },
+    {
+      "id": "web-validation",
+      "label": "Web Application Tests",
+      "flows": ["test"],
+      "tests": [
+        "Authentication requirement test for login endpoints",
+        "Rate limiting and brute-force protection validation",
+        "Session management and cookie security flag check",
+        "Input validation and basic OWASP control coverage",
+        "Information disclosure validation in error messages",
+        "Authorization bypass and role-based access control test",
+        "File upload security and content-type validation",
+        "Basic resilience test against CSRF/XSS/SQL injection"
+      ]
+    },
+    {
+      "id": "system-hardening",
+      "label": "System Hardening Tests",
+      "flows": ["test"],
+      "tests": [
+        "Verification of disabling unnecessary services",
+        "Package update and critical patch level check",
+        "Password policy and multi-factor authentication requirement",
+        "Log collection and centralized monitoring validation",
+        "File permissions and privilege restriction check",
+        "Secure configuration validation for remote administration services",
+        "Kernel and operating system security parameter check",
+        "Malware protection and event log integrity validation"
+      ]
+    },
+    {
+      "id": "container-validation",
+      "label": "Container and Orchestration Tests",
+      "flows": ["test"],
+      "tests": [
+        "Container privilege settings and capability check",
+        "Image source and signature validation",
+        "Secret management and environment variable leakage check",
+        "Container network policy validation",
+        "Runtime security profile check",
+        "Network isolation validation between containers",
+        "Kubernetes role and service account permission validation",
+        "Registry access control and image scanning validation"
+      ]
+    },
+    {
+      "id": "identity-access",
+      "label": "Identity and Access Tests",
+      "flows": ["test"],
+      "tests": [
+        "Least privilege principle role matrix validation",
+        "Access control test for privilege escalation paths",
+        "Service account key and token lifecycle check",
+        "Unauthorized endpoint access validation",
+        "User lifecycle management check",
+        "Single sign-on flow and session termination validation",
+        "Account lockout and failed login policy test"
+      ]
+    },
+    {
+      "id": "api-validation",
+      "label": "API Security Tests",
+      "flows": ["test"],
+      "tests": [
+        "API authentication and authorization check",
+        "Object-level authorization validation",
+        "Rate limiting and abuse protection test",
+        "Sensitive data leakage check in error responses",
+        "API versioning and legacy endpoint exposure validation",
+        "JSON schema and input validation resilience test"
+      ]
+    },
+    {
+      "id": "wireless-validation",
+      "label": "Wireless Network Tests",
+      "flows": ["test"],
+      "tests": [
+        "Wireless encryption protocol validation",
+        "Guest network isolation and access boundary check",
+        "Wireless client isolation validation",
+        "Access point management interface security check",
+        "Enterprise authentication configuration validation"
+      ]
+    },
+    {
+      "id": "active-directory-validation",
+      "label": "Directory Service Tests",
+      "flows": ["test"],
+      "tests": [
+        "Password policy and account lockout configuration validation",
+        "Review of privileged group memberships",
+        "Legacy protocol and weak authentication usage check",
+        "Group policy security settings validation",
+        "Privilege propagation check for shares and file permissions"
+      ]
+    },
+    {
+      "id": "cloud-validation",
+      "label": "Cloud Security Tests",
+      "flows": ["test"],
+      "tests": [
+        "Identity and role authorization configuration validation",
+        "Public access exposure check for object storage",
+        "Network security group and access rule validation",
+        "Key management and secret storage check",
+        "Cloud audit logging and monitoring scope validation",
+        "Serverless function permission and trigger security test"
+      ]
+    },
+    {
+      "id": "attack-surface-validation",
+      "label": "Attack Surface and Access Steps",
+      "flows": ["attack"],
+      "tests": [
+        "Controlled access validation for externally exposed services",
+        "Brute-force resistance measurement on authentication points",
+        "Unauthorized endpoint access attempt and outcome classification",
+        "Information leakage assessment from service banners/headers",
+        "Controlled test against weak password policy paths",
+        "Basic exploitability check with a low-risk payload",
+        "MFA bypass attempt on management interfaces",
+        "Verification of lateral movement potential within privilege boundaries"
+      ]
+    },
+    {
+      "id": "attack-web-scenarios",
+      "label": "Web Scenarios",
+      "flows": ["attack"],
+      "tests": [
+        "Unauthenticated critical endpoint call attempt",
+        "IDOR-like access scenario with role change",
+        "Controlled request flood for rate limit boundary testing",
+        "Stack/config disclosure hunting from error responses",
+        "Extension/MIME bypass check in file upload flow",
+        "CSRF token validation bypass attempt",
+        "Benign payload test for XSS filtering resilience",
+        "Safe error-based validation signal for SQLi"
+      ]
+    },
+    {
+      "id": "attack-internal-pivoting",
+      "label": "Internal Network and Pivot Steps",
+      "flows": ["attack"],
+      "tests": [
+        "Check for ACL bypass possibility between segments",
+        "Anonymous/incorrect permission attempt on SMB shares",
+        "Safe authentication attempt for RDP/SSH service",
+        "SNMP community string strength validation",
+        "DNS zone transfer attempt and record disclosure check",
+        "Anonymous bind check on LDAP/AD endpoints",
+        "Source IP restriction bypass test on management ports",
+        "Lateral movement path mapping (controlled)"
+      ]
+    },
+    {
+      "id": "remediation-network-hardening",
+      "label": "Network Hardening",
+      "flows": ["remediation"],
+      "tests": [
+        "Create action to close unnecessary open ports",
+        "Firewall rule narrowing and allowlist definition",
+        "VPN/segment requirement for management ports",
+        "Disable SMBv1 and weak encryption protocols",
+        "Secure configuration template for DNS/NTP/SNMP services",
+        "Add guest and production network isolation plan",
+        "ACL policy review and change timeline",
+        "Management interface access restriction for network devices"
+      ]
+    },
+    {
+      "id": "remediation-application-security",
+      "label": "Application Security",
+      "flows": ["remediation"],
+      "tests": [
+        "Close endpoints that do not require authentication",
+        "Harden role-based authorization matrix",
+        "Reduce information leakage through error message sanitization",
+        "Improve rate limiting and captcha policy",
+        "Apply secure cookie flags (HttpOnly/Secure/SameSite)",
+        "Centralize input validation layer",
+        "Update file upload security policy",
+        "Review CSRF/XSS/SQLi protection middleware"
+      ]
+    },
+    {
+      "id": "remediation-identity-governance",
+      "label": "Identity and Access Governance",
+      "flows": ["remediation"],
+      "tests": [
+        "Enforce MFA for privileged accounts",
+        "Harden password policy and account lockout thresholds",
+        "Rotate tokens/keys for service accounts",
+        "Clean up roles based on least privilege",
+        "Create a plan to close privilege escalation paths",
+        "Remove inactive accounts and automate closure",
+        "Improve SSO session termination",
+        "Define IAM event alerts in audit logs"
+      ]
+    },
+    {
+      "id": "remediation-cloud-container",
+      "label": "Cloud and Container",
+      "flows": ["remediation"],
+      "tests": [
+        "Close public bucket/policy exposures",
+        "Narrow cloud security group rules",
+        "Revise KMS key access policy",
+        "Remove root privileges at container runtime",
+        "Minimize Kubernetes RBAC permissions",
+        "Enforce image signing and registry policy",
+        "Move secret management to a centralized vault",
+        "Define default-deny network policies for workloads"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+Risk, Sonuçlar ve Yasal Şartlar
+
+Bu platform aktif ağ taraması, servis tespiti, port keşfi ve ilgili teknik doğrulama adımları içerebilir.
+Bu tip işlemler hedef sistemlerde log kaydı oluşturabilir, güvenlik alarmlarını tetikleyebilir,
+performans düşüşüne yol açabilir veya hatalı yapılandırılmış ortamlarda kesintiye neden olabilir.
+Bu nedenle tarama adımlarına başlamadan önce kapsam, zaman aralığı, etki seviyesi ve geri dönüş planı
+açık biçimde belirlenmelidir.
+
+1) Yetki ve Kullanım Sınırı
+- Bu platformu yalnızca sana ait sistemlerde veya açıkça yazılı izin aldığın ortamlarda kullan.
+- Üçüncü taraf ağları, üretim sistemleri veya kamuya açık servisler üzerinde izinsiz test yapma.
+- Test kapsamını aşan hedeflere yönelmek, izin dışı erişim denemesi olarak değerlendirilebilir.
+- Gerekli durumlarda kurum içi onay, sözleşme, pentest kapsam dokümanı ve değişiklik kaydı tut.
+
+2) Operasyonel Riskler
+- Yoğun taramalar bant genişliği tüketebilir ve ağ cihazlarını zorlayabilir.
+- IDS/IPS, WAF, SIEM veya EDR sistemleri taramayı saldırı olarak algılayabilir.
+- Yanlış parametre seçimleri servislerde timeout, gecikme veya geçici erişim sorunları doğurabilir.
+- Çoklu hedef, geniş CIDR veya agresif hız ayarları risk seviyesini belirgin şekilde artırır.
+
+3) Veri Güvenliği ve Mahremiyet
+- Toplanan teknik çıktılar (IP, port, banner, servis sürümü vb.) hassas bilgi sayılabilir.
+- Sonuçları sadece yetkili kişilerle paylaş; gerektiğinde maskeleme veya anonimleştirme uygula.
+- Çıktı dosyalarını güvenli depolamada sakla; yetkisiz erişime karşı erişim kontrolü uygula.
+- Kişisel veri içerebilecek log kayıtlarında ilgili mevzuata uygun hareket et.
+
+4) Sonuçların Yorumlanması
+- Tarama çıktıları kesin kanıt değil, teknik bir göstergedir.
+- False positive/false negative olasılığı vardır; kritik bulguları ikinci bir yöntemle doğrula.
+- Tek bir araç veya tek bir parametre seti ile nihai güvenlik kararı verme.
+- Raporlama aşamasında varsayımları, kapsamı ve sınırları açıkça belirt.
+
+5) Yasal ve Kurumsal Yükümlülük
+- Yerel kanunlar, kurum politikası ve sözleşmesel yükümlülükler önceliklidir.
+- İzinsiz erişim, keşif veya test girişimleri hukuki ve cezai sorumluluk doğurabilir.
+- Bu platformun sağladığı yetenekler savunma, doğrulama ve iyileştirme amaçlı kullanılmalıdır.
+- Kullanıcı, gerçekleştirdiği işlemlerden doğan sorumluluğu kendi uhdesinde kabul eder.
+
+6) Güvenli Çalışma Pratikleri
+- Önce düşük etkili ayarlarla başla, ihtiyaç halinde kontrollü şekilde artır.
+- Mümkünse testleri izole lab ortamında dene, sonra hedef ortama geç.
+- Kritik zamanlarda (yüksek trafik/operasyon saatleri) agresif taramadan kaçın.
+- Her test oturumu için başlangıç-zaman, kapsam, parametre ve sonuç kaydı tut.
+
+Onay kutusunu işaretleyerek bu riskleri, sınırları ve sorumlulukları okuduğunu,
+anladığını ve yalnızca yetkili/izinli kullanım kapsamında hareket edeceğini beyan etmiş olursun.

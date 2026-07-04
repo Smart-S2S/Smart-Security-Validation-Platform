@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="{{ home_lang or 'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="home.meta.title">SSVP | Smart Security Validation Platform</title>
+    <link rel="stylesheet" href="/static/css/home.css?v=1.0.2">
+    <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
+</head>
+<body>
+    <div class="bg-layer bg-grid" aria-hidden="true"></div>
+    <div class="bg-layer bg-glow" aria-hidden="true"></div>
+
+    <header class="site-header">
+        <a class="brand" href="/{{ home_lang or 'tr' }}">
+            <img src="/static/images/logo_opt.png" alt="SSVP" class="brand-logo">
+        </a>
+
+        <nav class="header-actions">
+            <div class="lang-links" aria-label="Language">
+                <a id="langTrLink" class="lang-link" href="/tr">TR</a>
+                <a id="langEnLink" class="lang-link" href="/en">EN</a>
+            </div>
+            {% if not current_user and not has_home_session %}
+            <button id="homeDirectLoginBtn" class="btn btn-solid" type="button" data-i18n="home.header.login">Giriş Yap</button>
+            {% endif %}
+            {% if current_user or has_home_session %}
+            <div class="header-menu-wrap" id="homeMenuWrap">
+                <button id="homeMenuToggle" type="button" class="avatar-btn" aria-label="Menu" title="Menu">U</button>
+                <div id="homeMenuPopover" class="header-popover menu-popover" hidden>
+                    <button type="button" class="menu-item" id="homeMenuProfile" data-i18n="home.header.profile">Profil</button>
+                    {% if current_user and current_user.is_admin %}
+                    <button type="button" class="menu-item" id="homeMenuPanel">Panel</button>
+                    {% endif %}
+                    <button type="button" class="menu-item" id="homeMenuSettings" data-i18n="home.header.settings">Ayarlar</button>
+                    <button type="button" class="menu-item" id="homeMenuApp" data-i18n="home.header.app">Pentest Paneli</button>
+                    <button type="button" class="menu-item" id="homeMenuLogout" data-i18n="home.header.logout">Çıkış Yap</button>
+                </div>
+            </div>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <p class="eyebrow" data-i18n="home.hero.eyebrow">Gerçek Ekipler için Güvenlik Doğrulaması Platformu</p>
+            <h1 data-i18n="home.hero.title">Ağ taramasından güvenlik kararına giden yolu tek platformda yönetin.</h1>
+            <p class="hero-copy" data-i18n="home.hero.copy">
+                Smart Security Validation Platform, teknik ekiplerin test, analiz ve aksiyon süreçlerini sade bir akışla birleştirir.
+                Modüler mimari, rol bazlı erişim ve raporlama ile kurum içi pentest operasyonunu hızlandırır.
+            </p>
+            <div class="hero-actions">
+                {% if current_user or has_home_session %}
+                <a class="btn btn-solid" href="/app" id="heroAppBtn" data-i18n="home.hero.appCta">Pentest Uygulamasına Geç</a>
+                {% else %}
+                <a class="btn btn-solid" href="#offer" id="heroAppBtn" data-i18n="home.hero.offerCta">Teklif Al</a>
+                {% endif %}
+                <a class="btn btn-outline" href="#features" data-i18n="home.hero.featureCta">Özellikler</a>
+            </div>
+            <div class="hero-metrics">
+                <article>
+                    <strong>3+</strong>
+                    <span data-i18n="home.metrics.tools">Tarama Aracı</span>
+                </article>
+                <article>
+                    <strong>RBAC</strong>
+                    <span data-i18n="home.metrics.rbac">Kullanıcı ve Rol Yönetimi</span>
+                </article>
+                <article>
+                    <strong>AI</strong>
+                    <span data-i18n="home.metrics.ai">Bulgulara Hizli Yorum</span>
+                </article>
+            </div>
+        </section>
+
+        <section id="features" class="content-section">
+            <h2 data-i18n="home.features.title">Neden SSVP?</h2>
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <h3 data-i18n="home.features.item1.title">Tek Akış, Çok Araç</h3>
+                    <p data-i18n="home.features.item1.desc">Nmap, Masscan ve netdiscover ile farklı bakışları aynı test oturumunda toplayın.</p>
+                </article>
+                <article class="feature-card">
+                    <h3 data-i18n="home.features.item2.title">Güvenli Erişim</h3>
+                    <p data-i18n="home.features.item2.desc">Pentest paneli ve backend API erişimi, aktif oturum olmadan otomatik olarak engellenir.</p>
+                </article>
+                <article class="feature-card">
+                    <h3 data-i18n="home.features.item3.title">Kurumsal Hazırlık</h3>
+                    <p data-i18n="home.features.item3.desc">Yasal onay adımı, rol tabanlı yetki modeli ve ayarlanabilir timeout değerleriyle operasyon standardı kurun.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="content-section split">
+            <article>
+                <h2 data-i18n="home.about.title">Tanıtım</h2>
+                <p data-i18n="home.about.desc">
+                    Platform; güvenlik takımı, SOC ve altyapı ekiplerinin aynı veri seti üzerinden çalışmasını hedefler.
+                    Tarama sonuçları tek yerde toplanır, bulgular adım adım izlenir ve raporlama süreci hızlanır.
+                </p>
+            </article>
+            <article>
+                <h2 data-i18n="home.contact.title">İletişim</h2>
+                <p data-i18n="home.contact.desc">Demo, eğitim veya kurum içi kurulum talepleri için bize ulaşın.</p>
+                <ul class="contact-list">
+                    <li data-i18n="home.contact.email">E-posta: security@ssvp.local</li>
+                    <li data-i18n="home.contact.phone">Telefon: +90 232 000 00 00</li>
+                    <li data-i18n="home.contact.address">Adres: İzmir / Türkiye</li>
+                </ul>
+            </article>
+        </section>
+    </main>
+
+    <div id="loginModal" class="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+            <button id="closeLoginModal" class="modal-close" type="button" aria-label="Kapat">x</button>
+            <h3 id="loginTitle" data-i18n="home.login.title">SSVP Giriş</h3>
+            <p id="loginInfo" class="muted" data-i18n="home.login.info">Pentest paneline geçmek için oturum açın.</p>
+
+            <form id="loginForm" class="login-form">
+                <label for="username" data-i18n="home.login.username">Kullanıcı adı</label>
+                <input id="username" name="username" type="text" autocomplete="username" required>
+
+                <label for="password" data-i18n="home.login.password">Şifre</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+                <button id="submitLogin" class="btn btn-solid" type="submit" data-i18n="home.login.submit">Giriş Yap</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="offerModal" class="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="offerTitle">
+            <button id="closeOfferModal" class="modal-close" type="button" aria-label="Kapat">x</button>
+            <h3 id="offerTitle" data-i18n="home.offer.title">Teklif Formu</h3>
+            <p id="offerInfo" class="muted" data-i18n="home.offer.info">Kisa bilgilerinizle teklif talebinizi iletebilirsiniz.</p>
+
+            <form id="offerForm" class="login-form">
+                <label for="offerName" data-i18n="home.offer.name">Ad Soyad</label>
+                <input id="offerName" name="offerName" type="text" maxlength="120" required>
+
+                <label for="offerEmail" data-i18n="home.offer.email">E-posta</label>
+                <input id="offerEmail" name="offerEmail" type="email" maxlength="160" required>
+
+                <label for="offerCompany" data-i18n="home.offer.company">Sirket</label>
+                <input id="offerCompany" name="offerCompany" type="text" maxlength="160">
+
+                <label for="offerPhone" data-i18n="home.offer.phone">Telefon</label>
+                <input id="offerPhone" name="offerPhone" type="text" maxlength="60">
+
+                <label for="offerMessage" data-i18n="home.offer.message">Talep Detayi</label>
+                <textarea id="offerMessage" name="offerMessage" rows="4" maxlength="4000" required></textarea>
+
+                <button id="submitOffer" class="btn btn-solid" type="submit" data-i18n="home.offer.submit">Teklif Gonder</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        window.__HOME_LANG__ = "{{ home_lang or 'tr' }}";
+    </script>
+    <script src="/static/js/notify.js?v=20260703b"></script>
+    <script src="/static/js/home.js?v=20260703b"></script>
+</body>
+</html>
