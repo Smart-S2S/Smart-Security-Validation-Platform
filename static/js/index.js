@@ -3896,7 +3896,10 @@ function exportStepOutputsPdf() {
         return;
     }
 
-    const popup = window.open("", "_blank", "noopener,noreferrer,width=1024,height=768");
+    // NOTE: do NOT pass "noopener"/"noreferrer" here — they sever the opener
+    // reference so document.write() lands on a detached document (or returns
+    // null), which is what produced the blank export page.
+    const popup = window.open("", "_blank", "width=1024,height=768");
     if (!popup) {
         if (window.SSVPNotify) {
             window.SSVPNotify.show({
@@ -3908,6 +3911,9 @@ function exportStepOutputsPdf() {
         return;
     }
 
+    // Print is triggered from the popup's own body onload so it fires only
+    // after the content has been parsed and laid out; printing synchronously
+    // right after document.write() yields a blank page.
     popup.document.write(`
         <html>
             <head>
@@ -3922,15 +3928,13 @@ function exportStepOutputsPdf() {
                     .step-output-text { white-space: normal; }
                 </style>
             </head>
-            <body>
+            <body onload="window.focus(); window.print();">
                 <h1>${escapeHtml(t("report.title", "Islem Sonuclari Raporu"))}</h1>
                 ${stepOutputs.innerHTML}
             </body>
         </html>
     `);
     popup.document.close();
-    popup.focus();
-    popup.print();
 }
 
 async function bootstrapApp() {
