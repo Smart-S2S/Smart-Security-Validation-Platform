@@ -28,6 +28,17 @@
     </div>
 </div>
 
+<div id="actionApprovalOverlay" class="auth-overlay" hidden>
+    <div class="auth-card" style="max-width:520px;">
+        <h2 id="actionApprovalTitle">Islem Onayi</h2>
+        <p id="actionApprovalMessage" class="muted">Bu islem backend Tool Runner ile calistirilacak.</p>
+        <div class="user-edit-actions" style="margin-top:14px; justify-content:flex-end;">
+            <button id="actionApprovalCancelBtn" type="button">Vazgec</button>
+            <button id="actionApprovalConfirmBtn" type="button">Onayla ve Calistir</button>
+        </div>
+    </div>
+</div>
+
 <header class="top-header">
     <div class="header-left">
         <div class="header-menu-wrap" id="networkSummaryMenu">
@@ -63,6 +74,10 @@
         </div>
     </div>
 </header>
+
+<div class="header-path-wrap">
+    <nav id="pathBreadcrumb" class="path-breadcrumb" aria-label="Adres"></nav>
+</div>
 
 <div class="app-grid">
     <div class="card workspace-card">
@@ -126,15 +141,15 @@
                     <p class="muted"></p>
                     <div id="directionSelectionWrap">
                         <div id="directionActions" class="action-grid">
-                            <button type="button" class="action-card" data-direction="validation_plan">
+                            <button type="button" class="action-card" data-direction="scan">
                                 <p class="action-title"></p>
                                 <p class="action-description"></p>
                             </button>
-                            <button type="button" class="action-card" data-direction="evidence_risk_analysis">
+                            <button type="button" class="action-card" data-direction="attack">
                                 <p class="action-title"></p>
                                 <p class="action-description"></p>
                             </button>
-                            <button type="button" class="action-card" data-direction="remediation_plan">
+                            <button type="button" class="action-card" data-direction="remediation">
                                 <p class="action-title"></p>
                                 <p class="action-description"></p>
                             </button>
@@ -157,6 +172,11 @@
                             <div id="nextTestManualWrap" style="display:none;">
                                 <label for="nextTestManualName"></label>
                                 <input id="nextTestManualName" name="nextTestManualName" placeholder="" />
+                            </div>
+
+                            <div id="nextTestParamsWrap" style="display:none;">
+                                <label for="nextTestParamsForm">Script Parametreleri</label>
+                                <div id="nextTestParamsForm" class="dynamic-param-grid"></div>
                             </div>
                         </form>
                         <p id="nextTestFeedback" class="action-note"></p>

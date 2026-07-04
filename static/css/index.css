@@ -149,6 +149,19 @@ input[type="radio"]:focus-visible {
     cursor: not-allowed;
 }
 
+#actionApprovalConfirmBtn {
+    border: 1px solid #16a34a;
+    background: #15803d;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+#actionApprovalCancelBtn {
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #e5e7eb;
+}
+
 .top-header {
     position: sticky;
     top: 0;
@@ -159,6 +172,34 @@ input[type="radio"]:focus-visible {
     padding: 12px 24px;
     border-bottom: 1px solid #374151;
     background: #0b1220;
+}
+
+.header-path-wrap {
+    padding: 10px 24px 12px;
+    border-bottom: 1px solid #374151;
+    background: rgba(8, 14, 26, 0.72);
+}
+
+.path-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    color: #9fb0c8;
+    font-size: 13px;
+}
+
+.path-breadcrumb a {
+    color: var(--text);
+    text-decoration: none;
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+
+.path-breadcrumb a:hover {
+    border-color: #4f77af;
+    background: rgba(96, 165, 250, 0.14);
 }
 
 .header-left {
@@ -952,6 +993,19 @@ pre {
     box-sizing: border-box;
 }
 
+.next-test-panel textarea {
+    width: 100%;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #374151;
+    background: #111827;
+    color: #e5e7eb;
+    min-height: 96px;
+    resize: vertical;
+}
+
 .next-test-panel input {
     padding: 12px;
     border-radius: 10px;
@@ -977,10 +1031,62 @@ pre {
 }
 
 .field-select:focus,
-.next-test-panel input:focus {
+.next-test-panel input:focus,
+.next-test-panel textarea:focus {
     outline: none;
     border-color: #2563eb;
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+.dynamic-param-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+}
+
+.dynamic-param-field {
+    border: 1px solid var(--home-line, #374151);
+    border-radius: 12px;
+    padding: 10px 11px;
+    background: var(--home-panel-soft, #0f172a);
+}
+
+.dynamic-param-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    color: var(--home-text, #cbd5e1);
+    font-size: 13px;
+}
+
+.dynamic-param-required {
+    color: #fca5a5;
+    font-size: 12px;
+}
+
+.dynamic-param-field input,
+.dynamic-param-field textarea,
+.dynamic-param-field select {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--home-line, #374151);
+    border-radius: 10px;
+    background: var(--home-panel, #111827);
+    color: var(--home-text, #e5e7eb);
+}
+
+.dynamic-param-field textarea {
+    min-height: 92px;
+    resize: vertical;
+}
+
+.dynamic-param-field input:focus,
+.dynamic-param-field textarea:focus,
+.dynamic-param-field select:focus {
+    outline: none;
+    border-color: #77a9ee;
+    box-shadow: 0 0 0 3px rgba(93, 146, 225, 0.24);
 }
 
 .action-note {
@@ -1065,6 +1171,10 @@ body.light-theme #userEditCancelBtn {
 
     .header-popover {
         width: min(300px, calc(100vw - 40px));
+    }
+
+    .header-path-wrap {
+        padding: 8px 14px 10px;
     }
 
     .app-grid {
@@ -1280,6 +1390,7 @@ textarea:focus,
 }
 
 body.light-theme {
+    --text: #142235;
     --home-bg: #e7eef9;
     --home-panel: #f6faff;
     --home-panel-soft: #ffffff;
@@ -1294,6 +1405,11 @@ body.light-theme {
 
 body.light-theme .top-header {
     background: rgba(247, 251, 255, 0.88);
+}
+
+body.light-theme .header-path-wrap {
+    background: rgba(247, 251, 255, 0.74);
+    border-bottom-color: #c7d6ea;
 }
 
 body.light-theme .stage-tab.active {

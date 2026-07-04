@@ -36,9 +36,14 @@ def _get_language_label(language: str) -> str:
     return "English" if language == "en" else "Türkçe"
 
 
-def _fake_ai_response(stage: str, target: str) -> dict:
+def _fake_ai_response(stage: str, target: str, allowed_actions: list[str] | None = None) -> dict:
+    allowed = {str(item).strip().lower() for item in (allowed_actions or []) if str(item).strip()}
     actions = []
     for action in FAKE_AI_RESPONSE["actions"]:
+        action_key = str(action.get("action") or "").strip().lower()
+        if allowed and action_key not in allowed:
+            continue
+
         copied = dict(action)
         copied["target"] = target or "authorized-target"
         actions.append(copied)
@@ -49,15 +54,19 @@ def _fake_ai_response(stage: str, target: str) -> dict:
     }
 
 
-def _build_prompt(language: str, scan_result: dict, stage: str) -> str:
+def _build_prompt(language: str, scan_result: dict, stage: str, allowed_actions: list[str] | None = None) -> str:
     ports_json = json.dumps(scan_result.get("ports", []), ensure_ascii=False, indent=2)
     hosts_json = json.dumps(scan_result.get("hosts", []), ensure_ascii=False, indent=2)
     evidence_json = json.dumps(scan_result.get("evidence", []), ensure_ascii=False, indent=2)
     workflow_step = scan_result.get("workflow_step") if isinstance(scan_result.get("workflow_step"), dict) else {}
+    stage_tools = scan_result.get("stage_tools") if isinstance(scan_result.get("stage_tools"), list) else []
     step_name = workflow_step.get("step_name") or stage
     step_desc = workflow_step.get("description") or ""
     step_hint = workflow_step.get("ai_prompt_hint") or ""
     target = scan_result.get("target", "authorized-target")
+    allowed_actions = [str(item).strip().lower() for item in (allowed_actions or []) if str(item).strip()]
+    allowed_actions_json = json.dumps(allowed_actions, ensure_ascii=False)
+    stage_tools_json = json.dumps(stage_tools, ensure_ascii=False, indent=2)
 
     return f"""
 Sen {_get_language_label(language)} konuşan kıdemli bir siber güvenlik analistisin.
@@ -84,6 +93,9 @@ Host özeti:
 Evidence:
 {evidence_json}
 
+Asama icin tanimli tool katalogu (action + kategori + adim):
+{stage_tools_json}
+
 Sadece şu JSON formatında cevap ver:
 {{
   "summary": "Kısa savunma odaklı değerlendirme",
@@ -102,6 +114,7 @@ Sadece şu JSON formatında cevap ver:
 
 Kurallar:
 - action sadece bir action_key olmalı (örn: service_detection, port_discovery_fast, local_network_discovery).
+- action sadece bu listeden secilmeli: {allowed_actions_json}
 - target sadece yetkili hedef metni olmalı.
 - reason kısa, profesyonel, savunma odaklı olmalı.
 - Zararlı exploit adımları veya saldırı talimatı verme.
@@ -176,7 +189,12 @@ def _parse_ai_payload(content: str, target: str, language: str) -> dict:
     }
 
 
-def suggest_action_intents(scan_result: dict, stage: str = "validation_plan", language: str = "tr") -> dict:
+def suggest_action_intents(
+    scan_result: dict,
+    stage: str = "scan",
+    language: str = "tr",
+    allowed_actions: list[str] | None = None,
+) -> dict:
     if scan_result.get("error"):
         return {
             "summary": t(language, "ai.scanFailed", "Tarama hatalı tamamlandığı için AI analizi yapılamadı."),
@@ -193,9 +211,9 @@ def suggest_action_intents(scan_result: dict, stage: str = "validation_plan", la
     use_fake = bool(settings.get("use_fake_response", ai_defaults.get("use_fake_response", False)))
 
     if use_fake:
-        return _fake_ai_response(stage, target)
+        return _fake_ai_response(stage, target, allowed_actions=allowed_actions)
 
-    prompt = _build_prompt(language, scan_result, stage)
+    prompt = _build_prompt(language, scan_result, stage, allowed_actions=allowed_actions)
 
     try:
         response = requests.post(
@@ -225,7 +243,7 @@ def suggest_action_intents(scan_result: dict, stage: str = "validation_plan", la
 
 
 def analyze_ports_with_ai(scan_result: dict, language: str = "tr") -> str:
-    payload = suggest_action_intents(scan_result, stage="evidence_risk_analysis", language=language)
+    payload = suggest_action_intents(scan_result, stage="scan", language=language)
     summary = payload.get("summary") or t(language, "ai.noResponse", "Yorumlama yapılamadı.")
     actions = payload.get("actions") or []
     if not actions:
@@ -252,4 +270,4 @@ def analyze_evidence_with_ai(target: str, evidence: list[dict], language: str = 
             "ai_prompt_hint": "Somut hardening adimlari, oncelik sirasi, retest kriteri.",
         },
     }
-    return suggest_action_intents(scan_result, stage="remediation_plan", language=language)
+    return suggest_action_intents(scan_result, stage="remediation", language=language)

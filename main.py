@@ -11,7 +11,6 @@ from backend.routes.validation_routes import router as validation_router
 from backend.services.auth_store import init_auth_store
 from backend.services.orchestrator_store import init_orchestrator_store
 from backend.services.settings_store import init_settings_store
-from backend.services.tool_registry_store import init_tool_registry_store
 
 
 app = FastAPI(title="Smart Security Validation Platform")
@@ -30,5 +29,4 @@ def on_startup():
     init_auth_store()
     init_settings_store()
     init_offer_store()
-    init_tool_registry_store()
     init_orchestrator_store()

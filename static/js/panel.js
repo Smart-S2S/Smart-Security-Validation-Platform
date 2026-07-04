@@ -51,6 +51,7 @@ const panelMenuProfile = document.getElementById('panelMenuProfile');
 const panelMenuSettings = document.getElementById('panelMenuSettings');
 const panelMenuPanel = document.getElementById('panelMenuPanel');
 const panelMenuApp = document.getElementById('panelMenuApp');
+const pathBreadcrumb = document.getElementById('pathBreadcrumb');
 
 let currentUser = null;
 let validRoles = [];
@@ -148,6 +149,61 @@ function activateTab(tabName) {
     panels.forEach((panel) => {
         panel.hidden = panel.dataset.panel !== tabName;
     });
+
+    try {
+        const nextUrl = `${window.location.pathname}${window.location.search}#${tabName}`;
+        window.history.replaceState(null, '', nextUrl);
+    } catch (_) {
+        // no-op
+    }
+    renderPathNavigation(tabName);
+}
+
+
+function renderPathNavigation(activeTab = 'profile') {
+    if (!pathBreadcrumb) {
+        return;
+    }
+
+    const safeTab = String(activeTab || 'profile').trim().toLowerCase() || 'profile';
+    const crumbs = [
+        { label: 'root', href: '/' },
+        { label: 'panel', href: '/panel' },
+        { label: safeTab, href: `/panel#${safeTab}` },
+    ];
+
+    pathBreadcrumb.innerHTML = crumbs
+        .map((item, index) => {
+            const separator = index > 0 ? '<span>/</span>' : '';
+            return `${separator}<a href="${item.href}" data-href="${item.href}">${item.label}</a>`;
+        })
+        .join('');
+}
+
+
+function navigatePanelPath(pathValue) {
+    const raw = String(pathValue || '').trim();
+    if (!raw) {
+        return;
+    }
+
+    if (raw === '/panel') {
+        const activeTab = tabButtons.find((button) => button.classList.contains('active'))?.dataset?.tab || 'profile';
+        renderPathNavigation(activeTab);
+        return;
+    }
+
+    if (raw.startsWith('/panel#')) {
+        const tab = raw.slice('/panel#'.length).trim().toLowerCase();
+        if (tab) {
+            activateTab(tab);
+        }
+        return;
+    }
+
+    if (raw.startsWith('/')) {
+        window.location.href = raw;
+    }
 }
 
 function selectedRolesFrom(container) {
@@ -672,6 +728,18 @@ if (panelMenuApp) {
     });
 }
 
+
+if (pathBreadcrumb) {
+    pathBreadcrumb.addEventListener('click', (event) => {
+        const link = event.target.closest('a[data-href]');
+        if (!link) {
+            return;
+        }
+        event.preventDefault();
+        navigatePanelPath(link.dataset.href || '');
+    });
+}
+
 (async function bootstrap() {
     try {
         applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
@@ -685,7 +753,9 @@ if (panelMenuApp) {
         const allowedTabs = currentUser?.is_admin
             ? new Set(['profile', 'users', 'roles', 'offers'])
             : new Set(['profile']);
-        activateTab(allowedTabs.has(requested) ? requested : 'profile');
+        const targetTab = allowedTabs.has(requested) ? requested : 'profile';
+        activateTab(targetTab);
+        renderPathNavigation(targetTab);
     } catch (error) {
         setFeedback(error.message || 'Panel verileri yüklenemedi.', true);
     }

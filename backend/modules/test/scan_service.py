@@ -44,7 +44,7 @@ def run_scan_job(
 
         if not result.get("error") and scan_tool == "nmap":
             add_log(job_id, t(language, "scan.job.analyzing", "Bulgular yorumlanıyor..."))
-            ai_payload = suggest_action_intents(result, stage="validation_plan", language=language)
+            ai_payload = suggest_action_intents(result, stage="scan", language=language)
             result["ai_action_intents"] = ai_payload.get("actions", [])
             result["ai_summary"] = ai_payload.get("summary", "")
 

@@ -22,21 +22,23 @@
     </div>
 </header>
 
+<div class="header-path-wrap">
+    <nav id="pathBreadcrumb" class="path-breadcrumb" aria-label="Adres"></nav>
+</div>
+
 <main class="settings-shell">
     <aside class="settings-tabs">
         <button class="tab-btn" data-tab="appearance" data-i18n="settings.tab.appearance">Görünüm</button>
         {% if current_user and current_user.is_admin %}
         <button class="tab-btn" data-tab="ai" data-i18n="settings.tab.ai">AI Model</button>
         <button class="tab-btn" data-tab="scan" data-i18n="settings.tab.scan">Tarama Ayarları</button>
-        <button class="tab-btn" data-tab="workflow">Workflow Steps</button>
-        <button class="tab-btn" data-tab="tools">Tool Registry</button>
+        <button class="tab-btn" data-tab="progress-categories">Ilerleme Kategorileri</button>
+        <button class="tab-btn" data-tab="tools">Adim Listesi</button>
         {% endif %}
         <button class="tab-btn" data-tab="system" data-i18n="settings.tab.system">Sistem ve Proje</button>
     </aside>
 
     <section class="settings-content">
-        <p id="settingsInfo" class="muted"></p>
-
         <section class="panel" data-panel="appearance" hidden>
             <h2 data-i18n="settings.appearance.title">Görünüm</h2>
             <form id="appearanceForm" class="form-grid card appearance-card">
@@ -108,157 +110,273 @@
             </form>
         </section>
 
-        <section class="panel" data-panel="workflow" hidden>
-            <h2>Workflow Steps</h2>
-            <div class="card compact-settings-card" style="margin-bottom:12px;">
-                <form id="workflowStepForm" class="form-grid">
-                    <label for="workflowStepKey">Step Key</label>
-                    <input id="workflowStepKey" type="text" maxlength="80" placeholder="validation_plan" required>
-
-                    <label for="workflowStepName">Step Name</label>
-                    <input id="workflowStepName" type="text" maxlength="140" placeholder="Validation Plan" required>
-
-                    <label for="workflowStepRole">Required Role</label>
-                    <input id="workflowStepRole" type="text" maxlength="64" placeholder="test">
-
-                    <label for="workflowStepOrder">Sort Order</label>
-                    <input id="workflowStepOrder" type="number" min="1" max="10000" value="100">
-
-                    <label for="workflowStepDescription">Description</label>
-                    <textarea id="workflowStepDescription" rows="3" maxlength="1000"></textarea>
-
-                    <label for="workflowStepHint">AI Prompt Hint</label>
-                    <textarea id="workflowStepHint" rows="3" maxlength="4000"></textarea>
-
-                    <label class="chip"><input id="workflowStepActive" type="checkbox" checked> <span>Active</span></label>
-
-                    <button type="submit">Step Ekle</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <strong>Workflow Steps List</strong>
-                    <button id="refreshWorkflowStepsBtn" type="button">Yenile</button>
-                </div>
-                <div style="overflow:auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Key</th>
-                                <th>Name</th>
-                                <th>Role</th>
-                                <th>Order</th>
-                                <th>Active</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="workflowStepsTbody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
         <section class="panel" data-panel="tools" hidden>
-            <h2>Tool Registry</h2>
-            <div class="card compact-settings-card" style="margin-bottom:12px;">
-                <form id="toolRegistryForm" class="form-grid">
-                    <label for="toolActionKey">Action Key</label>
-                    <input id="toolActionKey" type="text" maxlength="120" placeholder="service_detection" required>
-
-                    <label for="toolDisplayName">Display Name</label>
-                    <input id="toolDisplayName" type="text" maxlength="160" required>
-
-                    <label for="toolName">Tool Name</label>
-                    <input id="toolName" type="text" maxlength="120" placeholder="nmap" required>
-
-                    <label for="toolRiskLevel">Risk Level</label>
-                    <select id="toolRiskLevel">
-                        <option value="low">low</option>
-                        <option value="medium">medium</option>
-                        <option value="high">high</option>
-                        <option value="critical">critical</option>
-                    </select>
-
-                    <label for="toolTimeout">Timeout (sec)</label>
-                    <input id="toolTimeout" type="number" min="5" max="7200" value="300">
-
-                    <label for="toolBaseCommand">Base Command</label>
-                    <textarea id="toolBaseCommand" rows="3" maxlength="2000"></textarea>
-
-                    <label class="chip"><input id="toolRequiresApproval" type="checkbox" checked> <span>Approval Required</span></label>
-                    <label class="chip"><input id="toolActive" type="checkbox" checked> <span>Active</span></label>
-
-                    <button type="submit">Tool Ekle</button>
-                </form>
+            <div class="step-list-header-row">
+                <h2 class="step-list-title">Adim Listesi</h2>
+                <div class="user-edit-actions" style="justify-content:flex-end;">
+                    <button id="refreshStepsBtn" type="button">Yenile</button>
+                    <button id="showCreateStepBtn" type="button">Yeni Adim</button>
+                </div>
             </div>
+            <div id="stepsListArea" style="overflow:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Step Key</th>
+                            <th>Display Name</th>
+                            <th>Workflow</th>
+                            <th>Category</th>
+                            <th>Active</th>
+                            <th>Actions</th>
+                        </tr>
+                        <tr>
+                            <th><input id="filterStepId" class="table-filter-input" type="text" placeholder="ID"></th>
+                            <th><input id="filterStepKey" class="table-filter-input" type="text" placeholder="Step Key"></th>
+                            <th><input id="filterStepDisplayName" class="table-filter-input" type="text" placeholder="Display Name"></th>
+                            <th>
+                                <select id="filterStepWorkflow" class="table-filter-input">
+                                    <option value="">Tum</option>
+                                    <option value="scan">scan</option>
+                                    <option value="attack">attack</option>
+                                    <option value="remediation">remediation</option>
+                                </select>
+                            </th>
+                            <th><input id="filterStepCategory" class="table-filter-input" type="text" placeholder="Category"></th>
+                            <th>
+                                <select id="filterStepActive" class="table-filter-input">
+                                    <option value="">Tum</option>
+                                    <option value="yes">yes</option>
+                                    <option value="no">no</option>
+                                </select>
+                            </th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="stepsTbody"></tbody>
+                </table>
+            </div>
+            <form id="stepForm" class="step-editor-split" style="display:none; margin-top:12px;">
+                    <input id="stepId" type="hidden">
 
+                    <section class="step-editor-left">
+                        <h3>Adim Duzenle</h3>
+
+                        <label for="stepKey">Step Key</label>
+                        <input id="stepKey" type="text" maxlength="160" required>
+
+                        <label for="stepDisplayName">Display Name</label>
+                        <input id="stepDisplayName" type="text" maxlength="160" required>
+
+                        <label for="stepWorkflow">Workflow</label>
+                        <select id="stepWorkflow">
+                            <option value="scan">Tarama</option>
+                            <option value="attack">Atak</option>
+                            <option value="remediation">Duzenleme</option>
+                        </select>
+
+                        <label for="stepCategory">Ilerleme Kategorisi</label>
+                        <select id="stepCategory"></select>
+
+                        <label for="stepDescription">Description</label>
+                        <textarea id="stepDescription" rows="3" maxlength="2000"></textarea>
+
+                        <label class="chip"><input id="stepActive" type="checkbox" checked> <span>Active</span></label>
+
+                        <div style="display:flex; gap:8px; margin-top:8px;">
+                            <button type="submit">Kaydet</button>
+                            <button id="cancelStepEditorBtn" type="button">Geri</button>
+                        </div>
+                    </section>
+
+                    <section class="step-editor-right">
+                        <div class="step-items-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <strong>Gorev ve Scriptler</strong>
+                                <div id="stepItemCreateActions" class="user-edit-actions" style="justify-content:flex-end;">
+                                    <button id="backToStepItemsListBtn" type="button" style="display:none;">Geri</button>
+                                    <button id="showCreateStepItemTaskBtn" type="button">Yeni Gorev</button>
+                                    <button id="showCreateStepItemScriptBtn" type="button">Yeni Script</button>
+                                </div>
+                            </div>
+                            <p id="stepItemsHint" class="muted" style="margin:0 0 10px 0;">Adimi kaydedince gorev ve script ekleyebilirsin.</p>
+                            <div id="stepItemsListArea" style="overflow:auto;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Tip</th>
+                                            <th>Isim</th>
+                                            <th>Key</th>
+                                            <th>Aciklama</th>
+                                            <th>Dosya İsmi</th>
+                                            <th>Active</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="stepItemsTbody"></tbody>
+                                </table>
+                            </div>
+
+                            <div id="stepItemTaskFormWrap" style="display:none; margin-top:10px;">
+                                <h4 style="margin:0 0 8px 0;">Yeni Gorev</h4>
+                                <div class="form-grid">
+                                    <input id="taskStepItemId" type="hidden">
+                                    <label for="taskStepItemKey">Key</label>
+                                    <input id="taskStepItemKey" type="text" maxlength="120" required>
+                                    <label for="taskStepItemDisplayName">Isim</label>
+                                    <input id="taskStepItemDisplayName" type="text" maxlength="160" required>
+                                    <label for="taskStepItemDescription">Aciklama</label>
+                                    <textarea id="taskStepItemDescription" rows="2" maxlength="2000"></textarea>
+                                    <label class="chip"><input id="taskStepItemActive" type="checkbox" checked> <span>Active</span></label>
+                                    <div style="display:flex; gap:8px;">
+                                        <button id="saveTaskStepItemBtn" type="button">Kaydet</button>
+                                        <button id="cancelTaskStepItemEditorBtn" type="button">Iptal</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="stepItemScriptFormWrap" style="display:none; margin-top:10px;">
+                                <h4 style="margin:0 0 8px 0;">Yeni Script</h4>
+                                <div class="form-grid">
+                                    <input id="scriptStepItemId" type="hidden">
+                                    <label for="scriptStepItemKey">Key</label>
+                                    <input id="scriptStepItemKey" type="text" maxlength="120" required>
+                                    <label for="scriptStepItemDisplayName">Isim</label>
+                                    <input id="scriptStepItemDisplayName" type="text" maxlength="160" required>
+                                    <label for="scriptStepItemDescription">Aciklama</label>
+                                    <textarea id="scriptStepItemDescription" rows="2" maxlength="2000"></textarea>
+                                    <label class="chip"><input id="scriptStepItemActive" type="checkbox" checked> <span>Active</span></label>
+                                    <div>
+                                        <label for="stepItemScriptFile">Script Dosyasi</label>
+                                        <input id="stepItemScriptFile" type="file" accept=".py,.sh,.txt,.ps1,.js">
+                                    </div>
+                                    <div style="display:flex; gap:8px;">
+                                        <button id="saveScriptStepItemBtn" type="button">Kaydet</button>
+                                        <button id="cancelScriptStepItemEditorBtn" type="button">Iptal</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-items-card" id="stepItemParamsCard" style="margin-top:12px; display:none;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <strong>Gorev Parametreleri</strong>
+                                <button id="showCreateStepItemParamBtn" type="button">Parametre Ekle</button>
+                            </div>
+                            <p id="stepItemParamsHint" class="muted" style="margin:0 0 10px 0;">Scriptler icin parametre yoktur.</p>
+                            <div style="overflow:auto;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Key</th>
+                                            <th>Label</th>
+                                            <th>Type</th>
+                                            <th>Default</th>
+                                            <th>Required</th>
+                                            <th>Sort</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="stepItemParamsTbody"></tbody>
+                                </table>
+                            </div>
+
+                            <div id="stepItemParamFormWrap" style="display:none; margin-top:10px;">
+                                <h4 id="stepItemParamEditorTitle" style="margin:0 0 8px 0;">Parametre Ekle</h4>
+                                <div id="stepItemParamForm" class="form-grid">
+                                    <input id="stepItemParamId" type="hidden">
+                                    <label for="stepItemParamKey">Param Key</label>
+                                    <input id="stepItemParamKey" type="text" maxlength="120" required>
+                                    <label for="stepItemParamLabel">Label</label>
+                                    <input id="stepItemParamLabel" type="text" maxlength="160" required>
+                                    <label for="stepItemParamType">Type</label>
+                                    <select id="stepItemParamType">
+                                        <option value="string">string</option>
+                                        <option value="number">number</option>
+                                        <option value="bool">bool</option>
+                                        <option value="json">json</option>
+                                    </select>
+                                    <label for="stepItemParamDefault">Default Value</label>
+                                    <input id="stepItemParamDefault" type="text" maxlength="2000">
+                                    <label for="stepItemParamSortOrder">Sort Order</label>
+                                    <input id="stepItemParamSortOrder" type="number" min="1" max="10000" value="100">
+                                    <label class="chip"><input id="stepItemParamRequired" type="checkbox"> <span>Required</span></label>
+                                    <div style="display:flex; gap:8px;">
+                                        <button id="saveStepItemParamBtn" type="button">Kaydet</button>
+                                        <button id="cancelStepItemParamEditorBtn" type="button">Iptal</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-items-card" id="stepItemScriptEditorCard" style="margin-top:12px; display:none;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px;">
+                                <strong id="stepItemScriptEditorTitle">Script Editor</strong>
+                                <button id="saveStepItemScriptContentBtn" type="button">Script Kaydet</button>
+                            </div>
+                            <div id="stepItemScriptCodeEditor" class="code-editor-box"></div>
+                        </div>
+                    </section>
+                </form>
+        </section>
+
+        <section class="panel" data-panel="progress-categories" hidden>
+            <h2>Ilerleme Kategorileri</h2>
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <strong>Tool Registry List</strong>
-                    <button id="refreshToolsBtn" type="button">Yenile</button>
+                    <strong>Kategori Listesi</strong>
+                    <div class="user-edit-actions" style="justify-content:flex-end;">
+                        <button id="refreshProgressCategoriesBtn" type="button">Yenile</button>
+                        <button id="showCreateProgressCategoryBtn" type="button">Yeni</button>
+                    </div>
                 </div>
-                <div style="overflow:auto;">
+                <div id="progressCategoriesListArea" style="overflow:auto;">
                     <table>
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Action</th>
-                                <th>Tool</th>
-                                <th>Risk</th>
-                                <th>Timeout</th>
-                                <th>Approval</th>
+                                <th>Key</th>
+                                <th>Display Name</th>
+                                <th>Workflow</th>
+                                <th>Description</th>
                                 <th>Active</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="toolsTbody"></tbody>
+                        <tbody id="progressCategoriesTbody"></tbody>
                     </table>
                 </div>
-            </div>
+                <form id="progressCategoryForm" class="form-grid" style="display:none; margin-top:12px;">
+                    <input id="progressCategoryId" type="hidden">
 
-            <div class="card" style="margin-top:12px;">
-                <h3 style="margin-top:0;">Tool Parameters</h3>
-                <form id="toolParameterForm" class="form-grid">
-                    <label for="parameterToolId">Tool ID</label>
-                    <input id="parameterToolId" type="number" min="1" required>
+                    <label for="progressCategoryKey">Category Key</label>
+                    <input id="progressCategoryKey" type="text" maxlength="120" required>
 
-                    <label for="parameterKey">Param Key</label>
-                    <input id="parameterKey" type="text" maxlength="120" required>
+                    <label for="progressCategoryDisplayName">Display Name</label>
+                    <input id="progressCategoryDisplayName" type="text" maxlength="160" required>
 
-                    <label for="parameterLabel">Label</label>
-                    <input id="parameterLabel" type="text" maxlength="160" required>
-
-                    <label for="parameterType">Type</label>
-                    <select id="parameterType">
-                        <option value="string">string</option>
-                        <option value="list">list</option>
-                        <option value="json">json</option>
+                    <label for="progressCategoryWorkflow">Workflow</label>
+                    <select id="progressCategoryWorkflow">
+                        <option value="scan">Tarama</option>
+                        <option value="attack">Atak</option>
+                        <option value="remediation">Duzenleme</option>
                     </select>
 
-                    <label for="parameterDefault">Default Value</label>
-                    <textarea id="parameterDefault" rows="2" placeholder='["service-version"]'></textarea>
+                    <label for="progressCategoryDescription">Description</label>
+                    <textarea id="progressCategoryDescription" rows="3" maxlength="2000"></textarea>
 
-                    <button type="submit">Parameter Ekle</button>
+                    <label class="chip"><input id="progressCategoryActive" type="checkbox" checked> <span>Active</span></label>
+
+                    <div style="display:flex; gap:8px;">
+                        <button type="submit">Kaydet</button>
+                        <button id="cancelProgressCategoryEditorBtn" type="button">Geri</button>
+                    </div>
                 </form>
-
-                <div style="overflow:auto; margin-top:10px;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Tool ID</th>
-                                <th>Key</th>
-                                <th>Type</th>
-                                <th>Default</th>
-                            </tr>
-                        </thead>
-                        <tbody id="toolParametersTbody"></tbody>
-                    </table>
-                </div>
             </div>
         </section>
+
         {% endif %}
 
         <p id="settingsFeedback" class="feedback"></p>
@@ -266,6 +384,7 @@
 </main>
 
 <script src="/static/js/notify.js?v=20260703b"></script>
-<script src="/static/js/settings.js?v=20260703g"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/static/js/settings.js?v=20260704i"></script>
 </body>
 </html>

@@ -29,6 +29,7 @@ const profileMenuLogout = document.getElementById("profileMenuLogout");
 const legalNoticeText = document.getElementById("legalNoticeText");
 const paramConflictNote = document.getElementById("paramConflictNote");
 const operationTabs = document.getElementById("operationTabs");
+const pathBreadcrumb = document.getElementById("pathBreadcrumb");
 const precheckPanel = document.getElementById("precheckPanel");
 const legalConsent = document.getElementById("legalConsent");
 const legalContinue = document.getElementById("legalContinue");
@@ -41,11 +42,18 @@ const directionProceedBtn = document.getElementById("directionProceedBtn");
 const directionLockedWrap = document.getElementById("directionLockedWrap");
 const directionLockedText = document.getElementById("directionLockedText");
 const directionOperationWindow = document.getElementById("directionOperationWindow");
+const nextTestParamsWrap = document.getElementById("nextTestParamsWrap");
+const nextTestParamsForm = document.getElementById("nextTestParamsForm");
 const testPlanPanel = document.getElementById("testPlanPanel");
 const stepOutputs = document.getElementById("stepOutputs");
 const exportPdfBtn = document.getElementById("exportPdfBtn");
 const authOverlay = document.getElementById("authOverlay");
 const authMessage = document.getElementById("authMessage");
+const actionApprovalOverlay = document.getElementById("actionApprovalOverlay");
+const actionApprovalTitle = document.getElementById("actionApprovalTitle");
+const actionApprovalMessage = document.getElementById("actionApprovalMessage");
+const actionApprovalCancelBtn = document.getElementById("actionApprovalCancelBtn");
+const actionApprovalConfirmBtn = document.getElementById("actionApprovalConfirmBtn");
 const loginForm = document.getElementById("loginForm");
 const loginSubmit = document.getElementById("loginSubmit");
 const changePasswordForm = document.getElementById("changePasswordForm");
@@ -88,6 +96,7 @@ let nextTestCatalogLanguage = "";
 let hasScanTab = false;
 let hasDirectionTab = false;
 let selectedDirection = "";
+let selectedDirectionStepKey = "";
 let directionLocked = false;
 let directionCompleted = false;
 let directionOperationDetails = null;
@@ -104,11 +113,15 @@ let latestScanResult = null;
 const stageSuggestionsByStage = {};
 let workflowSteps = [];
 const workflowStepByKey = {};
+let approvalResolve = null;
+let operationWindowIntents = [];
+let operationWindowExecuted = false;
+let operationWindowRunning = false;
 
 const STAGE_ROLE_MAP = {
-    validation_plan: "test",
-    evidence_risk_analysis: "test",
-    remediation_plan: "remediation",
+    scan: "test",
+    attack: "attack",
+    remediation: "remediation",
 };
 
 
@@ -127,7 +140,114 @@ function setWorkflowSteps(steps) {
             continue;
         }
         workflowStepByKey[key] = step;
-        STAGE_ROLE_MAP[key] = String(step.role_required || "test").trim().toLowerCase() || "test";
+    }
+}
+
+
+function getStepsForDirection(directionValue) {
+    const direction = String(directionValue || "").trim().toLowerCase();
+    return workflowSteps.filter((item) => String(item.workflow_key || "").trim().toLowerCase() === direction);
+}
+
+
+function getDirectionCategories(directionValue) {
+    const items = getStepsForDirection(directionValue);
+    const map = new Map();
+
+    for (const step of items) {
+        const categoryKey = String(step.category_key || "general").trim().toLowerCase() || "general";
+        if (!map.has(categoryKey)) {
+            map.set(categoryKey, {
+                key: categoryKey,
+                label: categoryKey.replaceAll("_", " "),
+            });
+        }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, currentLanguage));
+}
+
+
+function renderDirectionCategoryAndSteps() {
+    const categorySelect = document.getElementById("nextTestCategory");
+    const stepSelect = document.getElementById("nextTestPreset");
+    const manualWrap = document.getElementById("nextTestManualWrap");
+    const feedback = document.getElementById("nextTestFeedback");
+    if (!categorySelect || !stepSelect) {
+        return;
+    }
+
+    if (nextTestParamsWrap) {
+        nextTestParamsWrap.style.display = "none";
+    }
+    if (nextTestParamsForm) {
+        nextTestParamsForm.innerHTML = "";
+    }
+
+    if (manualWrap) {
+        manualWrap.style.display = "none";
+    }
+
+    clearIntentSelectionUi();
+
+    const categories = getDirectionCategories(selectedDirection);
+    if (!selectedDirection || !categories.length) {
+        categorySelect.innerHTML = `<option value="">${escapeHtml(t("direction.noCategory", "Kategori secilmedi"))}</option>`;
+        stepSelect.innerHTML = `<option value="">${escapeHtml(t("direction.noStep", "Adim secilmedi"))}</option>`;
+        selectedDirectionStepKey = "";
+        if (feedback) {
+            feedback.classList.remove("error");
+            feedback.innerText = selectedDirection ? t("direction.noStep", "Adim secilmedi") : t("direction.waiting", "Yon secimi bekleniyor.");
+        }
+        directionNextBtn.disabled = true;
+        if (directionProceedBtn) {
+            directionProceedBtn.disabled = true;
+        }
+        return;
+    }
+
+    const previousCategory = categorySelect.value;
+    categorySelect.innerHTML = categories
+        .map((item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`)
+        .join("");
+
+    if (categories.some((item) => item.key === previousCategory)) {
+        categorySelect.value = previousCategory;
+    }
+
+    const activeCategory = categorySelect.value || categories[0].key;
+    const steps = getStepsForDirection(selectedDirection)
+        .filter((item) => (item.category_key || "general") === activeCategory)
+        .sort((a, b) => String(a.step_name || "").localeCompare(String(b.step_name || ""), currentLanguage));
+
+    if (!steps.length) {
+        stepSelect.innerHTML = `<option value="">${escapeHtml(t("direction.noStep", "Adim secilmedi"))}</option>`;
+        selectedDirectionStepKey = "";
+        directionNextBtn.disabled = true;
+        if (directionProceedBtn) {
+            directionProceedBtn.disabled = true;
+        }
+        return;
+    }
+
+    const previousStep = selectedDirectionStepKey;
+    stepSelect.innerHTML = steps
+        .map((item) => `<option value="${escapeHtml(item.step_key)}">${escapeHtml(item.step_name || item.step_key)}</option>`)
+        .join("");
+
+    if (steps.some((item) => item.step_key === previousStep)) {
+        stepSelect.value = previousStep;
+    }
+
+    selectedDirectionStepKey = stepSelect.value || steps[0].step_key;
+    directionNextBtn.disabled = !selectedDirectionStepKey;
+    if (directionProceedBtn) {
+        directionProceedBtn.disabled = !selectedDirectionStepKey;
+    }
+
+    if (feedback) {
+        feedback.classList.remove("error");
+        feedback.innerText = `${t("direction.category", "Kategori")}: ${activeCategory.replaceAll("_", " ")} | ${t("direction.step", "Adim")}: ${stepSelect.selectedOptions?.[0]?.textContent || "-"}`;
     }
 }
 
@@ -137,29 +257,20 @@ function renderWorkflowStepCards() {
         return;
     }
 
-    if (!workflowSteps.length) {
-        directionActions.innerHTML = `
-            <button type="button" class="action-card" data-direction="validation_plan">
-                <p class="action-title">Validation Plan</p>
-                <p class="action-description">Workflow step tanımı bulunamadı.</p>
-            </button>
-        `;
-        return;
-    }
-
-    directionActions.innerHTML = workflowSteps
-        .map((step) => {
-            const stepKey = escapeHtml(step.step_key || "");
-            const stepName = escapeHtml(step.step_name || step.step_key || "Step");
-            const stepDesc = escapeHtml(step.description || "");
-            return `
-                <button type="button" class="action-card" data-direction="${stepKey}">
-                    <p class="action-title">${stepName}</p>
-                    <p class="action-description">${stepDesc}</p>
-                </button>
-            `;
-        })
-        .join("");
+    directionActions.innerHTML = `
+        <button type="button" class="action-card" data-direction="scan">
+            <p class="action-title">${escapeHtml(t("direction.scan", "Tarama"))}</p>
+            <p class="action-description">${escapeHtml(t("direction.scan.desc", "Tarama odakli dogrulama aksiyonlarini planla."))}</p>
+        </button>
+        <button type="button" class="action-card" data-direction="attack">
+            <p class="action-title">${escapeHtml(t("direction.attack", "Atak"))}</p>
+            <p class="action-description">${escapeHtml(t("direction.attack.desc", "Yetkili aktif dogrulama aksiyonlarini calistir."))}</p>
+        </button>
+        <button type="button" class="action-card" data-direction="remediation">
+            <p class="action-title">${escapeHtml(t("direction.remediation", "Duzenleme"))}</p>
+            <p class="action-description">${escapeHtml(t("direction.remediation.desc", "Duzeltme odakli aksiyonlari calistir."))}</p>
+        </button>
+    `;
 }
 
 
@@ -168,10 +279,12 @@ async function loadWorkflowStepsFromServer() {
         const response = await apiRequest("/validation/workflow-steps", { cache: "no-store" });
         setWorkflowSteps(response.items || []);
         renderWorkflowStepCards();
+        renderDirectionCategoryAndSteps();
         applyRoleRestrictions();
     } catch (_) {
         setWorkflowSteps([]);
         renderWorkflowStepCards();
+        renderDirectionCategoryAndSteps();
     }
 }
 
@@ -197,6 +310,73 @@ function setAuthMessage(message, isError = false) {
 
     authMessage.innerText = message || "";
     authMessage.classList.toggle("error", Boolean(isError));
+}
+
+
+function appendProcessLog(message) {
+    if (!logsDiv) {
+        return;
+    }
+
+    const timestamp = new Date().toLocaleTimeString("tr-TR", { hour12: false });
+    const line = document.createElement("div");
+    line.textContent = `[${timestamp}] ${String(message || "").trim()}`;
+    logsDiv.appendChild(line);
+    logsDiv.scrollTop = logsDiv.scrollHeight;
+}
+
+
+function appendAiEvaluation(title, text) {
+    if (!aiOutput) {
+        return;
+    }
+
+    const normalizedTitle = String(title || "Yapay Zeka Degerlendirmesi").trim();
+    const normalizedText = String(text || "").trim();
+    if (!normalizedText) {
+        return;
+    }
+
+    const chunks = [];
+    if (aiOutput.innerText.trim()) {
+        chunks.push(aiOutput.innerText.trim());
+    }
+    chunks.push(`## ${normalizedTitle}`);
+    chunks.push(normalizedText);
+
+    aiOutput.innerText = chunks.join("\n\n");
+}
+
+
+function requestActionApproval({ title, message }) {
+    if (!actionApprovalOverlay || !actionApprovalConfirmBtn || !actionApprovalCancelBtn) {
+        return Promise.resolve(false);
+    }
+
+    if (actionApprovalTitle) {
+        actionApprovalTitle.innerText = title || "Islem Onayi";
+    }
+    if (actionApprovalMessage) {
+        actionApprovalMessage.innerText = message || "Bu islem backend Tool Runner ile calistirilacak.";
+    }
+
+    actionApprovalOverlay.hidden = false;
+
+    return new Promise((resolve) => {
+        approvalResolve = resolve;
+    });
+}
+
+
+function closeActionApprovalModal(approved) {
+    if (actionApprovalOverlay) {
+        actionApprovalOverlay.hidden = true;
+    }
+
+    if (typeof approvalResolve === "function") {
+        approvalResolve(Boolean(approved));
+        approvalResolve = null;
+    }
 }
 
 
@@ -750,91 +930,387 @@ function parseParametersFromManualInput() {
 }
 
 
-function getCurrentStageIntents() {
-    return stageSuggestionsByStage[selectedDirection] || [];
+function normalizeDynamicParamType(paramType) {
+    const token = String(paramType || "string").trim().toLowerCase();
+    if (token === "bool") return "boolean";
+    if (token === "int") return "number";
+    if (token === "float") return "number";
+    return token;
 }
 
 
-function getSelectedStageIntent() {
-    const actionKey = document.getElementById("nextTestCategory")?.value || "";
-    const intents = getCurrentStageIntents();
-    return intents.find((item) => item.action === actionKey) || null;
-}
-
-
-function populateStageIntentOptions() {
-    const categorySelect = document.getElementById("nextTestCategory");
-    const presetSelect = document.getElementById("nextTestPreset");
-    const manualInput = document.getElementById("nextTestManualName");
-    const manualWrap = document.getElementById("nextTestManualWrap");
-    const feedback = document.getElementById("nextTestFeedback");
-
-    if (!categorySelect || !presetSelect) {
+function renderDynamicIntentParameters(intent) {
+    const schema = Array.isArray(intent?.parameter_schema) ? intent.parameter_schema : [];
+    if (!nextTestParamsWrap || !nextTestParamsForm) {
         return;
     }
 
-    const intents = getCurrentStageIntents();
-    if (!intents.length) {
-        categorySelect.innerHTML = "<option value=''>No intent</option>";
-        presetSelect.innerHTML = "<option value=''>-</option>";
-        if (manualWrap) {
-            manualWrap.style.display = "block";
-        }
-        if (manualInput) {
-            manualInput.value = "{}";
-        }
-        if (feedback) {
-            feedback.classList.add("error");
-            feedback.innerText = "AI bu aşama için öneri üretemedi.";
-        }
+    if (!schema.length) {
+        nextTestParamsWrap.style.display = "none";
+        nextTestParamsForm.innerHTML = "";
         return;
     }
 
-    categorySelect.innerHTML = intents
+    const rows = [...schema].sort((a, b) => Number(a?.sort_order || 100) - Number(b?.sort_order || 100));
+    nextTestParamsWrap.style.display = "block";
+
+    nextTestParamsForm.innerHTML = rows
         .map((item) => {
-            const action = escapeHtml(item.action || "");
-            const reason = escapeHtml(item.reason || "-");
-            return `<option value="${action}">${action} | ${reason}</option>`;
+            const key = String(item?.key || "").trim();
+            if (!key) {
+                return "";
+            }
+
+            const label = String(item?.label || key);
+            const required = Boolean(item?.required);
+            const type = normalizeDynamicParamType(item?.type);
+            const defaultValue = item?.default;
+
+            if (type === "boolean") {
+                const checked = defaultValue === true ? " checked" : "";
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <label class="check-chip">
+                            <input type="checkbox" data-param-key="${escapeHtml(key)}" data-param-type="boolean"${checked}>
+                            <span>${escapeHtml(key)}</span>
+                        </label>
+                    </div>
+                `;
+            }
+
+            if (type === "json" || type === "list" || type === "object" || type === "dict") {
+                const serialized = typeof defaultValue === "string"
+                    ? defaultValue
+                    : JSON.stringify(defaultValue ?? (type === "list" ? [] : {}), null, 2);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <textarea data-param-key="${escapeHtml(key)}" data-param-type="${escapeHtml(type)}" placeholder="JSON">${escapeHtml(serialized)}</textarea>
+                    </div>
+                `;
+            }
+
+            if (type === "number") {
+                const numericValue = Number(defaultValue);
+                const value = Number.isFinite(numericValue) ? String(numericValue) : "";
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="number" data-param-key="${escapeHtml(key)}" data-param-type="number" value="${escapeHtml(value)}">
+                    </div>
+                `;
+            }
+
+            const value = defaultValue == null ? "" : String(defaultValue);
+            return `
+                <div class="dynamic-param-field">
+                    <div class="dynamic-param-label">
+                        <span>${escapeHtml(label)}</span>
+                        ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                    </div>
+                    <input type="text" data-param-key="${escapeHtml(key)}" data-param-type="string" value="${escapeHtml(value)}">
+                </div>
+            `;
         })
         .join("");
+}
 
-    const firstIntent = intents[0];
-    presetSelect.innerHTML = `<option value="${escapeHtml(firstIntent.target || latestScanResult?.target || "authorized-target")}">${escapeHtml(firstIntent.target || latestScanResult?.target || "authorized-target")}</option>`;
 
-    if (manualWrap) {
-        manualWrap.style.display = "block";
+function collectDynamicIntentParameters(schema) {
+    const rows = Array.isArray(schema) ? schema : [];
+    if (!rows.length || !nextTestParamsForm) {
+        return { values: {}, error: "" };
     }
-    if (manualInput) {
-        manualInput.value = JSON.stringify(firstIntent.parameters || {}, null, 0);
+
+    const values = {};
+    for (const item of rows) {
+        const key = String(item?.key || "").trim();
+        if (!key) {
+            continue;
+        }
+
+        const type = normalizeDynamicParamType(item?.type);
+        const required = Boolean(item?.required);
+        const node = nextTestParamsForm.querySelector(`[data-param-key="${CSS.escape(key)}"]`);
+        if (!node) {
+            continue;
+        }
+
+        if (type === "boolean") {
+            values[key] = Boolean(node.checked);
+            continue;
+        }
+
+        const raw = String(node.value || "").trim();
+        if (required && !raw) {
+            return { values: {}, error: `${key} zorunlu parametre.` };
+        }
+
+        if (!raw) {
+            values[key] = raw;
+            continue;
+        }
+
+        if (type === "number") {
+            const parsed = Number(raw);
+            if (!Number.isFinite(parsed)) {
+                return { values: {}, error: `${key} sayisal olmali.` };
+            }
+            values[key] = parsed;
+            continue;
+        }
+
+        if (type === "json" || type === "list" || type === "object" || type === "dict") {
+            try {
+                values[key] = JSON.parse(raw);
+            } catch (_) {
+                return { values: {}, error: `${key} gecerli JSON olmali.` };
+            }
+            continue;
+        }
+
+        values[key] = raw;
     }
-    if (feedback) {
-        feedback.classList.remove("error");
-        feedback.innerText = "AI action intent önerisi yüklendi. Parametreleri düzenleyip onaylayabilirsiniz.";
+
+    return { values, error: "" };
+}
+
+
+function getCurrentStageIntents() {
+    return stageSuggestionsByStage[selectedDirectionStepKey] || [];
+}
+
+
+function clearIntentSelectionUi() {
+    operationWindowIntents = [];
+    operationWindowExecuted = false;
+    operationWindowRunning = false;
+
+    if (directionOperationWindow) {
+        directionOperationWindow.innerHTML = `
+            <h4 style="margin:0 0 8px 0;">${escapeHtml(t("direction.newOperation", "Yeni Islem"))}</h4>
+            <p class="muted" style="margin:0;">${escapeHtml(t("direction.waiting", "Yon secimi bekleniyor."))}</p>
+        `;
     }
+
+    if (directionProceedBtn) {
+        directionProceedBtn.disabled = true;
+    }
+}
+
+
+function renderOperationWindowIntents(intents) {
+    if (!directionOperationWindow) {
+        return;
+    }
+
+    operationWindowIntents = Array.isArray(intents) ? intents : [];
+    operationWindowExecuted = false;
+    operationWindowRunning = false;
+
+    if (!operationWindowIntents.length) {
+        directionOperationWindow.innerHTML = `
+            <h4 style="margin:0 0 8px 0;">${escapeHtml(t("direction.newOperation", "Yeni Islem"))}</h4>
+            <p class="muted" style="margin:0;">AI bu adim icin kayitli gorev/script bulamadi.</p>
+        `;
+        if (directionProceedBtn) {
+            directionProceedBtn.disabled = true;
+        }
+        return;
+    }
+
+    const cardsHtml = operationWindowIntents.map((intent, intentIndex) => {
+        const action = String(intent?.action || "").trim();
+        const name = String(intent?.script?.display_name || action || `script-${intentIndex + 1}`);
+        const itemType = String(intent?.item_type || intent?.script?.item_type || "script").trim().toLowerCase();
+        const reason = String(intent?.reason || "Script dogrulama aksiyonu");
+        const schema = Array.isArray(intent?.parameter_schema) ? [...intent.parameter_schema] : [];
+        schema.sort((a, b) => Number(a?.sort_order || 100) - Number(b?.sort_order || 100));
+
+        const fieldsHtml = schema.map((item) => {
+            const key = String(item?.key || "").trim();
+            if (!key) {
+                return "";
+            }
+
+            const label = String(item?.label || key);
+            const required = Boolean(item?.required);
+            const type = normalizeDynamicParamType(item?.type);
+            const defaultValue = intent?.parameters?.[key] ?? item?.default;
+            const keyAttr = escapeHtml(key);
+
+            if (type === "boolean") {
+                const checked = defaultValue === true ? " checked" : "";
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <label class="check-chip">
+                            <input type="checkbox" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="boolean"${checked}>
+                            <span>${keyAttr}</span>
+                        </label>
+                    </div>
+                `;
+            }
+
+            if (type === "json" || type === "list" || type === "object" || type === "dict") {
+                const serialized = typeof defaultValue === "string"
+                    ? defaultValue
+                    : JSON.stringify(defaultValue ?? (type === "list" ? [] : {}), null, 2);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <textarea data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="${escapeHtml(type)}" placeholder="JSON">${escapeHtml(serialized)}</textarea>
+                    </div>
+                `;
+            }
+
+            if (type === "number") {
+                const numericValue = Number(defaultValue);
+                const value = Number.isFinite(numericValue) ? String(numericValue) : "";
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="number" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="number" value="${escapeHtml(value)}">
+                    </div>
+                `;
+            }
+
+            const value = defaultValue == null ? "" : String(defaultValue);
+            return `
+                <div class="dynamic-param-field">
+                    <div class="dynamic-param-label">
+                        <span>${escapeHtml(label)}</span>
+                        ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                    </div>
+                    <input type="text" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="string" value="${escapeHtml(value)}">
+                </div>
+            `;
+        }).join("");
+
+        return `
+            <div class="next-test-panel" style="margin-top:10px;">
+                <h4 style="margin:0 0 6px 0;">${escapeHtml(name)}</h4>
+                <p class="muted" style="margin:0 0 6px 0;">Action: ${escapeHtml(action)}</p>
+                <p class="muted" style="margin:0 0 6px 0;">Type: ${escapeHtml(itemType)}</p>
+                <p class="muted" style="margin:0;">${escapeHtml(reason)}</p>
+                <div class="dynamic-param-grid" style="margin-top:10px;">${fieldsHtml || `<p class="muted" style="margin:0;">Parametre gerekmiyor.</p>`}</div>
+            </div>
+        `;
+    }).join("");
+
+    directionOperationWindow.innerHTML = `
+        <h4 style="margin:0 0 8px 0;">${escapeHtml(t("direction.newOperation", "Yeni Islem"))}</h4>
+        <p class="muted" style="margin:0 0 8px 0;">Bu adimdaki tum gorev/scriptler yüklendi. Parametreleri girip baslatabilirsiniz.</p>
+        ${cardsHtml}
+        <div class="direction-global-actions" style="margin-top:12px;">
+            <button id="directionStartBtn" type="button">${escapeHtml(t("direction.start", "Baslat"))}</button>
+        </div>
+    `;
+
+    if (directionProceedBtn) {
+        directionProceedBtn.disabled = true;
+    }
+}
+
+
+function collectWindowIntentParameters(intent, intentIndex) {
+    const schema = Array.isArray(intent?.parameter_schema) ? intent.parameter_schema : [];
+    const values = {};
+
+    for (const item of schema) {
+        const key = String(item?.key || "").trim();
+        if (!key) {
+            continue;
+        }
+
+        const type = normalizeDynamicParamType(item?.type);
+        const required = Boolean(item?.required);
+        const node = directionOperationWindow?.querySelector(`[data-intent-index="${intentIndex}"][data-param-key="${CSS.escape(key)}"]`);
+        if (!node) {
+            continue;
+        }
+
+        if (type === "boolean") {
+            values[key] = Boolean(node.checked);
+            continue;
+        }
+
+        const raw = String(node.value || "").trim();
+        if (required && !raw) {
+            return { values: {}, error: `${intent.action || "action"} > ${key} zorunlu parametre.` };
+        }
+
+        if (!raw) {
+            values[key] = raw;
+            continue;
+        }
+
+        if (type === "number") {
+            const parsed = Number(raw);
+            if (!Number.isFinite(parsed)) {
+                return { values: {}, error: `${intent.action || "action"} > ${key} sayisal olmali.` };
+            }
+            values[key] = parsed;
+            continue;
+        }
+
+        if (type === "json" || type === "list" || type === "object" || type === "dict") {
+            try {
+                values[key] = JSON.parse(raw);
+            } catch (_) {
+                return { values: {}, error: `${intent.action || "action"} > ${key} gecerli JSON olmali.` };
+            }
+            continue;
+        }
+
+        values[key] = raw;
+    }
+
+    return { values, error: "" };
 }
 
 
 async function fetchStageSuggestions() {
     const feedback = document.getElementById("nextTestFeedback");
-    if (!selectedDirection || !latestScanResult) {
+    if (!selectedDirection || !selectedDirectionStepKey || !latestScanResult) {
         if (feedback) {
             feedback.classList.add("error");
             feedback.innerText = "Aşama önerisi için önce bir tarama sonucu gerekli.";
         }
-        return;
+        return false;
     }
 
     if (feedback) {
         feedback.classList.remove("error");
         feedback.innerText = "AI önerileri alınıyor...";
     }
+    appendProcessLog(`${getDirectionLabel(selectedDirection)}: AI action intent onerileri aliniyor.`);
 
     try {
         const response = await apiRequest("/validation/step-intents", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                step_key: selectedDirection,
+                step_key: selectedDirectionStepKey,
                 target: latestScanResult.target || document.getElementById("target")?.value.trim() || "authorized-target",
                 scan_tool: latestScanResult.scan_tool || "nmap",
                 scan_result: latestScanResult,
@@ -842,18 +1318,23 @@ async function fetchStageSuggestions() {
             }),
         });
 
-        stageSuggestionsByStage[selectedDirection] = Array.isArray(response.intents) ? response.intents : [];
-        populateStageIntentOptions();
+        const intents = Array.isArray(response.intents) ? response.intents : [];
+        stageSuggestionsByStage[selectedDirectionStepKey] = intents;
 
         if (feedback) {
             feedback.classList.remove("error");
             feedback.innerText = response.summary || "AI önerileri yüklendi.";
         }
+        appendProcessLog(`${getDirectionLabel(selectedDirection)}: AI action intent onerileri hazir.`);
+        appendAiEvaluation(`Asama Degerlendirmesi - ${getDirectionLabel(selectedDirection)}`, response.summary || "AI ozeti alinamadi.");
+        return { ok: true, intents };
     } catch (error) {
         if (feedback) {
             feedback.classList.add("error");
             feedback.innerText = error.message || "AI aşama önerisi alınamadı.";
         }
+        appendProcessLog(`${getDirectionLabel(selectedDirection)}: AI onerisi alinamadi. ${error.message || "Unknown error"}`);
+        return { ok: false, intents: [] };
     }
 }
 
@@ -927,7 +1408,7 @@ function resetCurrentTestState() {
     if (resultDiv) {
         resultDiv.innerHTML = t("scan.result.initial", "Tarama sonucu oluştuğunda sağ panelde adım çıktılarına eklenecektir.");
     }
-    if (aiOutput) {
+    if (aiOutput && !aiOutput.innerText.trim()) {
         aiOutput.innerText = t("right.ai.initial", "Tarama sonrasında yapay zeka değerlendirmesi burada sabit kalır.");
     }
     if (statusText) {
@@ -941,9 +1422,11 @@ function resetCurrentTestState() {
     }
 
     selectedDirection = "";
+    selectedDirectionStepKey = "";
     directionLocked = false;
     directionCompleted = false;
     directionOperationDetails = null;
+    clearIntentSelectionUi();
     renderDirectionState();
 
     const accepted = hasAcceptedLegalNotice();
@@ -1189,18 +1672,18 @@ function applyStaticTranslations() {
 
     setText("#directionPanel > h3", "direction.title", "Validation Workflow");
     setText("#directionPanel > p.muted", "direction.note.initial", "Tarama tamamlandi. Asama secip AI onerisi yukleyin.");
-    setText("[data-direction='validation_plan'] .action-title", "direction.validationPlan", "Validation Plan");
-    setText("[data-direction='validation_plan'] .action-description", "direction.validationPlan.desc", "AI ile dogrulama aksiyonlarini planla.");
-    setText("[data-direction='evidence_risk_analysis'] .action-title", "direction.evidenceRisk", "Evidence & Risk Analysis");
-    setText("[data-direction='evidence_risk_analysis'] .action-description", "direction.evidenceRisk.desc", "Bulgulari risk baglaminda dogrula.");
-    setText("[data-direction='remediation_plan'] .action-title", "direction.remediationPlan", "Remediation Plan");
-    setText("[data-direction='remediation_plan'] .action-description", "direction.remediationPlan.desc", "Duzeltme odakli aksiyonlari calistir.");
-    setText("label[for='nextTestCategory']", "direction.category", "AI Onerilen Action");
-    setText("label[for='nextTestPreset']", "direction.step", "Target");
+    setText("[data-direction='scan'] .action-title", "direction.scan", "Tarama");
+    setText("[data-direction='scan'] .action-description", "direction.scan.desc", "Tarama odakli dogrulama aksiyonlarini planla.");
+    setText("[data-direction='attack'] .action-title", "direction.attack", "Atak");
+    setText("[data-direction='attack'] .action-description", "direction.attack.desc", "Yetkili aktif dogrulama aksiyonlarini calistir.");
+    setText("[data-direction='remediation'] .action-title", "direction.remediation", "Duzenleme");
+    setText("[data-direction='remediation'] .action-description", "direction.remediation.desc", "Duzeltme odakli aksiyonlari calistir.");
+    setText("label[for='nextTestCategory']", "direction.category", "Test Kategorisi");
+    setText("label[for='nextTestPreset']", "direction.step", "Yapilmak Istenen Adim");
     setText("label[for='nextTestManualName']", "direction.manual", "Parametre JSON (duzenlenebilir)");
     setAttr("#nextTestManualName", "placeholder", "direction.manual.placeholder", '{"scan_params":["service-version"],"scan_ports":["80","443"]}');
-    setText("#directionNextBtn", "direction.newOperation", "AI Onerisi Yukle");
-    setText("#directionProceedBtn", "direction.proceed", "Onayla ve Calistir");
+    setText("#directionNextBtn", "direction.newOperation", "Yeni Islem");
+    setText("#directionProceedBtn", "direction.proceed", "Ilerle");
 
     setText(".right-rail h2:nth-of-type(1)", "right.tracking", "Islem Takibi");
     setText(".right-rail h2:nth-of-type(2)", "right.ai", "AI Ciktisi");
@@ -1359,7 +1842,7 @@ async function setLanguage(langCode) {
     renderLanguageSubmenu();
     await loadLegalNotice();
     if ((directionPanel?.style.display !== "none" || selectedDirection) && getCurrentStageIntents().length) {
-        populateStageIntentOptions();
+        renderOperationWindowIntents(getCurrentStageIntents());
     }
     await loadNetworkSummary();
 }
@@ -1451,6 +1934,17 @@ function bindHeaderMenus() {
             if (!hasAcceptedLegalNotice() && directionNote) {
                 directionNote.innerText = t("msg.newTestNeedLegal", "Yeni test için önce yasal onay adımını tamamla.");
             }
+        });
+    }
+
+    if (pathBreadcrumb) {
+        pathBreadcrumb.addEventListener("click", (event) => {
+            const link = event.target.closest("a[data-href]");
+            if (!link) {
+                return;
+            }
+            event.preventDefault();
+            navigateAppPath(link.dataset.href || "");
         });
     }
 }
@@ -1692,6 +2186,64 @@ function setActiveOperation(opName) {
     document.querySelectorAll("[data-op-panel]").forEach((panel) => {
         panel.style.display = panel.dataset.opPanel === opName ? "block" : "none";
     });
+
+    renderPathNavigation(opName);
+}
+
+
+function getActiveOperationFromUi() {
+    const active = operationTabs?.querySelector(".stage-tab.active");
+    return String(active?.dataset?.op || "legal").trim().toLowerCase() || "legal";
+}
+
+
+function renderPathNavigation(opName = "") {
+    if (!pathBreadcrumb) {
+        return;
+    }
+
+    const activeOp = String(opName || getActiveOperationFromUi() || "legal").trim().toLowerCase();
+    const crumbs = [
+        { label: "root", href: "/" },
+        { label: "app", href: "/app" },
+        { label: activeOp, href: `/app#${activeOp}` },
+    ];
+
+    pathBreadcrumb.innerHTML = crumbs
+        .map((item, index) => {
+            const separator = index > 0 ? "<span>/</span>" : "";
+            return `${separator}<a href="${item.href}" data-href="${item.href}">${item.label}</a>`;
+        })
+        .join("");
+}
+
+
+function navigateAppPath(pathValue) {
+    const raw = String(pathValue || "").trim();
+    if (!raw) {
+        return;
+    }
+
+    if (raw === "/app") {
+        renderPathNavigation(getActiveOperationFromUi());
+        return;
+    }
+
+    if (raw.startsWith("/app#")) {
+        const opName = raw.slice("/app#".length).trim().toLowerCase();
+        if (!opName) {
+            return;
+        }
+        const hasTab = Boolean(operationTabs?.querySelector(`.stage-tab[data-op="${opName}"]`));
+        if (hasTab) {
+            setActiveOperation(opName);
+        }
+        return;
+    }
+
+    if (raw.startsWith("/")) {
+        window.location.href = raw;
+    }
 }
 
 
@@ -1783,27 +2335,19 @@ function getDirectionLabel(directionValue) {
     if (workflowStepByKey[key]) {
         return workflowStepByKey[key].step_name || workflowStepByKey[key].step_key || t("tab.direction", "Ilerleme Yonu");
     }
-    if (directionValue === "validation_plan") return t("direction.validationPlan", "Validation Plan");
-    if (directionValue === "evidence_risk_analysis") return t("direction.evidenceRisk", "Evidence & Risk Analysis");
-    if (directionValue === "remediation_plan") return t("direction.remediationPlan", "Remediation Plan");
+    if (key === "scan") return t("direction.scan", "Tarama");
+    if (key === "attack") return t("direction.attack", "Atak");
+    if (key === "remediation") return t("direction.remediation", "Duzenleme");
     return t("tab.direction", "Ilerleme Yonu");
 }
 
 
 function getDirectionSelectionDetails() {
     const categorySelect = document.getElementById("nextTestCategory");
-    const targetValue = document.getElementById("nextTestPreset")?.value || "";
-    const manualParams = document.getElementById("nextTestManualName")?.value.trim() || "";
+    const stepSelect = document.getElementById("nextTestPreset");
 
     const categoryLabel = categorySelect?.selectedOptions?.[0]?.textContent?.trim() || t("direction.noCategory", "Kategori secilmedi");
-
-    let stepLabel = t("direction.noStep", "Adim secilmedi");
-    if (targetValue) {
-        stepLabel = `Target: ${targetValue}`;
-    }
-    if (manualParams) {
-        stepLabel = `${stepLabel} | Params: ${manualParams}`;
-    }
+    const stepLabel = stepSelect?.selectedOptions?.[0]?.textContent?.trim() || t("direction.noStep", "Adim secilmedi");
 
     return {
         categoryLabel,
@@ -1879,7 +2423,7 @@ function renderDirectionState() {
         `;
     }
     if (directionProceedBtn) {
-        directionProceedBtn.disabled = false;
+        directionProceedBtn.disabled = !operationWindowExecuted;
         directionProceedBtn.hidden = directionCompleted;
     }
     directionLockedText.innerText = tf("direction.locked", { direction: label }, `${label} yonu secildi. Sekme sifirlanana kadar bu secim kilitli kalir.`);
@@ -1889,9 +2433,13 @@ function renderDirectionState() {
 
 function prepareDirectionPanelForNextOperation() {
     selectedDirection = "";
+    selectedDirectionStepKey = "";
     directionLocked = false;
     directionCompleted = false;
     directionOperationDetails = null;
+    operationWindowIntents = [];
+    operationWindowExecuted = false;
+    operationWindowRunning = false;
 
     const nextTestForm = document.getElementById("nextTestForm");
     if (nextTestForm) {
@@ -2468,6 +3016,7 @@ directionActions.addEventListener("click", async (event) => {
     }
 
     selectedDirection = selectedAction;
+    selectedDirectionStepKey = "";
 
     directionActions.querySelectorAll("[data-direction]").forEach((item) => {
         item.classList.remove("active");
@@ -2475,66 +3024,36 @@ directionActions.addEventListener("click", async (event) => {
     button.classList.add("active");
     directionNextBtn.disabled = false;
     if (directionProceedBtn) {
-        directionProceedBtn.disabled = false;
+        directionProceedBtn.disabled = true;
     }
 
     if (testPlanPanel) {
         testPlanPanel.style.display = "block";
     }
 
-    await fetchStageSuggestions();
-    directionNote.innerText = `${getDirectionLabel(selectedDirection)} ${t("direction.selectedLock", "secildi. AI onerisi yuklendi.")}`;
+    renderDirectionCategoryAndSteps();
+    const selectedStep = document.getElementById("nextTestPreset")?.selectedOptions?.[0]?.textContent || "-";
+
+    appendProcessLog(`${getDirectionLabel(selectedDirection)}: yon secildi | adim: ${selectedStep}`);
+    clearIntentSelectionUi();
+    directionNote.innerText = `${getDirectionLabel(selectedDirection)} ${t("direction.selectedLock", "secildi.")}`;
 });
 
 directionPanel.addEventListener("change", (event) => {
     const target = event.target;
 
     if (target.id === "nextTestCategory") {
-        const intent = getSelectedStageIntent();
-        const presetSelect = document.getElementById("nextTestPreset");
-        const manualInput = document.getElementById("nextTestManualName");
-        const feedback = document.getElementById("nextTestFeedback");
-        if (presetSelect) {
-            const resolvedTarget = intent?.target || latestScanResult?.target || "authorized-target";
-            presetSelect.innerHTML = `<option value="${escapeHtml(resolvedTarget)}">${escapeHtml(resolvedTarget)}</option>`;
-        }
+        renderDirectionCategoryAndSteps();
+        return;
+    }
 
-        const fallbackParams = intent?.parameters || {};
-        if (manualInput) {
-            manualInput.value = JSON.stringify(fallbackParams, null, 0);
+    if (target.id === "nextTestPreset") {
+        selectedDirectionStepKey = target.value || "";
+        directionNextBtn.disabled = !selectedDirectionStepKey;
+        if (directionProceedBtn) {
+            directionProceedBtn.disabled = true;
         }
-
-        if (!intent) {
-            return;
-        }
-
-        apiRequest("/validation/resolve-intent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                step_key: selectedDirection,
-                action: intent.action,
-                target: intent.target || latestScanResult?.target || "authorized-target",
-                reason: intent.reason || "Step action resolution",
-                parameters: fallbackParams,
-            }),
-        }).then((resolved) => {
-            if (manualInput) {
-                manualInput.value = JSON.stringify(resolved?.intent?.parameters || fallbackParams, null, 0);
-            }
-            if (feedback) {
-                const toolName = resolved?.tool?.tool_name || "-";
-                const risk = resolved?.tool?.risk_level || "low";
-                const approval = resolved?.tool?.requires_approval ? "yes" : "no";
-                feedback.classList.remove("error");
-                feedback.innerText = `Tool: ${toolName} | Risk: ${risk} | Approval: ${approval}`;
-            }
-        }).catch((error) => {
-            if (feedback) {
-                feedback.classList.add("error");
-                feedback.innerText = error.message || "Intent çözümlenemedi.";
-            }
-        });
+        clearIntentSelectionUi();
         return;
     }
 });
@@ -2548,100 +3067,232 @@ directionPanel.addEventListener("submit", (event) => {
     event.preventDefault();
 });
 
-directionNextBtn.addEventListener("click", () => {
-    if (!selectedDirection) {
+directionNextBtn.addEventListener("click", async () => {
+    if (!selectedDirection || !selectedDirectionStepKey) {
         return;
     }
 
     const feedback = document.getElementById("nextTestFeedback");
     directionOperationDetails = getDirectionSelectionDetails();
+    const loadResult = await fetchStageSuggestions();
     if (feedback) {
-        feedback.classList.remove("error");
-        feedback.innerText = `${t("direction.selectedStep", "Secilen adim")}: ${directionOperationDetails.categoryLabel} / ${directionOperationDetails.stepLabel}`;
+        if (loadResult.ok) {
+            feedback.classList.remove("error");
+            feedback.innerText = `${t("direction.selectedStep", "Secilen adim")}: ${directionOperationDetails.categoryLabel} / ${directionOperationDetails.stepLabel}. AI onerisi ve parametreler yuklendi.`;
+        }
+    }
+
+    if (!loadResult.ok) {
+        return;
     }
 
     directionLocked = true;
     directionCompleted = false;
     renderDirectionState();
+    renderOperationWindowIntents(loadResult.intents || []);
 });
 
 
-if (directionProceedBtn) {
-    directionProceedBtn.addEventListener("click", async () => {
-        if (!selectedDirection) {
-            directionNote.innerText = t("direction.selectFirst", "Lutfen once ilerleme yonu sec.");
+async function pollValidationExecution(executionId, directionLabel) {
+    const safeId = String(executionId || "").trim();
+    if (!safeId) {
+        throw new Error("Execution id bulunamadi");
+    }
+
+    let lastLogIndex = 0;
+    const startedAt = Date.now();
+    const hardTimeoutMs = 10 * 60 * 1000;
+
+    while (true) {
+        if (Date.now() - startedAt > hardTimeoutMs) {
+            throw new Error("Execution timeout");
+        }
+
+        const state = await apiRequest(`/validation/executions/${encodeURIComponent(safeId)}`, { cache: "no-store" });
+        const logs = Array.isArray(state.logs) ? state.logs : [];
+
+        while (lastLogIndex < logs.length) {
+            const line = logs[lastLogIndex];
+            appendProcessLog(`${directionLabel}: ${line?.message || ""}`);
+            lastLogIndex += 1;
+        }
+
+        if (state.status === "finished") {
+            return state;
+        }
+        if (state.status === "failed") {
+            throw new Error(state.error || "Execution failed");
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+}
+
+
+async function executeOperationWindowIntents() {
+    if (!selectedDirection || !selectedDirectionStepKey) {
+        directionNote.innerText = t("direction.selectFirst", "Lutfen once ilerleme yonu sec.");
+        return;
+    }
+
+    if (!operationWindowIntents.length) {
+        directionNote.innerText = "Baslatmak icin bu adimda en az bir gorev/script olmali.";
+        return;
+    }
+
+    if (operationWindowRunning) {
+        return;
+    }
+
+    const resolvedTarget = latestScanResult?.target || document.getElementById("target")?.value.trim() || "authorized-target";
+    const userApproved = await requestActionApproval({
+        title: "Islem Onayi",
+        message: `${operationWindowIntents.length} adet gorev/script backend Tool Runner ile calistirilacak.\n\nTarget: ${resolvedTarget}`,
+    });
+    if (!userApproved) {
+        directionNote.innerText = "Islem kullanici tarafindan onaylanmadi.";
+        appendProcessLog(`${getDirectionLabel(selectedDirection)}: kullanici onayi verilmedi.`);
+        return;
+    }
+
+    const prepared = [];
+    for (let i = 0; i < operationWindowIntents.length; i += 1) {
+        const intent = operationWindowIntents[i];
+        const dynamicParamData = collectWindowIntentParameters(intent, i);
+        if (dynamicParamData.error) {
+            directionNote.innerText = dynamicParamData.error;
             return;
         }
 
-        const selectedIntent = getSelectedStageIntent();
-        if (!selectedIntent) {
-            directionNote.innerText = "Calistirmak icin once bir AI action intent secin.";
-            return;
-        }
+        prepared.push({
+            intent,
+            parameters: {
+                ...(intent?.parameters || {}),
+                ...dynamicParamData.values,
+            },
+        });
+    }
 
-        const userApproved = window.confirm("Bu action backend Tool Runner ile calistirilacak. Onayliyor musunuz?");
-        if (!userApproved) {
-            directionNote.innerText = "Islem kullanici tarafindan onaylanmadi.";
-            return;
-        }
+    operationWindowRunning = true;
+    const startBtn = directionOperationWindow?.querySelector("#directionStartBtn");
+    if (startBtn) {
+        startBtn.disabled = true;
+    }
 
-        const editableParams = parseParametersFromManualInput();
-        const payload = {
-            step_key: selectedDirection,
-            action: selectedIntent.action,
-            target: selectedIntent.target || latestScanResult?.target || "authorized-target",
-            reason: selectedIntent.reason || "Stage execution requested by user",
-            parameters: editableParams,
-            approved: true,
-        };
+    try {
+        for (const { intent, parameters } of prepared) {
+            const executable = Boolean(intent?.executable ?? (String(intent?.item_type || "script").toLowerCase() === "script"));
+            if (!executable) {
+                appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${intent.action} manuel gorev olarak kaydedildi.`);
+                appendStepOutput(
+                    `${getDirectionLabel(selectedDirection)} - Manual Task (${intent.action})`,
+                    JSON.stringify({ target: resolvedTarget, parameters }, null, 2),
+                );
+                continue;
+            }
 
-        let execution;
-        try {
-            execution = await apiRequest("/validation/execute-intent", {
+            const payload = {
+                step_key: selectedDirectionStepKey,
+                action: intent.action,
+                target: resolvedTarget,
+                reason: intent.reason || "Stage execution requested by user",
+                parameters,
+                approved: true,
+            };
+
+            appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${intent.action} calistiriliyor.`);
+            const executionStart = await apiRequest("/validation/execute-intent", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-        } catch (error) {
-            directionNote.innerText = error.message || "Validation action calistirilamadi.";
+            const executionState = await pollValidationExecution(executionStart.execution_id, getDirectionLabel(selectedDirection));
+
+            const execResult = executionState?.result || {};
+            const execOutput = execResult?.output || {};
+            const outputText = execOutput?.result?.error
+                ? `Error: ${execOutput.result.error}`
+                : `Action: ${intent.action || "-"} | Status: ${execResult.status || "completed"}`;
+            appendStepOutput(`${getDirectionLabel(selectedDirection)} - Tool Runner`, outputText);
+
+            if (execOutput.result && typeof execOutput.result === "object") {
+                appendStepOutput(
+                    `${getDirectionLabel(selectedDirection)} - Script Result (${intent.action})`,
+                    JSON.stringify(execOutput.result, null, 2),
+                );
+            }
+
+            if (execOutput.ai_guidance?.summary) {
+                appendAiEvaluation("Execution Guidance", execOutput.ai_guidance.summary);
+            }
+
+            try {
+                const evidenceAnalysis = await apiRequest("/validation/evidence-analysis", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        target: resolvedTarget,
+                        evidence: [
+                            {
+                                action: intent.action,
+                                target: resolvedTarget,
+                                output: execOutput,
+                            },
+                        ],
+                    }),
+                });
+
+                const remediationSummary = evidenceAnalysis?.analysis?.summary || "Evidence analizi tamamlandi.";
+                appendStepOutput("Evidence & Remediation Analysis", remediationSummary);
+                appendAiEvaluation("Evidence ve Remediation Degerlendirmesi", remediationSummary);
+            } catch (analysisError) {
+                appendStepOutput("Evidence & Remediation Analysis", analysisError.message || "Evidence analizi alınamadı.");
+            }
+        }
+
+        operationWindowExecuted = true;
+        directionNote.innerText = "Tum gorev/scriptler tamamlandi. Ilerle ile sonraki asamaya gecebilirsiniz.";
+        if (directionProceedBtn) {
+            directionProceedBtn.disabled = false;
+        }
+    } catch (error) {
+        directionNote.innerText = error.message || "Validation action calistirilamadi.";
+        appendProcessLog(`${getDirectionLabel(selectedDirection)}: calistirma hatasi. ${error.message || "Unknown error"}`);
+        if (startBtn) {
+            startBtn.disabled = false;
+        }
+    } finally {
+        operationWindowRunning = false;
+    }
+}
+
+
+if (directionOperationWindow) {
+    directionOperationWindow.addEventListener("click", async (event) => {
+        const button = event.target.closest("#directionStartBtn");
+        if (!button) {
+            return;
+        }
+        await executeOperationWindowIntents();
+    });
+}
+
+
+if (directionProceedBtn) {
+    directionProceedBtn.addEventListener("click", async () => {
+        if (!selectedDirection || !selectedDirectionStepKey) {
+            directionNote.innerText = t("direction.selectFirst", "Lutfen once ilerleme yonu sec.");
+            return;
+        }
+
+        if (!operationWindowExecuted) {
+            directionNote.innerText = "Ilerlemek icin once Yeni Islem penceresindeki Baslat islemini tamamlayin.";
             return;
         }
 
         const feedback = document.getElementById("nextTestFeedback");
         const details = getDirectionSelectionDetails();
         const completedDirection = selectedDirection;
-
-        const execResult = execution?.result || {};
-        const outputText = execResult?.output?.error
-            ? `Error: ${execResult.output.error}`
-            : `Tool: ${execResult.tool_name || "-"} | Status: ${execResult.status || "completed"}`;
-        appendStepOutput(`${getDirectionLabel(completedDirection)} - Tool Runner`, outputText);
-
-        try {
-            const evidenceAnalysis = await apiRequest("/validation/evidence-analysis", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    target: selectedIntent.target || latestScanResult?.target || "authorized-target",
-                    evidence: [execResult.output || {}],
-                }),
-            });
-
-            const remediationSummary = evidenceAnalysis?.analysis?.summary || "Evidence analizi tamamlandi.";
-            const remediationActions = evidenceAnalysis?.analysis?.actions || [];
-            const renderedRemediation = [remediationSummary];
-            if (remediationActions.length) {
-                renderedRemediation.push("");
-                renderedRemediation.push("Remediation Action Intents:");
-                remediationActions.forEach((item) => {
-                    renderedRemediation.push(`- ${item.action} | ${item.reason}`);
-                });
-            }
-
-            appendStepOutput("Evidence & Remediation Analysis", renderedRemediation.join("\n"));
-        } catch (analysisError) {
-            appendStepOutput("Evidence & Remediation Analysis", analysisError.message || "Evidence analizi alınamadı.");
-        }
 
         directionCompleted = true;
         directionProceedBtn.hidden = true;
@@ -2732,7 +3383,7 @@ form.addEventListener("submit", async (e) => {
     });
     statusText.innerText = t("status.preparing", "Durum: hazirlaniyor...");
     currentStep.innerText = "";
-    aiOutput.innerText = t("right.ai.wait", "AI analizi bekleniyor...");
+    appendAiEvaluation("Tarama Durumu", t("right.ai.wait", "AI analizi bekleniyor..."));
     resultDiv.innerHTML = t("scan.running", "Tarama calisiyor. Sonuclar sag panelde adim ciktilarina eklenecek.");
     logsDiv.innerHTML = "";
 
@@ -2865,14 +3516,14 @@ function renderLogs(logs) {
 function renderResult(result) {
     if (!result) {
         resultDiv.innerHTML = t("scan.result.none", "Tarama sonucu alinamadi.");
-        aiOutput.innerText = t("right.ai.none", "Sonuc alinamadigi icin AI cikti yok.");
+        appendAiEvaluation("Tarama AI Degerlendirmesi", t("right.ai.none", "Sonuc alinamadigi icin AI cikti yok."));
         appendStepOutput(t("scan.result.title", "Tarama Sonucu"), t("scan.result.none", "Sonuc alinamadi."));
         return;
     }
 
     if (result.error) {
         resultDiv.innerHTML = t("scan.result.error", "Tarama hata ile sonlandi.");
-        aiOutput.innerText = t("right.ai.error", "Tarama hata ile sonlandigi icin AI cikti yok.");
+        appendAiEvaluation("Tarama AI Degerlendirmesi", t("right.ai.error", "Tarama hata ile sonlandigi icin AI cikti yok."));
         appendStepOutput(t("scan.result.title", "Tarama Sonucu"), `${t("scan.error", "Hata")}: ${result.error}`);
         return;
     }
@@ -2880,9 +3531,9 @@ function renderResult(result) {
     latestScanResult = result;
 
     if (result.ai_analysis) {
-        aiOutput.innerText = result.ai_analysis;
+        appendAiEvaluation("Tarama AI Degerlendirmesi", result.ai_analysis);
     } else {
-        aiOutput.innerText = t("right.ai.noAnalysis", "Bu tarama icin AI analizi uretilmedi.");
+        appendAiEvaluation("Tarama AI Degerlendirmesi", t("right.ai.noAnalysis", "Bu tarama icin AI analizi uretilmedi."));
     }
 
     resultDiv.innerHTML = t("scan.result.done", "Tarama tamamlandi. Ilerleme Yonu sekmesine gecildi.");
@@ -3119,6 +3770,16 @@ async function bootstrapApp() {
     if (exportPdfBtn) {
         exportPdfBtn.addEventListener("click", exportStepOutputsPdf);
     }
+
+    renderPathNavigation(getActiveOperationFromUi());
 }
 
 bootstrapApp();
+
+if (actionApprovalCancelBtn) {
+    actionApprovalCancelBtn.addEventListener("click", () => closeActionApprovalModal(false));
+}
+
+if (actionApprovalConfirmBtn) {
+    actionApprovalConfirmBtn.addEventListener("click", () => closeActionApprovalModal(true));
+}

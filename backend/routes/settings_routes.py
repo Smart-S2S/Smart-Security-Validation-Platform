@@ -6,30 +6,43 @@ import subprocess
 from pathlib import Path
 
 import requests
+from pymysql.err import IntegrityError
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import File, Form, UploadFile
 
 from backend.auth import get_current_user, require_roles
 from backend.i18n import request_lang, t
 from backend.models.orchestrator_models import (
-    ToolCreateRequest,
-    ToolParameterCreateRequest,
-    ToolParameterUpdateRequest,
-    ToolUpdateRequest,
-    WorkflowStepCreateRequest,
-    WorkflowStepUpdateRequest,
+    StepItemCreateRequest,
+    StepItemParameterCreateRequest,
+    StepItemScriptContentUpdateRequest,
+    StepItemParameterUpdateRequest,
+    StepItemUpdateRequest,
+    StepCreateRequest,
+    StepUpdateRequest,
 )
 from backend.services.orchestrator_store import (
-    create_tool,
-    create_tool_parameter,
-    create_workflow_step,
-    list_tool_parameters,
-    list_tools,
-    list_workflow_steps,
-    update_tool,
-    update_tool_parameter,
-    update_workflow_step,
+    create_step_item,
+    create_step_item_parameter,
+    create_step,
+    create_progress_category,
+    delete_step_item,
+    delete_step_item_parameter,
+    delete_progress_category,
+    delete_step,
+    list_step_item_parameters,
+    list_step_items,
+    list_progress_categories,
+    list_steps,
+    get_step_item_script_content,
+    save_step_item_script_content,
+    update_step_item,
+    update_step_item_parameter,
+    update_progress_category,
+    update_step,
+    upload_step_item_script,
 )
 from backend.services.auth_store import (
     VALID_ROLES,
@@ -44,8 +57,18 @@ from backend.utils.binary_resolver import resolve_binary
 router = APIRouter()
 PROJECT_VERSION = os.getenv("SSVP_VERSION", "1.0")
 PROJECT_VENDOR = os.getenv("SSVP_VENDOR", "SSVP Core Team")
+VALID_WORKFLOW_KEYS = {"scan", "attack", "remediation"}
 
 
+def _normalize_workflow_key_or_400(value: str, language: str) -> str:
+    normalized = (value or "scan").strip().lower()
+    if normalized in VALID_WORKFLOW_KEYS:
+        return normalized
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=t(language, "settings.invalidWorkflow", "Gecersiz workflow secimi"),
+    )
 def _bytes_to_gib(value: int) -> float:
     return round(value / (1024 ** 3), 2)
 
@@ -155,6 +178,21 @@ class ScanSettingsUpdateRequest(BaseModel):
     netdiscover_timeout_sec: int = Field(ge=10, le=7200)
 
 
+class ProgressCategoryCreateRequest(BaseModel):
+    category_key: str = Field(min_length=2, max_length=120)
+    display_name: str = Field(min_length=2, max_length=160)
+    workflow_key: str = Field(default="scan", min_length=2, max_length=32)
+    description: str = Field(default="", max_length=2000)
+    is_active: bool = True
+
+
+class ProgressCategoryUpdateRequest(BaseModel):
+    display_name: str | None = Field(default=None, min_length=2, max_length=160)
+    workflow_key: str | None = Field(default=None, min_length=2, max_length=32)
+    description: str | None = Field(default=None, max_length=2000)
+    is_active: bool | None = None
+
+
 def _public_user(user: dict) -> dict:
     return {
         "id": user["id"],
@@ -177,7 +215,7 @@ def _public_user(user: dict) -> dict:
 def settings_access(current_user: dict = Depends(get_current_user)):
     tabs = ["appearance", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "system", "ai", "scan", "workflow", "tools"]
+        tabs = ["appearance", "system", "ai", "scan", "tools", "progress-categories"]
 
     return {
         "user": _public_user(current_user),
@@ -347,110 +385,361 @@ def settings_ai_models(request: Request, current_user: dict = Depends(require_ro
     }
 
 
-@router.get("/settings/workflow-steps")
-def settings_workflow_steps(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
+@router.get("/settings/progress-categories")
+def settings_progress_categories(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
     if not current_user.get("is_admin"):
         return {"items": []}
-    return {"items": list_workflow_steps(active_only=False)}
+    return {"items": list_progress_categories(active_only=False)}
 
 
-@router.post("/settings/workflow-steps", status_code=201)
-def settings_workflow_step_create(
+@router.post("/settings/progress-categories", status_code=201)
+def settings_progress_categories_create(
     request: Request,
-    payload: WorkflowStepCreateRequest,
+    payload: ProgressCategoryCreateRequest,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-    created = create_workflow_step(payload.model_dump())
-    return {"item": created}
+
+    data = payload.model_dump()
+    data["workflow_key"] = _normalize_workflow_key_or_400(data.get("workflow_key") or "scan", lang)
+    try:
+        item = create_progress_category(data)
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=t(lang, "settings.categoryAlreadyExists", "Kategori anahtari zaten kullaniliyor"),
+        ) from exc
+    return {"item": item}
 
 
-@router.patch("/settings/workflow-steps/{step_id}")
-def settings_workflow_step_update(
+@router.patch("/settings/progress-categories/{category_id}")
+def settings_progress_categories_update(
+    request: Request,
+    category_id: int,
+    payload: ProgressCategoryUpdateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    data = payload.model_dump(exclude_unset=True)
+    if "workflow_key" in data and data["workflow_key"] is not None:
+        data["workflow_key"] = _normalize_workflow_key_or_400(data.get("workflow_key") or "scan", lang)
+    item = update_progress_category(category_id, data)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"item": item}
+
+
+@router.delete("/settings/progress-categories/{category_id}")
+def settings_progress_categories_delete(
+    request: Request,
+    category_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    try:
+        deleted = delete_progress_category(category_id)
+    except ValueError as exc:
+        if str(exc) == "CATEGORY_IN_USE":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=t(lang, "settings.categoryInUse", "Bu kategori bir tool tarafinda kullanildigi icin silinemez"),
+            ) from exc
+        raise
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"ok": True}
+
+
+@router.get("/settings/steps")
+def settings_steps(
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+    workflow_key: str | None = None,
+    category_key: str | None = None,
+):
+    if not current_user.get("is_admin"):
+        return {"items": []}
+    return {
+        "items": list_steps(
+            active_only=False,
+            workflow_key=workflow_key,
+            category_key=category_key,
+        )
+    }
+
+
+@router.post("/settings/steps", status_code=201)
+def settings_steps_create(
+    request: Request,
+    payload: StepCreateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    data = payload.model_dump()
+    data["workflow_key"] = _normalize_workflow_key_or_400(data.get("workflow_key") or "scan", lang)
+    try:
+        item = create_step(data)
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=t(lang, "settings.toolNameConflict", "Ayni action key ile baska tool var. Lutfen farkli isim kullanin"),
+        ) from exc
+    return {"item": item}
+
+
+@router.patch("/settings/steps/{step_id}")
+def settings_steps_update(
     request: Request,
     step_id: int,
-    payload: WorkflowStepUpdateRequest,
+    payload: StepUpdateRequest,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-    item = update_workflow_step(step_id, payload.model_dump(exclude_unset=True))
+
+    item = update_step(step_id, payload.model_dump(exclude_unset=True))
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
     return {"item": item}
 
 
-@router.get("/settings/tool-registry")
-def settings_tool_registry(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
+@router.delete("/settings/steps/{step_id}")
+def settings_steps_delete(
+    request: Request,
+    step_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    try:
+        deleted = delete_step(step_id)
+    except ValueError as exc:
+        if str(exc) == "STEP_IN_USE":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=t(lang, "settings.categoryInUse", "Bu kategori bir tool tarafinda kullanildigi icin silinemez"),
+            ) from exc
+        raise
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"ok": True}
+
+
+@router.get("/settings/steps/{step_id}/items")
+def settings_step_items(
+    step_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
     if not current_user.get("is_admin"):
         return {"items": []}
-    return {"items": list_tools(active_only=False)}
+    return {"items": list_step_items(step_id, active_only=False)}
 
 
-@router.post("/settings/tool-registry", status_code=201)
-def settings_tool_registry_create(
+@router.post("/settings/steps/{step_id}/items", status_code=201)
+def settings_step_items_create(
     request: Request,
-    payload: ToolCreateRequest,
+    step_id: int,
+    payload: StepItemCreateRequest,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-    created = create_tool(payload.model_dump())
-    return {"item": created}
+
+    data = payload.model_dump()
+    try:
+        item = create_step_item(step_id, data)
+    except ValueError as exc:
+        if str(exc) == "STEP_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        raise
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=t(lang, "settings.toolNameConflict", "Ayni action key ile baska tool var. Lutfen farkli isim kullanin")) from exc
+    return {"item": item}
 
 
-@router.patch("/settings/tool-registry/{tool_id}")
-def settings_tool_registry_update(
+@router.patch("/settings/steps/items/{item_id}")
+def settings_step_items_update(
     request: Request,
-    tool_id: int,
-    payload: ToolUpdateRequest,
+    item_id: int,
+    payload: StepItemUpdateRequest,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-    item = update_tool(tool_id, payload.model_dump(exclude_unset=True))
+
+    try:
+        item = update_step_item(item_id, payload.model_dump(exclude_unset=True))
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=t(lang, "settings.toolNameConflict", "Ayni action key ile baska tool var. Lutfen farkli isim kullanin")) from exc
+
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
     return {"item": item}
 
 
-@router.get("/settings/tool-registry/{tool_id}/parameters")
-def settings_tool_registry_parameters(tool_id: int, current_user: dict = Depends(require_roles(allow_must_change_password=False))):
+@router.delete("/settings/steps/items/{item_id}")
+def settings_step_items_delete(
+    request: Request,
+    item_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    deleted = delete_step_item(item_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"ok": True}
+
+
+@router.post("/settings/steps/items/{item_id}/script-upload")
+async def settings_step_items_upload_script(
+    request: Request,
+    item_id: int,
+    file: UploadFile = File(...),
+    script_name: str = Form(default=""),
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    del script_name
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.emptyScriptFile", "Script dosyasi bos olamaz"))
+
+    try:
+        item = upload_step_item_script(item_id, filename=file.filename or "script.py", content=content)
+    except ValueError as exc:
+        if str(exc) == "STEP_ITEM_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        if str(exc) == "ITEM_NOT_SCRIPT":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidScriptType", "Secili kayit script tipi degil")) from exc
+        raise
+
+    return {"item": item}
+
+
+@router.get("/settings/steps/items/{item_id}/script-content")
+def settings_step_item_script_content(
+    request: Request,
+    item_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    try:
+        return get_step_item_script_content(item_id)
+    except ValueError as exc:
+        if str(exc) == "STEP_ITEM_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        if str(exc) == "ITEM_NOT_SCRIPT":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidScriptType", "Secili kayit script tipi degil")) from exc
+        raise
+
+
+@router.patch("/settings/steps/items/{item_id}/script-content")
+def settings_step_item_script_content_update(
+    request: Request,
+    item_id: int,
+    payload: StepItemScriptContentUpdateRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    try:
+        return save_step_item_script_content(item_id, payload.script_source)
+    except ValueError as exc:
+        if str(exc) == "STEP_ITEM_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        if str(exc) == "ITEM_NOT_SCRIPT":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidScriptType", "Secili kayit script tipi degil")) from exc
+        raise
+
+
+@router.get("/settings/steps/items/{item_id}/parameters")
+def settings_step_item_parameters(
+    item_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
     if not current_user.get("is_admin"):
         return {"items": []}
-    return {"items": list_tool_parameters(tool_id)}
+    return {"items": list_step_item_parameters(item_id)}
 
 
-@router.post("/settings/tool-registry/{tool_id}/parameters", status_code=201)
-def settings_tool_registry_parameter_create(
+@router.post("/settings/steps/items/{item_id}/parameters", status_code=201)
+def settings_step_item_parameters_create(
     request: Request,
-    tool_id: int,
-    payload: ToolParameterCreateRequest,
+    item_id: int,
+    payload: StepItemParameterCreateRequest,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-    item = create_tool_parameter(tool_id, payload.model_dump())
+
+    try:
+        item = create_step_item_parameter(item_id, payload.model_dump())
+    except ValueError as exc:
+        if str(exc) == "STEP_ITEM_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        if str(exc) == "ITEM_NOT_TASK":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidTaskType", "Parametre sadece gorev tipinde tanimlanabilir")) from exc
+        raise
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=t(lang, "settings.toolNameConflict", "Ayni action key ile baska tool var. Lutfen farkli isim kullanin")) from exc
     return {"item": item}
 
 
-@router.patch("/settings/tool-registry/parameters/{parameter_id}")
-def settings_tool_registry_parameter_update(
+@router.patch("/settings/steps/parameters/{param_id}")
+def settings_step_item_parameters_update(
     request: Request,
-    parameter_id: int,
-    payload: ToolParameterUpdateRequest,
+    param_id: int,
+    payload: StepItemParameterUpdateRequest,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-    item = update_tool_parameter(parameter_id, payload.model_dump(exclude_unset=True))
+
+    item = update_step_item_parameter(param_id, payload.model_dump(exclude_unset=True))
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
     return {"item": item}
+
+
+@router.delete("/settings/steps/parameters/{param_id}")
+def settings_step_item_parameters_delete(
+    request: Request,
+    param_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    deleted = delete_step_item_parameter(param_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"ok": True}
