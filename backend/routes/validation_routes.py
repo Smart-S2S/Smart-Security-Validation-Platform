@@ -429,6 +429,8 @@ def _infer_parameter_schema_from_script(item_id: int, script_path: str = "") -> 
 
 
 def _build_parameter_schema(item_id: int, item_type: str = "script", script_path: str = "") -> list[dict]:
+    del item_type
+    del script_path
     rows = list_step_item_parameters(int(item_id))
     schema: list[dict] = []
     for row in rows:
@@ -439,17 +441,12 @@ def _build_parameter_schema(item_id: int, item_type: str = "script", script_path
                 "type": row.get("param_type") or "string",
                 "required": bool(row.get("is_required")),
                 "default": _coerce_default_value(row.get("param_type"), row.get("default_value")),
+                "description": row.get("description") or "",
+                "options_json": row.get("options_json") if isinstance(row.get("options_json"), (list, dict)) else [],
                 "sort_order": int(row.get("sort_order") or 100),
             }
         )
-
-    if schema:
-        return schema
-
-    if str(item_type or "").strip().lower() != "script":
-        return []
-
-    return _infer_parameter_schema_from_script(int(item_id), script_path)
+    return schema
 
 
 def _default_parameters_from_schema(schema: list[dict]) -> dict:

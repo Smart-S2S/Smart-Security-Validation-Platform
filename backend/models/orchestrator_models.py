@@ -124,6 +124,8 @@ class StepItemParameterCreateRequest(BaseModel):
     label: str = Field(min_length=1, max_length=160)
     param_type: str = Field(default="string", min_length=3, max_length=32)
     default_value: str = Field(default="", max_length=2000)
+    description: str = Field(default="", max_length=2000)
+    options_json: dict | list = Field(default_factory=list)
     is_required: bool = False
     sort_order: int = Field(default=100, ge=1, le=10000)
 
@@ -132,6 +134,8 @@ class StepItemParameterUpdateRequest(BaseModel):
     label: str | None = Field(default=None, min_length=1, max_length=160)
     param_type: str | None = Field(default=None, min_length=3, max_length=32)
     default_value: str | None = Field(default=None, max_length=2000)
+    description: str | None = Field(default=None, max_length=2000)
+    options_json: dict | list | None = None
     is_required: bool | None = None
     sort_order: int | None = Field(default=None, ge=1, le=10000)
 

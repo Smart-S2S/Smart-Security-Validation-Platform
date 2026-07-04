@@ -225,6 +225,8 @@ def init_mysql_schema() -> None:
                     label VARCHAR(160) NOT NULL,
                     param_type VARCHAR(32) NOT NULL DEFAULT 'string',
                     default_value TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    options_json LONGTEXT NOT NULL,
                     is_required TINYINT(1) NOT NULL DEFAULT 0,
                     sort_order INT NOT NULL DEFAULT 100,
                     created_at VARCHAR(64) NOT NULL,
@@ -567,6 +569,29 @@ def init_mysql_schema() -> None:
             cur.execute("SHOW COLUMNS FROM tool_scripts LIKE 'file_path'")
             if not cur.fetchone():
                 cur.execute("ALTER TABLE tool_scripts ADD COLUMN file_path VARCHAR(400) NOT NULL DEFAULT ''")
+
+            cur.execute("SHOW COLUMNS FROM step_item_parameters LIKE 'description'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE step_item_parameters ADD COLUMN description TEXT NULL")
+
+            cur.execute("SHOW COLUMNS FROM step_item_parameters LIKE 'options_json'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE step_item_parameters ADD COLUMN options_json LONGTEXT NULL")
+
+            cur.execute(
+                """
+                UPDATE step_item_parameters
+                SET description = ''
+                WHERE description IS NULL
+                """
+            )
+            cur.execute(
+                """
+                UPDATE step_item_parameters
+                SET options_json = '[]'
+                WHERE options_json IS NULL OR TRIM(options_json) = ''
+                """
+            )
 
             cur.execute("SHOW INDEX FROM tools WHERE Key_name = 'idx_tools_workflow'")
             if not cur.fetchone():

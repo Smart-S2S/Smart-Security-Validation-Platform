@@ -206,10 +206,14 @@ const stepItemParamKey = document.getElementById("stepItemParamKey");
 const stepItemParamLabel = document.getElementById("stepItemParamLabel");
 const stepItemParamType = document.getElementById("stepItemParamType");
 const stepItemParamDefault = document.getElementById("stepItemParamDefault");
+const stepItemParamDescription = document.getElementById("stepItemParamDescription");
+const stepItemParamOptions = document.getElementById("stepItemParamOptions");
 const stepItemParamSortOrder = document.getElementById("stepItemParamSortOrder");
 const stepItemParamRequired = document.getElementById("stepItemParamRequired");
 const saveStepItemParamBtn = document.getElementById("saveStepItemParamBtn");
 const cancelStepItemParamEditorBtn = document.getElementById("cancelStepItemParamEditorBtn");
+const detectStepItemParamsBtn = document.getElementById("detectStepItemParamsBtn");
+const saveDetectedStepItemParamsBtn = document.getElementById("saveDetectedStepItemParamsBtn");
 const stepItemScriptEditorCard = document.getElementById("stepItemScriptEditorCard");
 const stepItemScriptEditorTitle = document.getElementById("stepItemScriptEditorTitle");
 const stepItemScriptCodeEditorElement = document.getElementById("stepItemScriptCodeEditor");
@@ -495,6 +499,7 @@ let selectedContextStepKey = "";
 let stepItems = [];
 let selectedStepItemId = 0;
 let stepItemParameters = [];
+let detectedStepItemParameters = [];
 let stepItemScriptCodeEditor = null;
 let currentActiveTab = "system";
 let pathRefreshQueued = false;
@@ -2100,11 +2105,15 @@ function renderStepItemParametersTable() {
         return;
     }
     if (!stepItemParameters.length) {
-        stepItemParamsTbody.innerHTML = "<tr><td colspan='8'>Parametre yok.</td></tr>";
+        stepItemParamsTbody.innerHTML = "<tr><td colspan='10'>Parametre yok.</td></tr>";
         return;
     }
 
     stepItemParamsTbody.innerHTML = stepItemParameters.map((item) => {
+        const optionsRaw = Array.isArray(item.options_json) || (item.options_json && typeof item.options_json === "object")
+            ? JSON.stringify(item.options_json)
+            : "[]";
+        const isPersisted = Number.isFinite(Number(item.id));
         return `
             <tr>
                 <td>${item.id}</td>
@@ -2112,12 +2121,14 @@ function renderStepItemParametersTable() {
                 <td>${item.label}</td>
                 <td>${item.param_type}</td>
                 <td>${item.default_value || ""}</td>
+                <td>${item.description || ""}</td>
+                <td>${escapeHtml(optionsRaw)}</td>
                 <td>${item.is_required ? "yes" : "no"}</td>
                 <td>${item.sort_order}</td>
                 <td>
                     <div style="display:flex; gap:6px;">
-                        <button type="button" data-action="edit-step-item-param" data-param-id="${item.id}">Duzenle</button>
-                        <button type="button" data-action="delete-step-item-param" data-param-id="${item.id}">Sil</button>
+                        ${isPersisted ? `<button type="button" data-action="edit-step-item-param" data-param-id="${item.id}">Duzenle</button>` : ""}
+                        ${isPersisted ? `<button type="button" data-action="delete-step-item-param" data-param-id="${item.id}">Sil</button>` : ""}
                     </div>
                 </td>
             </tr>
@@ -2131,6 +2142,9 @@ async function loadStepItems(stepIdValue) {
         stepItems = [];
         selectedStepItemId = 0;
         stepItemParameters = [];
+        detectedStepItemParameters = [];
+        if (detectStepItemParamsBtn) detectStepItemParamsBtn.disabled = true;
+        if (saveDetectedStepItemParamsBtn) saveDetectedStepItemParamsBtn.disabled = true;
         renderStepItemsTable();
         renderStepItemParametersTable();
         return;
@@ -2141,6 +2155,9 @@ async function loadStepItems(stepIdValue) {
     if (!stepItems.some((item) => Number(item.id) === Number(selectedStepItemId))) {
         selectedStepItemId = 0;
         stepItemParameters = [];
+        detectedStepItemParameters = [];
+        if (detectStepItemParamsBtn) detectStepItemParamsBtn.disabled = true;
+        if (saveDetectedStepItemParamsBtn) saveDetectedStepItemParamsBtn.disabled = true;
     }
     renderStepItemsTable();
     renderStepItemParametersTable();
@@ -2156,6 +2173,7 @@ async function loadStepItemParameters(itemIdValue) {
 
     const data = await apiRequest(`/settings/steps/items/${itemIdValue}/parameters`, { cache: "no-store" });
     stepItemParameters = Array.isArray(data.items) ? data.items : [];
+    detectedStepItemParameters = [];
     renderStepItemParametersTable();
 }
 
@@ -2220,6 +2238,13 @@ function openStepItemParameterEditor(item = null) {
         if (stepItemParamLabel) stepItemParamLabel.value = item.label || "";
         if (stepItemParamType) stepItemParamType.value = item.param_type || "string";
         if (stepItemParamDefault) stepItemParamDefault.value = item.default_value || "";
+        if (stepItemParamDescription) stepItemParamDescription.value = item.description || "";
+        if (stepItemParamOptions) {
+            const optionsText = Array.isArray(item.options_json) || (item.options_json && typeof item.options_json === "object")
+                ? JSON.stringify(item.options_json, null, 2)
+                : "[]";
+            stepItemParamOptions.value = optionsText;
+        }
         if (stepItemParamRequired) stepItemParamRequired.checked = Boolean(item.is_required);
         if (stepItemParamSortOrder) stepItemParamSortOrder.value = String(item.sort_order || 100);
         if (stepItemParamEditorTitle) stepItemParamEditorTitle.textContent = "Parametre Duzenle";
@@ -2232,6 +2257,8 @@ function openStepItemParameterEditor(item = null) {
         if (stepItemParamLabel) stepItemParamLabel.value = "";
         if (stepItemParamType) stepItemParamType.value = "string";
         if (stepItemParamDefault) stepItemParamDefault.value = "";
+        if (stepItemParamDescription) stepItemParamDescription.value = "";
+        if (stepItemParamOptions) stepItemParamOptions.value = "[]";
         if (stepItemParamRequired) stepItemParamRequired.checked = false;
         if (stepItemParamSortOrder) stepItemParamSortOrder.value = "100";
         if (stepItemParamEditorTitle) stepItemParamEditorTitle.textContent = "Parametre Ekle";
@@ -2271,6 +2298,12 @@ async function pickStepItem(itemIdValue) {
     }
     if (showCreateStepItemParamBtn) {
         showCreateStepItemParamBtn.disabled = false;
+    }
+    if (detectStepItemParamsBtn) {
+        detectStepItemParamsBtn.disabled = selectedItem.item_type !== "script";
+    }
+    if (saveDetectedStepItemParamsBtn) {
+        saveDetectedStepItemParamsBtn.disabled = true;
     }
 
     if (stepItemParamsCard) {
@@ -3342,11 +3375,24 @@ if (saveStepItemParamBtn) {
             return;
         }
 
+        let optionsJson = [];
+        if (stepItemParamOptions && String(stepItemParamOptions.value || "").trim()) {
+            try {
+                const parsed = JSON.parse(stepItemParamOptions.value);
+                optionsJson = (Array.isArray(parsed) || (parsed && typeof parsed === "object")) ? parsed : [];
+            } catch (_) {
+                setFeedback("Options JSON gecerli olmali.", true);
+                return;
+            }
+        }
+
         const payload = {
             param_key: stepItemParamKey?.value?.trim(),
             label: stepItemParamLabel?.value?.trim(),
             param_type: (stepItemParamType?.value || "string").trim().toLowerCase(),
             default_value: stepItemParamDefault?.value || "",
+            description: stepItemParamDescription?.value?.trim() || "",
+            options_json: optionsJson,
             is_required: Boolean(stepItemParamRequired?.checked),
             sort_order: Number(stepItemParamSortOrder?.value || "100"),
         };
@@ -3366,6 +3412,8 @@ if (saveStepItemParamBtn) {
                         label: payload.label,
                         param_type: payload.param_type,
                         default_value: payload.default_value,
+                        description: payload.description,
+                        options_json: payload.options_json,
                         is_required: payload.is_required,
                         sort_order: payload.sort_order,
                     }),
@@ -3382,6 +3430,87 @@ if (saveStepItemParamBtn) {
             setFeedback(editingParamId > 0 ? "Parametre guncellendi." : "Parametre eklendi.");
         } catch (error) {
             setFeedback(error.message || "Parametre kaydedilemedi.", true);
+        }
+    });
+}
+
+
+if (detectStepItemParamsBtn) {
+    detectStepItemParamsBtn.addEventListener("click", async () => {
+        if (!selectedStepItemId) {
+            setFeedback("Once script secmelisin.", true);
+            return;
+        }
+
+        const selectedItem = stepItems.find((row) => Number(row.id) === Number(selectedStepItemId));
+        if (!selectedItem || selectedItem.item_type !== "script") {
+            setFeedback("Parametre algilama sadece script icin calisir.", true);
+            return;
+        }
+
+        try {
+            const data = await apiRequest(`/settings/steps/items/${selectedStepItemId}/parameters/detect`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+
+            detectedStepItemParameters = Array.isArray(data.items) ? data.items : [];
+            if (!detectedStepItemParameters.length) {
+                setFeedback("Scriptte parametre bulunamadi.", true);
+                if (saveDetectedStepItemParamsBtn) {
+                    saveDetectedStepItemParamsBtn.disabled = true;
+                }
+                return;
+            }
+
+            stepItemParameters = detectedStepItemParameters.map((item, idx) => ({
+                id: `detected-${idx + 1}`,
+                param_key: item.key,
+                label: item.label,
+                param_type: item.type,
+                default_value: typeof item.default === "object" ? JSON.stringify(item.default) : (item.default ?? ""),
+                description: item.description || "",
+                options_json: item.options_json || [],
+                is_required: Boolean(item.required),
+                sort_order: Number(item.sort_order || (idx * 10)),
+            }));
+            renderStepItemParametersTable();
+
+            if (saveDetectedStepItemParamsBtn) {
+                saveDetectedStepItemParamsBtn.disabled = false;
+            }
+
+            const source = String(data.source || "none").toLowerCase();
+            const sourceLabel = source === "metadata" ? "metadata" : (source === "inference" ? "inference" : "none");
+            setFeedback(`Parametreler scriptten algilandi. Kaynak: ${sourceLabel}.`);
+        } catch (error) {
+            setFeedback(error.message || "Parametre algilama basarisiz.", true);
+        }
+    });
+}
+
+
+if (saveDetectedStepItemParamsBtn) {
+    saveDetectedStepItemParamsBtn.addEventListener("click", async () => {
+        if (!selectedStepItemId || !detectedStepItemParameters.length) {
+            setFeedback("Kaydedilecek algilanan parametre yok.", true);
+            return;
+        }
+
+        try {
+            await apiRequest(`/settings/steps/items/${selectedStepItemId}/parameters/save-detected`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ items: detectedStepItemParameters }),
+            });
+            await loadStepItemParameters(selectedStepItemId);
+            if (saveDetectedStepItemParamsBtn) {
+                saveDetectedStepItemParamsBtn.disabled = true;
+            }
+            setFeedback("Algilanan parametreler MySQL'e kaydedildi.");
+        } catch (error) {
+            setFeedback(error.message || "Algilanan parametreler kaydedilemedi.", true);
         }
     });
 }

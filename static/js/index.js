@@ -935,6 +935,9 @@ function normalizeDynamicParamType(paramType) {
     if (token === "bool") return "boolean";
     if (token === "int") return "number";
     if (token === "float") return "number";
+    if (token === "integer") return "number";
+    if (token === "double") return "number";
+    if (token === "ip_address") return "ip";
     return token;
 }
 
@@ -965,6 +968,7 @@ function renderDynamicIntentParameters(intent) {
             const required = Boolean(item?.required);
             const type = normalizeDynamicParamType(item?.type);
             const defaultValue = item?.default;
+            const options = Array.isArray(item?.options_json) ? item.options_json : [];
 
             if (type === "boolean") {
                 const checked = defaultValue === true ? " checked" : "";
@@ -1007,6 +1011,70 @@ function renderDynamicIntentParameters(intent) {
                             ${required ? `<span class="dynamic-param-required">required</span>` : ""}
                         </div>
                         <input type="number" data-param-key="${escapeHtml(key)}" data-param-type="number" value="${escapeHtml(value)}">
+                    </div>
+                `;
+            }
+
+            if (type === "select") {
+                const selected = defaultValue == null ? "" : String(defaultValue);
+                const optionsHtml = options.map((optionItem) => {
+                    const optionValue = typeof optionItem === "string" ? optionItem : String(optionItem?.value || optionItem?.label || "");
+                    const optionLabel = typeof optionItem === "string" ? optionItem : String(optionItem?.label || optionValue);
+                    if (!optionValue) {
+                        return "";
+                    }
+                    const isSelected = optionValue === selected ? " selected" : "";
+                    return `<option value="${escapeHtml(optionValue)}"${isSelected}>${escapeHtml(optionLabel)}</option>`;
+                }).join("");
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <select data-param-key="${escapeHtml(key)}" data-param-type="select">
+                            <option value="">Seciniz</option>
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                `;
+            }
+
+            if (type === "url") {
+                const value = defaultValue == null ? "" : String(defaultValue);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="url" data-param-key="${escapeHtml(key)}" data-param-type="url" value="${escapeHtml(value)}">
+                    </div>
+                `;
+            }
+
+            if (type === "ip") {
+                const value = defaultValue == null ? "" : String(defaultValue);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="text" data-param-key="${escapeHtml(key)}" data-param-type="ip" value="${escapeHtml(value)}" placeholder="192.168.1.10">
+                    </div>
+                `;
+            }
+
+            if (type === "file") {
+                const value = defaultValue == null ? "" : String(defaultValue);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="text" data-param-key="${escapeHtml(key)}" data-param-type="file" value="${escapeHtml(value)}" placeholder="/path/to/file">
                     </div>
                 `;
             }
@@ -1067,6 +1135,25 @@ function collectDynamicIntentParameters(schema) {
                 return { values: {}, error: `${key} sayisal olmali.` };
             }
             values[key] = parsed;
+            continue;
+        }
+
+        if (type === "url") {
+            values[key] = raw;
+            continue;
+        }
+
+        if (type === "ip") {
+            const ipPattern = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(raw)) {
+                return { values: {}, error: `${key} gecerli IPv4 olmali.` };
+            }
+            values[key] = raw;
+            continue;
+        }
+
+        if (type === "file" || type === "select") {
+            values[key] = raw;
             continue;
         }
 
@@ -1147,6 +1234,7 @@ function renderOperationWindowIntents(intents) {
             const required = Boolean(item?.required);
             const type = normalizeDynamicParamType(item?.type);
             const defaultValue = intent?.parameters?.[key] ?? item?.default;
+            const options = Array.isArray(item?.options_json) ? item.options_json : [];
             const keyAttr = escapeHtml(key);
 
             if (type === "boolean") {
@@ -1190,6 +1278,70 @@ function renderOperationWindowIntents(intents) {
                             ${required ? `<span class="dynamic-param-required">required</span>` : ""}
                         </div>
                         <input type="number" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="number" value="${escapeHtml(value)}">
+                    </div>
+                `;
+            }
+
+            if (type === "select") {
+                const selected = defaultValue == null ? "" : String(defaultValue);
+                const optionsHtml = options.map((optionItem) => {
+                    const optionValue = typeof optionItem === "string" ? optionItem : String(optionItem?.value || optionItem?.label || "");
+                    const optionLabel = typeof optionItem === "string" ? optionItem : String(optionItem?.label || optionValue);
+                    if (!optionValue) {
+                        return "";
+                    }
+                    const isSelected = optionValue === selected ? " selected" : "";
+                    return `<option value="${escapeHtml(optionValue)}"${isSelected}>${escapeHtml(optionLabel)}</option>`;
+                }).join("");
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <select data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="select">
+                            <option value="">Seciniz</option>
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                `;
+            }
+
+            if (type === "url") {
+                const value = defaultValue == null ? "" : String(defaultValue);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="url" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="url" value="${escapeHtml(value)}">
+                    </div>
+                `;
+            }
+
+            if (type === "ip") {
+                const value = defaultValue == null ? "" : String(defaultValue);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="text" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="ip" value="${escapeHtml(value)}" placeholder="192.168.1.10">
+                    </div>
+                `;
+            }
+
+            if (type === "file") {
+                const value = defaultValue == null ? "" : String(defaultValue);
+                return `
+                    <div class="dynamic-param-field">
+                        <div class="dynamic-param-label">
+                            <span>${escapeHtml(label)}</span>
+                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
+                        </div>
+                        <input type="text" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="file" value="${escapeHtml(value)}" placeholder="/path/to/file">
                     </div>
                 `;
             }
@@ -1270,6 +1422,25 @@ function collectWindowIntentParameters(intent, intentIndex) {
                 return { values: {}, error: `${intent.action || "action"} > ${key} sayisal olmali.` };
             }
             values[key] = parsed;
+            continue;
+        }
+
+        if (type === "url") {
+            values[key] = raw;
+            continue;
+        }
+
+        if (type === "ip") {
+            const ipPattern = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(raw)) {
+                return { values: {}, error: `${intent.action || "action"} > ${key} gecerli IPv4 olmali.` };
+            }
+            values[key] = raw;
+            continue;
+        }
+
+        if (type === "file" || type === "select") {
+            values[key] = raw;
             continue;
         }
 

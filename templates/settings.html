@@ -262,9 +262,13 @@
                         <div class="step-items-card" id="stepItemParamsCard" style="margin-top:12px; display:none;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                                 <strong>Gorev Parametreleri</strong>
-                                <button id="showCreateStepItemParamBtn" type="button">Parametre Ekle</button>
+                                <div style="display:flex; gap:8px;">
+                                    <button id="detectStepItemParamsBtn" type="button">Script'ten Parametreleri Algila</button>
+                                    <button id="saveDetectedStepItemParamsBtn" type="button" disabled>MySQL'e Kaydet</button>
+                                    <button id="showCreateStepItemParamBtn" type="button">Parametre Ekle</button>
+                                </div>
                             </div>
-                            <p id="stepItemParamsHint" class="muted" style="margin:0 0 10px 0;">Scriptler icin parametre yoktur.</p>
+                            <p id="stepItemParamsHint" class="muted" style="margin:0 0 10px 0;">Script parametreleri script iceriginden algilanip MySQL'e kaydedilebilir.</p>
                             <div style="overflow:auto;">
                                 <table>
                                     <thead>
@@ -274,6 +278,8 @@
                                             <th>Label</th>
                                             <th>Type</th>
                                             <th>Default</th>
+                                            <th>Description</th>
+                                            <th>Options</th>
                                             <th>Required</th>
                                             <th>Sort</th>
                                             <th>Actions</th>
@@ -297,9 +303,17 @@
                                         <option value="number">number</option>
                                         <option value="bool">bool</option>
                                         <option value="json">json</option>
+                                        <option value="select">select</option>
+                                        <option value="url">url</option>
+                                        <option value="ip">ip</option>
+                                        <option value="file">file</option>
                                     </select>
                                     <label for="stepItemParamDefault">Default Value</label>
                                     <input id="stepItemParamDefault" type="text" maxlength="2000">
+                                    <label for="stepItemParamDescription">Description</label>
+                                    <textarea id="stepItemParamDescription" rows="2" maxlength="2000"></textarea>
+                                    <label for="stepItemParamOptions">Options JSON</label>
+                                    <textarea id="stepItemParamOptions" rows="3" maxlength="5000" placeholder='["opt1", "opt2"]'></textarea>
                                     <label for="stepItemParamSortOrder">Sort Order</label>
                                     <input id="stepItemParamSortOrder" type="number" min="1" max="10000" value="100">
                                     <label class="chip"><input id="stepItemParamRequired" type="checkbox"> <span>Required</span></label>
@@ -385,6 +399,6 @@
 
 <script src="/static/js/notify.js?v=20260703b"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/static/js/settings.js?v=20260704i"></script>
+<script src="/static/js/settings.js?v=20260704j"></script>
 </body>
 </html>

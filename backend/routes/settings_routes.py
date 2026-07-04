@@ -1,5 +1,8 @@
 import os
 import platform
+import ast
+import json
+import re
 import shutil
 import socket
 import subprocess
@@ -36,6 +39,7 @@ from backend.services.orchestrator_store import (
     list_step_items,
     list_progress_categories,
     list_steps,
+    replace_step_item_parameters,
     get_step_item_script_content,
     save_step_item_script_content,
     update_step_item,
@@ -58,6 +62,11 @@ router = APIRouter()
 PROJECT_VERSION = os.getenv("SSVP_VERSION", "1.0")
 PROJECT_VENDOR = os.getenv("SSVP_VENDOR", "SSVP Core Team")
 VALID_WORKFLOW_KEYS = {"scan", "attack", "remediation"}
+PARAM_SCHEMA_ASSIGN_PATTERN = re.compile(r"SSVP_PARAM_SCHEMA\s*=", flags=re.MULTILINE)
+PARAM_GET_PATTERN = re.compile(
+    r"(?:params|parameters)\s*\.\s*get\(\s*['\"]([a-zA-Z0-9_\-\.]+)['\"]\s*(?:,\s*([^\)]+))?\)",
+    flags=re.IGNORECASE,
+)
 
 
 def _normalize_workflow_key_or_400(value: str, language: str) -> str:
@@ -69,6 +78,169 @@ def _normalize_workflow_key_or_400(value: str, language: str) -> str:
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=t(language, "settings.invalidWorkflow", "Gecersiz workflow secimi"),
     )
+
+
+def _coerce_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    token = str(value or "").strip().lower()
+    return token in {"1", "true", "yes", "on"}
+
+
+def _safe_literal(value, fallback=""):
+    if value is None:
+        return fallback
+    if isinstance(value, (str, int, float, bool, dict, list)):
+        return value
+    try:
+        return ast.literal_eval(value)
+    except Exception:
+        return fallback
+
+
+def _normalize_schema_item(raw: dict, index: int) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+
+    key = str(raw.get("key") or raw.get("param_key") or "").strip()
+    if not key:
+        return None
+
+    label = str(raw.get("label") or key.replace("_", " ").title()).strip() or key
+    param_type = str(raw.get("type") or raw.get("param_type") or "string").strip().lower() or "string"
+    default_value = raw.get("default", raw.get("default_value", ""))
+    description = str(raw.get("description") or "").strip()
+    sort_order = raw.get("sort_order", index * 10)
+    try:
+        sort_order = int(sort_order)
+    except Exception:
+        sort_order = index * 10
+
+    options = raw.get("options_json", raw.get("options", []))
+    if isinstance(options, str):
+        try:
+            parsed_options = json.loads(options)
+            options = parsed_options if isinstance(parsed_options, (list, dict)) else []
+        except Exception:
+            options = []
+    elif not isinstance(options, (list, dict)):
+        options = []
+
+    required = _coerce_bool(raw.get("required", raw.get("is_required", False)))
+
+    return {
+        "key": key,
+        "label": label,
+        "type": param_type,
+        "default": default_value,
+        "required": required,
+        "description": description,
+        "options_json": options,
+        "sort_order": sort_order,
+    }
+
+
+def _extract_metadata_schema(script_source: str) -> list[dict]:
+    source = str(script_source or "")
+    if not source.strip() or not PARAM_SCHEMA_ASSIGN_PATTERN.search(source):
+        return []
+
+    try:
+        tree = ast.parse(source)
+    except Exception:
+        return []
+
+    schema_raw = None
+    for node in ast.walk(tree):
+        target_names: list[str] = []
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    target_names.append(target.id)
+            if "SSVP_PARAM_SCHEMA" not in target_names:
+                continue
+            schema_raw = _safe_literal(node.value, None)
+            break
+
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id != "SSVP_PARAM_SCHEMA":
+                continue
+            schema_raw = _safe_literal(node.value, None)
+            break
+
+    if schema_raw is None:
+        return []
+
+    if isinstance(schema_raw, dict):
+        if isinstance(schema_raw.get("parameters"), list):
+            schema_raw = schema_raw.get("parameters")
+        else:
+            return []
+
+    if not isinstance(schema_raw, list):
+        return []
+
+    normalized: list[dict] = []
+    for idx, item in enumerate(schema_raw):
+        candidate = _normalize_schema_item(item, idx)
+        if candidate:
+            normalized.append(candidate)
+
+    normalized.sort(key=lambda row: int(row.get("sort_order") or 100))
+    return normalized
+
+
+def _infer_schema_from_source(script_source: str) -> list[dict]:
+    source = str(script_source or "")
+    if not source.strip():
+        return []
+
+    discovered: list[dict] = []
+    by_key: dict[str, dict] = {}
+    for line in source.splitlines():
+        match = PARAM_GET_PATTERN.search(line)
+        if not match:
+            continue
+
+        key = str(match.group(1) or "").strip()
+        if not key:
+            continue
+
+        default_expr = str(match.group(2) or "").strip()
+        default_value = _safe_literal(default_expr, "") if default_expr else ""
+        candidate = {
+            "key": key,
+            "label": key.replace("_", " ").title(),
+            "type": "boolean" if isinstance(default_value, bool) else "number" if isinstance(default_value, (int, float)) else "string",
+            "default": default_value,
+            "required": False,
+            "description": "",
+            "options_json": [],
+            "sort_order": len(discovered) * 10,
+        }
+        existing = by_key.get(key)
+        if not existing:
+            discovered.append(candidate)
+            by_key[key] = candidate
+            continue
+
+        if existing.get("default") in ("", None) and candidate.get("default") not in ("", None):
+            existing["default"] = candidate.get("default")
+            existing["type"] = candidate.get("type")
+
+    return discovered
+
+
+def _detect_script_parameter_schema(script_source: str) -> dict:
+    metadata_schema = _extract_metadata_schema(script_source)
+    if metadata_schema:
+        return {"source": "metadata", "items": metadata_schema}
+
+    inferred = _infer_schema_from_source(script_source)
+    if inferred:
+        return {"source": "inference", "items": inferred}
+
+    return {"source": "none", "items": []}
 def _bytes_to_gib(value: int) -> float:
     return round(value / (1024 ** 3), 2)
 
@@ -176,6 +348,10 @@ class ScanSettingsUpdateRequest(BaseModel):
     nmap_timeout_sec: int = Field(ge=10, le=7200)
     masscan_timeout_sec: int = Field(ge=10, le=7200)
     netdiscover_timeout_sec: int = Field(ge=10, le=7200)
+
+
+class DetectedStepItemParametersSaveRequest(BaseModel):
+    items: list[dict] = Field(default_factory=list)
 
 
 class ProgressCategoryCreateRequest(BaseModel):
@@ -676,6 +852,60 @@ def settings_step_item_script_content_update(
         if str(exc) == "ITEM_NOT_SCRIPT":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidScriptType", "Secili kayit script tipi degil")) from exc
         raise
+
+
+@router.post("/settings/steps/items/{item_id}/parameters/detect")
+def settings_step_item_parameters_detect(
+    request: Request,
+    item_id: int,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    try:
+        content_payload = get_step_item_script_content(item_id)
+    except ValueError as exc:
+        if str(exc) == "STEP_ITEM_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        if str(exc) == "ITEM_NOT_SCRIPT":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidScriptType", "Secili kayit script tipi degil")) from exc
+        raise
+
+    script_source = str(content_payload.get("content") or "")
+    detected = _detect_script_parameter_schema(script_source)
+    return {
+        "source": detected.get("source") or "none",
+        "items": detected.get("items") or [],
+    }
+
+
+@router.post("/settings/steps/items/{item_id}/parameters/save-detected")
+def settings_step_item_parameters_save_detected(
+    request: Request,
+    item_id: int,
+    payload: DetectedStepItemParametersSaveRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    normalized_items: list[dict] = []
+    for idx, raw in enumerate(payload.items):
+        candidate = _normalize_schema_item(raw, idx)
+        if candidate:
+            normalized_items.append(candidate)
+
+    try:
+        rows = replace_step_item_parameters(item_id, normalized_items)
+    except ValueError as exc:
+        if str(exc) == "STEP_ITEM_NOT_FOUND":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı")) from exc
+        raise
+
+    return {"items": rows}
 
 
 @router.get("/settings/steps/items/{item_id}/parameters")

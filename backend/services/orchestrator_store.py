@@ -951,6 +951,8 @@ def _step_item_param_row_to_dict(row: dict) -> dict:
         "label": _normalize_text(row.get("label"), "Parametre"),
         "param_type": _normalize_text(row.get("param_type"), "string").lower(),
         "default_value": _normalize_text(row.get("default_value"), ""),
+        "description": _normalize_text(row.get("description"), ""),
+        "options_json": _safe_loads(row.get("options_json"), []),
         "is_required": bool(row.get("is_required")),
         "sort_order": int(row.get("sort_order") or 100),
     }
@@ -1275,7 +1277,7 @@ def list_step_item_parameters(item_id: int) -> list[dict]:
             cur.execute(
                 """
                 SELECT id, item_id, param_key, label, param_type,
-                       default_value, is_required, sort_order
+                      default_value, description, options_json, is_required, sort_order
                 FROM step_item_parameters
                 WHERE item_id = %s
                 ORDER BY sort_order ASC, id ASC
@@ -1300,9 +1302,9 @@ def create_step_item_parameter(item_id: int, payload: dict) -> dict:
                 """
                 INSERT INTO step_item_parameters (
                     item_id, param_key, label, param_type,
-                    default_value, is_required, sort_order,
+                    default_value, description, options_json, is_required, sort_order,
                     created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     int(item_id),
@@ -1310,6 +1312,8 @@ def create_step_item_parameter(item_id: int, payload: dict) -> dict:
                     _normalize_text(payload.get("label"), "Parametre"),
                     _normalize_text(payload.get("param_type"), "string").lower(),
                     _normalize_text(payload.get("default_value"), ""),
+                    _normalize_text(payload.get("description"), ""),
+                    json.dumps(payload.get("options_json", []), ensure_ascii=False),
                     1 if payload.get("is_required") else 0,
                     int(payload.get("sort_order") or 100),
                     now,
@@ -1320,7 +1324,7 @@ def create_step_item_parameter(item_id: int, payload: dict) -> dict:
             cur.execute(
                 """
                 SELECT id, item_id, param_key, label, param_type,
-                       default_value, is_required, sort_order
+                      default_value, description, options_json, is_required, sort_order
                 FROM step_item_parameters
                 WHERE id = %s
                 """,
@@ -1338,7 +1342,7 @@ def update_step_item_parameter(param_id: int, payload: dict) -> dict | None:
             cur.execute(
                 """
                 SELECT id, item_id, param_key, label, param_type,
-                       default_value, is_required, sort_order
+                      default_value, description, options_json, is_required, sort_order
                 FROM step_item_parameters
                 WHERE id = %s
                 """,
@@ -1352,6 +1356,8 @@ def update_step_item_parameter(param_id: int, payload: dict) -> dict | None:
                 "label": ("label", lambda v: _normalize_text(v, "Parametre")),
                 "param_type": ("param_type", lambda v: _normalize_text(v, "string").lower()),
                 "default_value": ("default_value", lambda v: _normalize_text(v, "")),
+                "description": ("description", lambda v: _normalize_text(v, "")),
+                "options_json": ("options_json", lambda v: json.dumps(v if isinstance(v, (dict, list)) else [], ensure_ascii=False)),
                 "is_required": ("is_required", lambda v: 1 if v else 0),
                 "sort_order": ("sort_order", lambda v: int(v)),
             }
@@ -1371,7 +1377,7 @@ def update_step_item_parameter(param_id: int, payload: dict) -> dict | None:
             cur.execute(
                 """
                 SELECT id, item_id, param_key, label, param_type,
-                       default_value, is_required, sort_order
+                      default_value, description, options_json, is_required, sort_order
                 FROM step_item_parameters
                 WHERE id = %s
                 """,
@@ -1390,6 +1396,65 @@ def delete_step_item_parameter(param_id: int) -> bool:
             deleted = cur.rowcount > 0
         conn.commit()
     return deleted
+
+
+def replace_step_item_parameters(item_id: int, rows: list[dict]) -> list[dict]:
+    init_orchestrator_store()
+    now = _utc_now_iso()
+    normalized_rows = rows if isinstance(rows, list) else []
+
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM step_items WHERE id = %s", (int(item_id),))
+            exists = cur.fetchone()
+            if not exists:
+                raise ValueError("STEP_ITEM_NOT_FOUND")
+
+            cur.execute("DELETE FROM step_item_parameters WHERE item_id = %s", (int(item_id),))
+
+            for index, item in enumerate(normalized_rows):
+                key = _slugify(item.get("key") or item.get("param_key"), "param")
+                label = _normalize_text(item.get("label"), key)
+                param_type = _normalize_text(item.get("type") or item.get("param_type"), "string").lower()
+                default_value = item.get("default", item.get("default_value", ""))
+                if isinstance(default_value, (dict, list)):
+                    default_value = json.dumps(default_value, ensure_ascii=False)
+                default_value = _normalize_text(str(default_value), "")
+                description = _normalize_text(item.get("description"), "")
+                options_value = item.get("options_json", item.get("options", []))
+                if not isinstance(options_value, (list, dict)):
+                    options_value = []
+                sort_order = item.get("sort_order")
+                try:
+                    sort_order = int(sort_order)
+                except Exception:
+                    sort_order = index * 10
+
+                cur.execute(
+                    """
+                    INSERT INTO step_item_parameters (
+                        item_id, param_key, label, param_type,
+                        default_value, description, options_json, is_required, sort_order,
+                        created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        int(item_id),
+                        key,
+                        label,
+                        param_type,
+                        default_value,
+                        description,
+                        json.dumps(options_value, ensure_ascii=False),
+                        1 if item.get("required") or item.get("is_required") else 0,
+                        sort_order,
+                        now,
+                        now,
+                    ),
+                )
+        conn.commit()
+
+    return list_step_item_parameters(item_id)
 
 
 def list_workflow_steps(active_only: bool = True) -> list[dict]:
