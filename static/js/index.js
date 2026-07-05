@@ -330,6 +330,10 @@ function appendAiEvaluation(title, text) {
     if (!aiOutput) {
         return;
     }
+    // Manual 3YM mode is AI-free: never populate the AI evaluation box.
+    if (workflowMode === "manual") {
+        return;
+    }
 
     const normalizedTitle = String(title || "Yapay Zeka Degerlendirmesi").trim();
     const normalizedText = String(text || "").trim();
@@ -930,6 +934,131 @@ function parseParametersFromManualInput() {
 }
 
 
+// Parameter keys that take a wordlist/list file. On operation forms (YZO + 3YM)
+// these render as a selectbox populated from the DB wordlist catalog instead of
+// a free-text path input.
+const WORDLIST_PARAM_KEYS = new Set(["wordlist", "wordlists", "userlist", "passlist", "combo_file"]);
+let wordlistCatalog = [];
+
+async function loadWordlistCatalog() {
+    try {
+        const data = await apiRequest("/validation/wordlists", { cache: "no-store" });
+        wordlistCatalog = Array.isArray(data?.items) ? data.items : [];
+    } catch (_) {
+        // Non-fatal: fall back to a plain text input (default paths still work).
+        wordlistCatalog = [];
+    }
+}
+
+// Wordlist param: a searchable combobox (live filter) instead of a plain select,
+// so one can find a wordlist quickly among many. A hidden input carries the real
+// value (the wordlist path) with the collector's data-attrs; a visible search box
+// filters the dropdown by name/path. Selection is via clicking a list row.
+function wordlistOptionLabel(w) {
+    return `${w.name || w.path}${w.size_h ? ` — ${w.size_h}` : ""}`;
+}
+
+function wordlistSelectHtml(labelBlock, value, attrs) {
+    const selected = value == null ? "" : String(value);
+    const match = wordlistCatalog.find((w) => w.path === selected);
+    const shownText = match ? wordlistOptionLabel(match) : selected;
+    return `
+        <div class="dynamic-param-field">
+            ${labelBlock}
+            <div class="wl-combo">
+                <input type="text" class="wl-combo-search" placeholder="Sözlük ara / seç…" value="${escapeHtml(shownText)}" autocomplete="off" spellcheck="false">
+                <input type="hidden" ${attrs} data-param-type="file" value="${escapeHtml(selected)}">
+                <div class="wl-combo-list" hidden></div>
+            </div>
+        </div>
+    `;
+}
+
+// Populate/filter one combo's dropdown from the wordlist catalog.
+function wlComboRenderList(combo, query) {
+    const list = combo?.querySelector(".wl-combo-list");
+    if (!list) {
+        return;
+    }
+    const q = String(query || "").trim().toLowerCase();
+    const items = wordlistCatalog.filter((w) => {
+        if (!w?.path) return false;
+        if (!q) return true;
+        return String(w.name || "").toLowerCase().includes(q) || String(w.path || "").toLowerCase().includes(q);
+    });
+    const shown = items.slice(0, 300);
+    if (!shown.length) {
+        list.innerHTML = `<div class="wl-combo-empty">${escapeHtml(wordlistCatalog.length ? "Eşleşen sözlük yok" : "Kayıtlı sözlük yok")}</div>`;
+    } else {
+        list.innerHTML = shown
+            .map((w) => `<div class="wl-combo-item" data-path="${escapeHtml(w.path)}" title="${escapeHtml(w.path)}">${escapeHtml(wordlistOptionLabel(w))}</div>`)
+            .join("");
+        if (items.length > shown.length) {
+            list.innerHTML += `<div class="wl-combo-empty">…${items.length - shown.length} sonuç daha, aramayı daraltın</div>`;
+        }
+    }
+    list.hidden = false;
+}
+
+// Delegated combobox behaviour — works for every operation form (YZO + 3YM),
+// since forms are re-rendered dynamically.
+document.addEventListener("focusin", (event) => {
+    const search = event.target.closest?.(".wl-combo-search");
+    if (search) {
+        wlComboRenderList(search.closest(".wl-combo"), "");
+    }
+});
+document.addEventListener("input", (event) => {
+    const search = event.target.closest?.(".wl-combo-search");
+    if (search) {
+        wlComboRenderList(search.closest(".wl-combo"), search.value);
+    }
+});
+document.addEventListener("click", (event) => {
+    const item = event.target.closest?.(".wl-combo-item");
+    if (item) {
+        const combo = item.closest(".wl-combo");
+        const hidden = combo?.querySelector("input[type=hidden]");
+        const search = combo?.querySelector(".wl-combo-search");
+        const list = combo?.querySelector(".wl-combo-list");
+        if (hidden) hidden.value = item.getAttribute("data-path") || "";
+        if (search) search.value = item.textContent || "";
+        if (list) list.hidden = true;
+        return;
+    }
+    // A click anywhere outside an open combo closes the dropdowns.
+    if (!event.target.closest?.(".wl-combo")) {
+        document.querySelectorAll(".wl-combo-list").forEach((el) => { el.hidden = true; });
+    }
+});
+
+
+// Upload-type params (OSINT scan/exclude lists): on file pick, upload the .xml/.txt
+// to the OSINT cache and store the returned filename as the param value.
+document.addEventListener("change", async (event) => {
+    const input = event.target.closest?.(".upload-param-input");
+    if (!input || !input.files || !input.files.length) {
+        return;
+    }
+    const wrap = input.closest(".upload-param");
+    const hidden = wrap?.querySelector("input[type=hidden]");
+    const nameSpan = wrap?.querySelector(".upload-param-name");
+    const file = input.files[0];
+    if (nameSpan) nameSpan.textContent = "Yükleniyor…";
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const data = await apiRequest("/validation/osint-list/upload", { method: "POST", body: formData });
+        const savedName = data?.added?.name || file.name;
+        if (hidden) hidden.value = savedName;
+        if (nameSpan) nameSpan.textContent = savedName;
+    } catch (error) {
+        if (nameSpan) nameSpan.textContent = `Yüklenemedi: ${error.message || "hata"}`;
+        if (hidden) hidden.value = "";
+    }
+});
+
+
 function normalizeDynamicParamType(paramType) {
     const token = String(paramType || "string").trim().toLowerCase();
     if (token === "bool") return "boolean";
@@ -939,6 +1068,220 @@ function normalizeDynamicParamType(paramType) {
     if (token === "double") return "number";
     if (token === "ip_address") return "ip";
     return token;
+}
+
+
+// Threshold above which a parameter is treated as "advanced" and tucked into a
+// collapsible section. The tool-wrapper seed assigns advanced options a
+// sort_order >= 500 so common/required inputs stay on top of the operation form.
+const ADVANCED_PARAM_SORT_THRESHOLD = 500;
+
+function dynamicParamHelpHtml(item) {
+    const desc = String(item?.description || "").trim();
+    return desc ? `<p class="dynamic-param-help">${escapeHtml(desc)}</p>` : "";
+}
+
+// Render a single schema field. `attrs` is the data-* attribute string that lets
+// the matching collector find the input (differs between the manual flow and the
+// operation window). Centralizing this keeps every widget type, help text and
+// required marker consistent across both renderers.
+function dynamicParamFieldHtml(item, value, attrs) {
+    const key = String(item?.key || "").trim();
+    if (!key) {
+        return "";
+    }
+
+    const label = String(item?.label || key);
+    const required = Boolean(item?.required);
+    const type = normalizeDynamicParamType(item?.type);
+    const options = Array.isArray(item?.options_json) ? item.options_json : [];
+    const keyAttr = escapeHtml(key);
+    const labelBlock = `
+        <div class="dynamic-param-label">
+            <span>${escapeHtml(label)}</span>
+            ${required ? `<span class="dynamic-param-required">gerekli</span>` : ""}
+        </div>
+        ${dynamicParamHelpHtml(item)}`;
+
+    // Wordlist-type params become a selectbox fed by the wordlist catalog.
+    if (WORDLIST_PARAM_KEYS.has(key)) {
+        return wordlistSelectHtml(labelBlock, value, attrs);
+    }
+
+    if (type === "boolean") {
+        const checked = value === true ? " checked" : "";
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <label class="check-chip">
+                    <input type="checkbox" ${attrs} data-param-type="boolean"${checked}>
+                    <span>${keyAttr}</span>
+                </label>
+            </div>
+        `;
+    }
+
+    if (type === "textarea") {
+        const shown = value == null ? "" : String(value);
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <textarea ${attrs} data-param-type="textarea" rows="4" placeholder="XML / liste">${escapeHtml(shown)}</textarea>
+            </div>
+        `;
+    }
+
+    if (type === "upload") {
+        const shown = value == null ? "" : String(value);
+        // Native file input is hidden and triggered by the styled "Dosya Seç"
+        // button; the hidden input carries the uploaded cache filename value.
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <div class="upload-param">
+                    <label class="upload-file-btn">
+                        <input type="file" class="upload-param-input" accept=".xml,.txt">
+                        <span>Dosya Seç</span>
+                    </label>
+                    <input type="hidden" ${attrs} data-param-type="string" value="${escapeHtml(shown)}">
+                    <span class="upload-param-name">${shown ? escapeHtml(shown) : "Dosya seçilmedi"}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    if (type === "json" || type === "list" || type === "object" || type === "dict") {
+        const serialized = typeof value === "string"
+            ? value
+            : JSON.stringify(value ?? (type === "list" ? [] : {}), null, 2);
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <textarea ${attrs} data-param-type="${escapeHtml(type)}" placeholder="JSON">${escapeHtml(serialized)}</textarea>
+            </div>
+        `;
+    }
+
+    if (type === "number") {
+        const numericValue = Number(value);
+        const shown = Number.isFinite(numericValue) ? String(numericValue) : "";
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <input type="number" ${attrs} data-param-type="number" value="${escapeHtml(shown)}">
+            </div>
+        `;
+    }
+
+    if (type === "select") {
+        const selected = value == null ? "" : String(value);
+        const optionsHtml = options.map((optionItem) => {
+            const optionValue = typeof optionItem === "string" ? optionItem : String(optionItem?.value || optionItem?.label || "");
+            const optionLabel = typeof optionItem === "string" ? optionItem : String(optionItem?.label || optionValue);
+            if (!optionValue) {
+                return "";
+            }
+            const isSelected = optionValue === selected ? " selected" : "";
+            return `<option value="${escapeHtml(optionValue)}"${isSelected}>${escapeHtml(optionLabel)}</option>`;
+        }).join("");
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <select ${attrs} data-param-type="select">
+                    <option value="">Seciniz</option>
+                    ${optionsHtml}
+                </select>
+            </div>
+        `;
+    }
+
+    if (type === "url") {
+        const shown = value == null ? "" : String(value);
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <input type="url" ${attrs} data-param-type="url" value="${escapeHtml(shown)}" placeholder="http://hedef/">
+            </div>
+        `;
+    }
+
+    if (type === "ip") {
+        const shown = value == null ? "" : String(value);
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <input type="text" ${attrs} data-param-type="ip" value="${escapeHtml(shown)}" placeholder="192.168.1.10">
+            </div>
+        `;
+    }
+
+    if (type === "file") {
+        const shown = value == null ? "" : String(value);
+        return `
+            <div class="dynamic-param-field">
+                ${labelBlock}
+                <input type="text" ${attrs} data-param-type="file" value="${escapeHtml(shown)}" placeholder="/path/to/file">
+            </div>
+        `;
+    }
+
+    const shown = value == null ? "" : String(value);
+    return `
+        <div class="dynamic-param-field">
+            ${labelBlock}
+            <input type="text" ${attrs} data-param-type="string" value="${escapeHtml(shown)}">
+        </div>
+    `;
+}
+
+// Keys of "page list" params (taranacak sayfa listesi) that stand in for the
+// whole scan. They render above the target/parameters, split off by a divider,
+// to signal "provide a ready list, OR fill in the target and parameters below".
+const LIST_SOURCE_PARAM_KEYS = new Set(["scan_list"]);
+
+// Render a whole schema, splitting basic vs advanced params. `valueFor(item)`
+// resolves the value to prefill and `attrsFor(item)` returns the data-* string.
+function renderDynamicParamGroups(schema, valueFor, attrsFor) {
+    const sorted = [...schema].sort((a, b) => Number(a?.sort_order || 100) - Number(b?.sort_order || 100));
+    const listSource = [];
+    const basic = [];
+    const advanced = [];
+    for (const item of sorted) {
+        const key = String(item?.key || "").trim();
+        if (!key) {
+            continue;
+        }
+        if (LIST_SOURCE_PARAM_KEYS.has(key)) {
+            listSource.push(item);
+        } else if (Number(item?.sort_order || 0) >= ADVANCED_PARAM_SORT_THRESHOLD) {
+            advanced.push(item);
+        } else {
+            basic.push(item);
+        }
+    }
+
+    let html = "";
+    if (listSource.length) {
+        const listHtml = listSource.map((item) => dynamicParamFieldHtml(item, valueFor(item), attrsFor(item))).join("");
+        html += `
+            <div class="dynamic-param-grid dynamic-param-list-source">${listHtml}</div>
+            <div class="dynamic-param-divider"><span>ya da</span></div>
+        `;
+    }
+
+    const basicHtml = basic.map((item) => dynamicParamFieldHtml(item, valueFor(item), attrsFor(item))).join("");
+    html += `<div class="dynamic-param-grid">${basicHtml || `<p class="muted" style="margin:0;">Parametre gerekmiyor.</p>`}</div>`;
+
+    if (advanced.length) {
+        const advHtml = advanced.map((item) => dynamicParamFieldHtml(item, valueFor(item), attrsFor(item))).join("");
+        html += `
+            <details class="dynamic-param-advanced">
+                <summary>Gelişmiş parametreler (${advanced.length})</summary>
+                <div class="dynamic-param-grid" style="margin-top:10px;">${advHtml}</div>
+            </details>
+        `;
+    }
+    return html;
 }
 
 
@@ -954,143 +1297,12 @@ function renderDynamicIntentParameters(intent) {
         return;
     }
 
-    const rows = [...schema].sort((a, b) => Number(a?.sort_order || 100) - Number(b?.sort_order || 100));
     nextTestParamsWrap.style.display = "block";
-
-    nextTestParamsForm.innerHTML = rows
-        .map((item) => {
-            const key = String(item?.key || "").trim();
-            if (!key) {
-                return "";
-            }
-
-            const label = String(item?.label || key);
-            const required = Boolean(item?.required);
-            const type = normalizeDynamicParamType(item?.type);
-            const defaultValue = item?.default;
-            const options = Array.isArray(item?.options_json) ? item.options_json : [];
-
-            if (type === "boolean") {
-                const checked = defaultValue === true ? " checked" : "";
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <label class="check-chip">
-                            <input type="checkbox" data-param-key="${escapeHtml(key)}" data-param-type="boolean"${checked}>
-                            <span>${escapeHtml(key)}</span>
-                        </label>
-                    </div>
-                `;
-            }
-
-            if (type === "json" || type === "list" || type === "object" || type === "dict") {
-                const serialized = typeof defaultValue === "string"
-                    ? defaultValue
-                    : JSON.stringify(defaultValue ?? (type === "list" ? [] : {}), null, 2);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <textarea data-param-key="${escapeHtml(key)}" data-param-type="${escapeHtml(type)}" placeholder="JSON">${escapeHtml(serialized)}</textarea>
-                    </div>
-                `;
-            }
-
-            if (type === "number") {
-                const numericValue = Number(defaultValue);
-                const value = Number.isFinite(numericValue) ? String(numericValue) : "";
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="number" data-param-key="${escapeHtml(key)}" data-param-type="number" value="${escapeHtml(value)}">
-                    </div>
-                `;
-            }
-
-            if (type === "select") {
-                const selected = defaultValue == null ? "" : String(defaultValue);
-                const optionsHtml = options.map((optionItem) => {
-                    const optionValue = typeof optionItem === "string" ? optionItem : String(optionItem?.value || optionItem?.label || "");
-                    const optionLabel = typeof optionItem === "string" ? optionItem : String(optionItem?.label || optionValue);
-                    if (!optionValue) {
-                        return "";
-                    }
-                    const isSelected = optionValue === selected ? " selected" : "";
-                    return `<option value="${escapeHtml(optionValue)}"${isSelected}>${escapeHtml(optionLabel)}</option>`;
-                }).join("");
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <select data-param-key="${escapeHtml(key)}" data-param-type="select">
-                            <option value="">Seciniz</option>
-                            ${optionsHtml}
-                        </select>
-                    </div>
-                `;
-            }
-
-            if (type === "url") {
-                const value = defaultValue == null ? "" : String(defaultValue);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="url" data-param-key="${escapeHtml(key)}" data-param-type="url" value="${escapeHtml(value)}">
-                    </div>
-                `;
-            }
-
-            if (type === "ip") {
-                const value = defaultValue == null ? "" : String(defaultValue);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="text" data-param-key="${escapeHtml(key)}" data-param-type="ip" value="${escapeHtml(value)}" placeholder="192.168.1.10">
-                    </div>
-                `;
-            }
-
-            if (type === "file") {
-                const value = defaultValue == null ? "" : String(defaultValue);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="text" data-param-key="${escapeHtml(key)}" data-param-type="file" value="${escapeHtml(value)}" placeholder="/path/to/file">
-                    </div>
-                `;
-            }
-
-            const value = defaultValue == null ? "" : String(defaultValue);
-            return `
-                <div class="dynamic-param-field">
-                    <div class="dynamic-param-label">
-                        <span>${escapeHtml(label)}</span>
-                        ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                    </div>
-                    <input type="text" data-param-key="${escapeHtml(key)}" data-param-type="string" value="${escapeHtml(value)}">
-                </div>
-            `;
-        })
-        .join("");
+    nextTestParamsForm.innerHTML = renderDynamicParamGroups(
+        schema,
+        (item) => item?.default,
+        (item) => `data-param-key="${escapeHtml(String(item?.key || "").trim())}"`,
+    );
 }
 
 
@@ -1152,7 +1364,7 @@ function collectDynamicIntentParameters(schema) {
             continue;
         }
 
-        if (type === "file" || type === "select") {
+        if (type === "file" || type === "select" || type === "textarea") {
             values[key] = raw;
             continue;
         }
@@ -1196,6 +1408,55 @@ function clearIntentSelectionUi() {
 }
 
 
+let stepToolIntents = [];
+
+// 3YM: after a step is chosen, present its tools so the operator selects which
+// to run; only the selected tools' parameters/scripts are then loaded.
+function renderStepToolSelection(intents) {
+    stepToolIntents = Array.isArray(intents) ? intents : [];
+    const container = directionOperationWindow;
+    if (!container) {
+        return;
+    }
+    if (!stepToolIntents.length) {
+        container.innerHTML = `<p class="muted" style="margin:0;">Bu adım için kayıtlı araç/script yok.</p>`;
+        return;
+    }
+
+    const rows = stepToolIntents.map((intent, i) => {
+        const name = escapeHtml(String(intent?.script?.display_name || intent?.action || `arac-${i + 1}`));
+        const action = escapeHtml(String(intent?.action || ""));
+        return `
+            <label class="check-chip" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                <input type="checkbox" class="step-tool-check" data-tool-index="${i}" checked>
+                <span><strong>${name}</strong> <span class="muted" style="font-size:12px;">(${action})</span></span>
+            </label>`;
+    }).join("");
+
+    container.innerHTML = `
+        <h4 style="margin:0 0 6px 0;">${escapeHtml(t("direction.toolSelect", "Araç Seçimi"))}</h4>
+        <p class="muted" style="margin:0 0 10px 0;">Bu adımda çalıştırmak istediğiniz araçları seçin, sonra parametreleri yükleyin.</p>
+        <div>${rows}</div>
+        <div class="direction-global-actions" style="margin-top:12px;">
+            <button id="stepToolLoadBtn" type="button">${escapeHtml(t("direction.loadSelected", "Seçili araçları yükle"))}</button>
+        </div>
+    `;
+
+    const loadBtn = container.querySelector("#stepToolLoadBtn");
+    if (loadBtn) {
+        loadBtn.addEventListener("click", () => {
+            const checkedIdx = Array.from(container.querySelectorAll(".step-tool-check:checked"))
+                .map((cb) => Number(cb.dataset.toolIndex));
+            const selected = stepToolIntents.filter((_, i) => checkedIdx.includes(i));
+            if (!selected.length) {
+                directionNote.innerText = t("direction.pickTool", "En az bir araç seçin.");
+                return;
+            }
+            renderOperationWindowIntents(selected);
+        });
+    }
+}
+
 function renderOperationWindowIntents(intents, options = {}) {
     const container = options.container || directionOperationWindow;
     const showStartButton = options.showStartButton !== false;
@@ -1223,150 +1484,24 @@ function renderOperationWindowIntents(intents, options = {}) {
         const name = String(intent?.script?.display_name || action || `script-${intentIndex + 1}`);
         const itemType = String(intent?.item_type || intent?.script?.item_type || "script").trim().toLowerCase();
         const reason = String(intent?.reason || "Script dogrulama aksiyonu");
-        const schema = Array.isArray(intent?.parameter_schema) ? [...intent.parameter_schema] : [];
-        schema.sort((a, b) => Number(a?.sort_order || 100) - Number(b?.sort_order || 100));
-
-        const fieldsHtml = schema.map((item) => {
-            const key = String(item?.key || "").trim();
-            if (!key) {
-                return "";
-            }
-
-            const label = String(item?.label || key);
-            const required = Boolean(item?.required);
-            const type = normalizeDynamicParamType(item?.type);
-            const defaultValue = intent?.parameters?.[key] ?? item?.default;
-            const options = Array.isArray(item?.options_json) ? item.options_json : [];
-            const keyAttr = escapeHtml(key);
-
-            if (type === "boolean") {
-                const checked = defaultValue === true ? " checked" : "";
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <label class="check-chip">
-                            <input type="checkbox" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="boolean"${checked}>
-                            <span>${keyAttr}</span>
-                        </label>
-                    </div>
-                `;
-            }
-
-            if (type === "json" || type === "list" || type === "object" || type === "dict") {
-                const serialized = typeof defaultValue === "string"
-                    ? defaultValue
-                    : JSON.stringify(defaultValue ?? (type === "list" ? [] : {}), null, 2);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <textarea data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="${escapeHtml(type)}" placeholder="JSON">${escapeHtml(serialized)}</textarea>
-                    </div>
-                `;
-            }
-
-            if (type === "number") {
-                const numericValue = Number(defaultValue);
-                const value = Number.isFinite(numericValue) ? String(numericValue) : "";
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="number" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="number" value="${escapeHtml(value)}">
-                    </div>
-                `;
-            }
-
-            if (type === "select") {
-                const selected = defaultValue == null ? "" : String(defaultValue);
-                const optionsHtml = options.map((optionItem) => {
-                    const optionValue = typeof optionItem === "string" ? optionItem : String(optionItem?.value || optionItem?.label || "");
-                    const optionLabel = typeof optionItem === "string" ? optionItem : String(optionItem?.label || optionValue);
-                    if (!optionValue) {
-                        return "";
-                    }
-                    const isSelected = optionValue === selected ? " selected" : "";
-                    return `<option value="${escapeHtml(optionValue)}"${isSelected}>${escapeHtml(optionLabel)}</option>`;
-                }).join("");
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <select data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="select">
-                            <option value="">Seciniz</option>
-                            ${optionsHtml}
-                        </select>
-                    </div>
-                `;
-            }
-
-            if (type === "url") {
-                const value = defaultValue == null ? "" : String(defaultValue);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="url" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="url" value="${escapeHtml(value)}">
-                    </div>
-                `;
-            }
-
-            if (type === "ip") {
-                const value = defaultValue == null ? "" : String(defaultValue);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="text" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="ip" value="${escapeHtml(value)}" placeholder="192.168.1.10">
-                    </div>
-                `;
-            }
-
-            if (type === "file") {
-                const value = defaultValue == null ? "" : String(defaultValue);
-                return `
-                    <div class="dynamic-param-field">
-                        <div class="dynamic-param-label">
-                            <span>${escapeHtml(label)}</span>
-                            ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                        </div>
-                        <input type="text" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="file" value="${escapeHtml(value)}" placeholder="/path/to/file">
-                    </div>
-                `;
-            }
-
-            const value = defaultValue == null ? "" : String(defaultValue);
-            return `
-                <div class="dynamic-param-field">
-                    <div class="dynamic-param-label">
-                        <span>${escapeHtml(label)}</span>
-                        ${required ? `<span class="dynamic-param-required">required</span>` : ""}
-                    </div>
-                    <input type="text" data-intent-index="${intentIndex}" data-param-key="${keyAttr}" data-param-type="string" value="${escapeHtml(value)}">
-                </div>
-            `;
-        }).join("");
+        const schema = Array.isArray(intent?.parameter_schema) ? intent.parameter_schema : [];
+        const fieldsHtml = renderDynamicParamGroups(
+            schema,
+            (item) => {
+                const key = String(item?.key || "").trim();
+                return intent?.parameters?.[key] ?? item?.default;
+            },
+            (item) => `data-intent-index="${intentIndex}" data-param-key="${escapeHtml(String(item?.key || "").trim())}"`,
+        );
 
         return `
-            <div class="next-test-panel" style="margin-top:10px;">
-                <h4 style="margin:0 0 6px 0;">${escapeHtml(name)}</h4>
+            <div class="next-test-panel op-intent-card" data-intent-index="${intentIndex}">
+                <button type="button" class="op-cancel-btn" data-cancel-index="${intentIndex}" title="Bu operasyonu iptal et" aria-label="İptal">×</button>
+                <h4 style="margin:0 24px 6px 0;">${escapeHtml(name)}</h4>
                 <p class="muted" style="margin:0 0 6px 0;">Action: ${escapeHtml(action)}</p>
                 <p class="muted" style="margin:0 0 6px 0;">Type: ${escapeHtml(itemType)}</p>
-                <p class="muted" style="margin:0;">${escapeHtml(reason)}</p>
-                <div class="dynamic-param-grid" style="margin-top:10px;">${fieldsHtml || `<p class="muted" style="margin:0;">Parametre gerekmiyor.</p>`}</div>
+                <p class="muted" style="margin:0 0 6px 0;">${escapeHtml(reason)}</p>
+                ${fieldsHtml}
             </div>
         `;
     }).join("");
@@ -1387,10 +1522,42 @@ function renderOperationWindowIntents(intents, options = {}) {
         ${startBtnHtml}
     `;
 
+    // YZO: when several operations are proposed, lay the cards out two-per-row
+    // (50% each) instead of packing them at ~25%. A single card stays full width.
+    if (typeof orchestratorOps !== "undefined" && container === orchestratorOps) {
+        container.classList.toggle("ops-multi", operationWindowIntents.length > 1);
+    }
+
     if (directionProceedBtn) {
         directionProceedBtn.disabled = true;
     }
 }
+
+// Cancel (×) a proposed operation before it runs: mark it cancelled (so the run
+// loops skip it) and drop its card. Indices stay stable (no splice), so the
+// remaining cards' param collectors keep matching.
+function countActiveIntents() {
+    return (operationWindowIntents || []).filter((intent) => intent && !intent._cancelled).length;
+}
+
+document.addEventListener("click", (event) => {
+    const btn = event.target.closest?.(".op-cancel-btn");
+    if (!btn) {
+        return;
+    }
+    const idx = Number(btn.getAttribute("data-cancel-index"));
+    if (!Number.isInteger(idx) || !operationWindowIntents[idx]) {
+        return;
+    }
+    operationWindowIntents[idx]._cancelled = true;
+    const card = btn.closest(".op-intent-card");
+    if (card) {
+        card.remove();
+    }
+    if (typeof orchestratorOps !== "undefined" && orchestratorOps) {
+        orchestratorOps.classList.toggle("ops-multi", countActiveIntents() > 1);
+    }
+});
 
 
 function collectWindowIntentParameters(intent, intentIndex, container = directionOperationWindow) {
@@ -1469,32 +1636,38 @@ function collectWindowIntentParameters(intent, intentIndex, container = directio
 }
 
 
+// Manual 3-way flow: load the selected step's registered scripts + saved
+// parameters WITHOUT any AI. No prior scan is required — the operator picked the
+// direction/step, so we just fetch that step's scripts and their parameter schema.
 async function fetchStageSuggestions() {
     const feedback = document.getElementById("nextTestFeedback");
-    if (!selectedDirection || !selectedDirectionStepKey || !latestScanResult) {
+    if (!selectedDirection || !selectedDirectionStepKey) {
         if (feedback) {
             feedback.classList.add("error");
-            feedback.innerText = "Aşama önerisi için önce bir tarama sonucu gerekli.";
+            feedback.innerText = "Önce ilerleme yönü ve adım seçin.";
         }
-        return false;
+        return { ok: false, intents: [] };
     }
+
+    const target = document.getElementById("target")?.value.trim()
+        || latestScanResult?.target
+        || "authorized-target";
 
     if (feedback) {
         feedback.classList.remove("error");
-        feedback.innerText = "AI önerileri alınıyor...";
+        feedback.innerText = "Adımın kayıtlı script ve parametreleri yükleniyor...";
     }
-    appendProcessLog(`${getDirectionLabel(selectedDirection)}: AI action intent onerileri aliniyor.`);
+    appendProcessLog(`${getDirectionLabel(selectedDirection)}: adım scriptleri yükleniyor (manuel, AI yok).`);
+    // Refresh the wordlist catalog so the operation form's wordlist selects are current.
+    await loadWordlistCatalog();
 
     try {
-        const response = await apiRequest("/validation/step-intents", {
+        const response = await apiRequest("/validation/step-scripts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 step_key: selectedDirectionStepKey,
-                target: latestScanResult.target || document.getElementById("target")?.value.trim() || "authorized-target",
-                scan_tool: latestScanResult.scan_tool || "nmap",
-                scan_result: latestScanResult,
-                evidence: [],
+                target,
             }),
         });
 
@@ -1503,17 +1676,16 @@ async function fetchStageSuggestions() {
 
         if (feedback) {
             feedback.classList.remove("error");
-            feedback.innerText = response.summary || "AI önerileri yüklendi.";
+            feedback.innerText = response.summary || "Adımın scriptleri yüklendi.";
         }
-        appendProcessLog(`${getDirectionLabel(selectedDirection)}: AI action intent onerileri hazir.`);
-        appendAiEvaluation(`Asama Degerlendirmesi - ${getDirectionLabel(selectedDirection)}`, response.summary || "AI ozeti alinamadi.");
+        appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${intents.length} script/parametre hazır.`);
         return { ok: true, intents };
     } catch (error) {
         if (feedback) {
             feedback.classList.add("error");
-            feedback.innerText = error.message || "AI aşama önerisi alınamadı.";
+            feedback.innerText = error.message || "Adım scriptleri yüklenemedi.";
         }
-        appendProcessLog(`${getDirectionLabel(selectedDirection)}: AI onerisi alinamadi. ${error.message || "Unknown error"}`);
+        appendProcessLog(`${getDirectionLabel(selectedDirection)}: script yüklenemedi. ${error.message || "Unknown error"}`);
         return { ok: false, intents: [] };
     }
 }
@@ -2430,33 +2602,224 @@ function navigateAppPath(pathValue) {
 }
 
 
-function appendStepOutput(title, text) {
-    if (!stepOutputs) {
-        return;
-    }
+// Buffer of the HTML for every result produced since the current operation tab
+// was opened. When a tab is rolled over (İlerle), this buffer is baked into the
+// completed tab's own panel so returning to that tab shows what ran + results.
+let currentTabOutputsHtml = [];
 
-    const item = document.createElement("div");
-    item.className = "step-output-item";
-    item.innerHTML = `
+function resetCurrentTabOutputs() {
+    currentTabOutputsHtml = [];
+}
+
+function takeCurrentTabOutputsHtml() {
+    const html = currentTabOutputsHtml.join("");
+    currentTabOutputsHtml = [];
+    return html;
+}
+
+function buildStepOutputItemHtml(title, innerHtml) {
+    return `
         <p class="step-output-title">${escapeHtml(title)}</p>
-        <p class="step-output-text">${escapeHtml(text)}</p>
+        <div class="step-output-text">${innerHtml}</div>
     `;
-    stepOutputs.appendChild(item);
+}
+
+
+function appendStepOutput(title, text) {
+    appendStepOutputHtml(title, `<p class="step-output-text" style="margin:0;">${escapeHtml(String(text ?? ""))}</p>`);
 }
 
 
 function appendStepOutputHtml(title, htmlContent) {
+    const itemHtml = buildStepOutputItemHtml(title, htmlContent);
+    currentTabOutputsHtml.push(`<div class="step-output-item">${itemHtml}</div>`);
+
     if (!stepOutputs) {
         return;
     }
 
     const item = document.createElement("div");
     item.className = "step-output-item";
-    item.innerHTML = `
-        <p class="step-output-title">${escapeHtml(title)}</p>
-        <div class="step-output-text">${htmlContent}</div>
-    `;
+    item.innerHTML = itemHtml;
     stepOutputs.appendChild(item);
+}
+
+
+// Convenience: format a raw script/tool result object into readable HTML and
+// append it as an operation-result card (never a raw JSON dump).
+function appendResultOutput(title, result) {
+    appendStepOutputHtml(title, formatResultHtml(result));
+}
+
+
+// ---------------------------------------------------------------------------
+// Result formatting (Req 5): every result that lands in "İşlem Sonuçları" is
+// rendered by shape — summary table, command block, console output, or nested
+// tables — instead of a raw JSON string, mirroring how the first nmap scan
+// returns a proper table.
+// ---------------------------------------------------------------------------
+const RESULT_FIELD_LABELS = {
+    tool: "Araç",
+    target: "Hedef",
+    exit_code: "Çıkış kodu",
+    line_count: "Satır sayısı",
+    action: "Aksiyon",
+    status: "Durum",
+    duration: "Süre",
+};
+
+const RESULT_HANDLED_KEYS = new Set([
+    "ok", "tool", "tool_installed", "exit_code", "target", "command",
+    "line_count", "output_tail", "error", "cancelled", "status", "scanned_urls_file",
+]);
+
+// Download link for a scanned-URL XML list saved under scans/ (Req: keep the big
+// list off the page). Served by /download-scan-file.
+function scannedUrlsDownloadHtml(fileName) {
+    const name = String(fileName || "").trim();
+    if (!name) {
+        return "";
+    }
+    const url = `/download-scan-file?file_name=${encodeURIComponent(name)}&language=${encodeURIComponent(currentLanguage)}`;
+    return `<p class="result-label">Taranan sayfalar</p><p class="result-detail"><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(name)} — XML indir</a></p>`;
+}
+
+function humanizeKey(key) {
+    const label = RESULT_FIELD_LABELS[key];
+    if (label) {
+        return label;
+    }
+    return String(key || "")
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim();
+}
+
+function resultSummaryTableHtml(rows) {
+    if (!rows.length) {
+        return "";
+    }
+    const body = rows
+        .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(String(v))}</td></tr>`)
+        .join("");
+    return `<table class="result-summary">${body}</table>`;
+}
+
+function arrayOfObjectsTableHtml(rows) {
+    const columns = [];
+    for (const row of rows) {
+        for (const key of Object.keys(row || {})) {
+            if (!columns.includes(key)) {
+                columns.push(key);
+            }
+        }
+    }
+    if (!columns.length) {
+        return `<pre class="result-console">${escapeHtml(JSON.stringify(rows, null, 2))}</pre>`;
+    }
+    const head = columns.map((c) => `<th>${escapeHtml(humanizeKey(c))}</th>`).join("");
+    const body = rows
+        .map((row) => {
+            const cells = columns
+                .map((c) => {
+                    const value = row?.[c];
+                    const text = value && typeof value === "object" ? JSON.stringify(value) : String(value ?? "-");
+                    return `<td>${escapeHtml(text)}</td>`;
+                })
+                .join("");
+            return `<tr>${cells}</tr>`;
+        })
+        .join("");
+    return `<div class="result-table-wrap"><table class="result-table"><tr>${head}</tr>${body}</table></div>`;
+}
+
+function objectTableHtml(obj) {
+    const rows = Object.entries(obj)
+        .filter(([, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => [humanizeKey(k), typeof v === "object" ? JSON.stringify(v) : String(v)]);
+    return resultSummaryTableHtml(rows);
+}
+
+function formatResultHtml(result) {
+    if (result === null || result === undefined) {
+        return `<p class="muted" style="margin:0;">Sonuç verisi yok.</p>`;
+    }
+    if (Array.isArray(result)) {
+        return result.length && typeof result[0] === "object"
+            ? arrayOfObjectsTableHtml(result)
+            : `<pre class="result-console">${escapeHtml(result.join("\n"))}</pre>`;
+    }
+    if (typeof result !== "object") {
+        return `<pre class="result-console">${escapeHtml(String(result))}</pre>`;
+    }
+
+    const parts = [];
+
+    const summaryRows = [];
+    if (result.tool) summaryRows.push(["Araç", result.tool]);
+    if (result.target) summaryRows.push(["Hedef", result.target]);
+    if (typeof result.ok === "boolean") summaryRows.push(["Durum", result.ok ? "Başarılı" : "Başarısız"]);
+    if (result.tool_installed === false) summaryRows.push(["Kurulum", "Araç kurulu değil"]);
+    if (result.status) summaryRows.push(["Durum", result.status]);
+    if (result.exit_code !== undefined && result.exit_code !== null) summaryRows.push(["Çıkış kodu", result.exit_code]);
+    if (result.line_count !== undefined && result.line_count !== null) summaryRows.push(["Satır sayısı", result.line_count]);
+    if (result.cancelled) summaryRows.push(["Durum", "İptal edildi"]);
+    parts.push(resultSummaryTableHtml(summaryRows));
+
+    if (result.command) {
+        parts.push(`<p class="result-label">Komut</p><pre class="result-console">${escapeHtml(String(result.command))}</pre>`);
+    }
+
+    if (result.error) {
+        parts.push(`<div class="result-error">${escapeHtml(String(result.error))}</div>`);
+    }
+
+    if (Array.isArray(result.output_tail) && result.output_tail.length) {
+        parts.push(`<p class="result-label">Çıktı</p><pre class="result-console">${escapeHtml(result.output_tail.join("\n"))}</pre>`);
+    }
+
+    if (result.scanned_urls_file) {
+        parts.push(scannedUrlsDownloadHtml(result.scanned_urls_file));
+    }
+
+    for (const [key, value] of Object.entries(result)) {
+        if (RESULT_HANDLED_KEYS.has(key)) {
+            continue;
+        }
+        if (Array.isArray(value)) {
+            if (!value.length) {
+                continue;
+            }
+            parts.push(`<p class="result-label">${escapeHtml(humanizeKey(key))}</p>`);
+            parts.push(
+                typeof value[0] === "object"
+                    ? arrayOfObjectsTableHtml(value)
+                    : `<pre class="result-console">${escapeHtml(value.join("\n"))}</pre>`,
+            );
+        } else if (value && typeof value === "object") {
+            if (!Object.keys(value).length) {
+                continue;
+            }
+            parts.push(`<p class="result-label">${escapeHtml(humanizeKey(key))}</p>`);
+            parts.push(objectTableHtml(value));
+        } else if (value !== undefined && value !== null && value !== "") {
+            parts.push(`<p class="result-detail"><b>${escapeHtml(humanizeKey(key))}:</b> ${escapeHtml(String(value))}</p>`);
+        }
+    }
+
+    const html = parts.filter(Boolean).join("");
+    return html || `<pre class="result-console">${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
+}
+
+
+// Render a target + parameters block (used for non-executable manual tasks) as
+// a small table instead of a JSON dump.
+function formatParametersHtml(target, parameters) {
+    const rows = [["Hedef", target]];
+    for (const [key, value] of Object.entries(parameters || {})) {
+        rows.push([humanizeKey(key), typeof value === "object" ? JSON.stringify(value) : String(value)]);
+    }
+    return resultSummaryTableHtml(rows);
 }
 
 
@@ -2569,8 +2932,9 @@ function renderDirectionState() {
         directionNextBtn.disabled = true;
         directionNextBtn.hidden = false;
         if (directionProceedBtn) {
+            // İlerle stays hidden until an operation is selected and run.
             directionProceedBtn.disabled = true;
-            directionProceedBtn.hidden = false;
+            directionProceedBtn.hidden = true;
         }
         if (testPlanPanel) {
             testPlanPanel.style.display = selectedDirection ? "block" : "none";
@@ -2607,8 +2971,10 @@ function renderDirectionState() {
         `;
     }
     if (directionProceedBtn) {
+        // 3YM: İlerle appears only after an operation is selected and its Başlat
+        // run has completed (operationWindowExecuted); hidden once tab completes.
         directionProceedBtn.disabled = !operationWindowExecuted;
-        directionProceedBtn.hidden = directionCompleted;
+        directionProceedBtn.hidden = !operationWindowExecuted || directionCompleted;
     }
     directionLockedText.innerText = tf("direction.locked", { direction: label }, `${label} yonu secildi. Sekme sifirlanana kadar bu secim kilitli kalir.`);
     directionNote.innerText = tf("direction.selected", { direction: label }, `${label} yonu secildi.`);
@@ -2644,28 +3010,39 @@ function prepareDirectionPanelForNextOperation() {
 }
 
 
-function archiveCompletedDirectionPanel(opId, directionValue, categoryLabel, stepLabel) {
+function archiveCompletedDirectionPanel(opId, directionValue, info = {}) {
     if (!stageMain || !opId) {
         return;
     }
 
-    const directionLabel = getDirectionLabel(directionValue);
+    const categoryLabel = info.categoryLabel || "-";
+    const operationLabel = info.operationLabel || "-";
+    const outputsHtml = info.outputsHtml || "";
+    const heading = info.heading || getDirectionLabel(directionValue);
+
     const panel = document.createElement("section");
     panel.className = "wizard-section operation-panel";
     panel.dataset.opPanel = opId;
     panel.style.display = "none";
     panel.innerHTML = `
-        <h3>${directionLabel} Islem Penceresi</h3>
-        <p class="muted">Kategori: ${escapeHtml(categoryLabel)}</p>
-        <p class="muted">Secilen Adim: ${escapeHtml(stepLabel)}</p>
-        <p class="muted">Bu sekme tamamlandi ve kilitlendi. Yeni islem farkli bir sekmede devam eder.</p>
+        <h3>${escapeHtml(heading)} — Tamamlandı</h3>
+        <p class="muted">Aşama / Kategori: ${escapeHtml(categoryLabel)}</p>
+        <p class="muted">Operasyon: ${escapeHtml(operationLabel)}</p>
+        <p class="muted" style="margin-bottom:12px;">Bu sekme tamamlandı ve kilitlendi. Aşağıda bu işlemde yapılanlar ve sonuçları yer alır.</p>
+        <div class="archived-outputs">
+            ${outputsHtml || `<p class="muted">Bu işlemde kayıtlı çıktı yok.</p>`}
+        </div>
     `;
 
     stageMain.appendChild(panel);
 }
 
 
-function rolloverDirectionWorkflowTab(directionValue, categoryLabel, stepLabel) {
+// Roll the current direction/operation tab into a completed, results-bearing tab
+// and open a fresh one for the next operation. `tabLabel` is the full label for
+// the completed tab, e.g. "Tarama (Nmap)"; `archiveInfo` carries the metadata +
+// captured result HTML rendered into the completed tab's own panel (Req 1 & 4).
+function rolloverDirectionWorkflowTab(directionValue, tabLabel, archiveInfo = {}) {
     if (!operationTabs) {
         return;
     }
@@ -2676,8 +3053,9 @@ function rolloverDirectionWorkflowTab(directionValue, categoryLabel, stepLabel) 
 
     if (currentTab) {
         currentTab.removeAttribute("id");
-        const safeCategory = (categoryLabel || "Kategori").trim() || "Kategori";
-        currentTab.innerText = `${currentTab.innerText} (${safeCategory})`;
+        const prefix = getTabOrderPrefix(currentTab.innerText);
+        const label = String(tabLabel || "").trim() || t("tab.direction", "Ilerleme Yonu");
+        currentTab.innerText = prefix ? `${prefix}. ${label}` : label;
     }
 
     if (currentReset) {
@@ -2685,7 +3063,7 @@ function rolloverDirectionWorkflowTab(directionValue, categoryLabel, stepLabel) 
         currentReset.hidden = true;
     }
 
-    archiveCompletedDirectionPanel(currentOpId, directionValue, categoryLabel, stepLabel);
+    archiveCompletedDirectionPanel(currentOpId, directionValue, archiveInfo);
 
     const newOpId = `direction-${Date.now()}`;
     const opIndex = operationTabs.querySelectorAll(".stage-tab").length + 1;
@@ -2960,10 +3338,11 @@ function updateToolDependentOptions() {
     updateParamSelectionState();
     updatePortSelectionState();
 
+    const toolLabel = t(toolConfig.labelKey, toolConfig.label || selectedTool);
     if (!toolConfig.ports || toolConfig.ports.length === 0) {
-        scanConfigNote.innerText = `${toolConfig.label} ${t("scan.note.noPorts", "secildi. Bu arac port yerine ag host kesfi yapar.")}`;
+        scanConfigNote.innerText = `${toolLabel} ${t("scan.note.noPorts", "secildi. Bu arac port yerine ag host kesfi yapar.")}`;
     } else {
-        scanConfigNote.innerText = `${toolConfig.label} ${t("scan.note.ready", "icin parametre ve port secimlerini tamamlayip taramayi baslatabilirsin.")}`;
+        scanConfigNote.innerText = `${toolLabel} ${t("scan.note.ready", "icin parametre ve port secimlerini tamamlayip taramayi baslatabilirsin.")}`;
     }
 
     updateScanButtonState();
@@ -3262,7 +3641,7 @@ directionNextBtn.addEventListener("click", async () => {
     if (feedback) {
         if (loadResult.ok) {
             feedback.classList.remove("error");
-            feedback.innerText = `${t("direction.selectedStep", "Secilen adim")}: ${directionOperationDetails.categoryLabel} / ${directionOperationDetails.stepLabel}. AI onerisi ve parametreler yuklendi.`;
+            feedback.innerText = `${t("direction.selectedStep", "Secilen adim")}: ${directionOperationDetails.categoryLabel} / ${directionOperationDetails.stepLabel}. Kayıtlı script ve parametreler yüklendi.`;
         }
     }
 
@@ -3273,7 +3652,9 @@ directionNextBtn.addEventListener("click", async () => {
     directionLocked = true;
     directionCompleted = false;
     renderDirectionState();
-    renderOperationWindowIntents(loadResult.intents || []);
+    // Requirement: after the step is chosen, let the operator pick which tool(s)
+    // to run before loading their parameters/scripts.
+    renderStepToolSelection(loadResult.intents || []);
 });
 
 
@@ -3342,6 +3723,9 @@ async function executeOperationWindowIntents() {
     const prepared = [];
     for (let i = 0; i < operationWindowIntents.length; i += 1) {
         const intent = operationWindowIntents[i];
+        if (intent?._cancelled) {
+            continue;
+        }
         const dynamicParamData = collectWindowIntentParameters(intent, i);
         if (dynamicParamData.error) {
             directionNote.innerText = dynamicParamData.error;
@@ -3356,21 +3740,31 @@ async function executeOperationWindowIntents() {
             },
         });
     }
+    if (!prepared.length) {
+        directionNote.innerText = "Tüm operasyonlar iptal edildi. Çalıştırılacak işlem yok.";
+        return;
+    }
 
     operationWindowRunning = true;
+    // Fresh capture window for this tab's results (Req 4).
+    resetCurrentTabOutputs();
     const startBtn = directionOperationWindow?.querySelector("#directionStartBtn");
     if (startBtn) {
         startBtn.disabled = true;
     }
 
     try {
+        // Manual 3YM flow (Req 2): NO AI interaction at all. We only run the
+        // registered scripts, track progress, and render their results — no AI
+        // evaluation and no evidence-analysis calls.
         for (const { intent, parameters } of prepared) {
+            const opLabel = String(intent?.script?.display_name || intent.action || "-");
             const executable = Boolean(intent?.executable ?? (String(intent?.item_type || "script").toLowerCase() === "script"));
             if (!executable) {
-                appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${intent.action} manuel gorev olarak kaydedildi.`);
-                appendStepOutput(
-                    `${getDirectionLabel(selectedDirection)} - Manual Task (${intent.action})`,
-                    JSON.stringify({ target: resolvedTarget, parameters }, null, 2),
+                appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${opLabel} manuel gorev olarak kaydedildi.`);
+                appendStepOutputHtml(
+                    `${getDirectionLabel(selectedDirection)} — Manuel Görev (${opLabel})`,
+                    formatParametersHtml(resolvedTarget, parameters),
                 );
                 continue;
             }
@@ -3384,7 +3778,7 @@ async function executeOperationWindowIntents() {
                 approved: true,
             };
 
-            appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${intent.action} calistiriliyor.`);
+            appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${opLabel} calistiriliyor.`);
             const executionStart = await apiRequest("/validation/execute-intent", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -3394,74 +3788,29 @@ async function executeOperationWindowIntents() {
 
             const execResult = executionState?.result || {};
             const execOutput = execResult?.output || {};
-            const outputText = execOutput?.result?.error
-                ? `Error: ${execOutput.result.error}`
-                : `Action: ${intent.action || "-"} | Status: ${execResult.status || "completed"}`;
-            appendStepOutput(`${getDirectionLabel(selectedDirection)} - Tool Runner`, outputText);
+            const scriptResult = execOutput.result;
 
-            if (execOutput.result && typeof execOutput.result === "object") {
-                appendStepOutput(
-                    `${getDirectionLabel(selectedDirection)} - Script Result (${intent.action})`,
-                    JSON.stringify(execOutput.result, null, 2),
-                );
-            }
-
-            const guidance = execOutput.ai_guidance || {};
-            const evaluation = guidance.evaluation || {};
-            if (guidance.summary || evaluation.summary) {
-                const riskLabel = String(guidance.risk_level || evaluation.risk_level || "").trim();
-                const nextStage = String(guidance.next_stage || evaluation.next_stage || "").trim();
-                const findings = Array.isArray(evaluation.findings) ? evaluation.findings.filter(Boolean) : [];
-                const nextSteps = Array.isArray(evaluation.recommended_next_steps)
-                    ? evaluation.recommended_next_steps.filter(Boolean)
-                    : [];
-                const lines = [];
-                if (riskLabel) {
-                    lines.push(`Risk seviyesi: ${riskLabel}`);
-                }
-                lines.push(String(guidance.summary || evaluation.summary || "").trim());
-                if (findings.length) {
-                    lines.push("Bulgular:");
-                    findings.forEach((item) => lines.push(`- ${String(item).trim()}`));
-                }
-                if (nextSteps.length) {
-                    lines.push("Onerilen sonraki adimlar:");
-                    nextSteps.forEach((item) => lines.push(`- ${String(item).trim()}`));
-                }
-                if (nextStage) {
-                    lines.push(`Sonraki asama onerisi: ${nextStage}`);
-                }
-                appendAiEvaluation(`Script Degerlendirmesi (${intent.action})`, lines.join("\n"));
-            }
-
-            try {
-                const evidenceAnalysis = await apiRequest("/validation/evidence-analysis", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        target: resolvedTarget,
-                        evidence: [
-                            {
-                                action: intent.action,
-                                target: resolvedTarget,
-                                output: execOutput,
-                            },
-                        ],
-                    }),
+            if (scriptResult && typeof scriptResult === "object") {
+                appendResultOutput(`${getDirectionLabel(selectedDirection)} — ${opLabel}`, scriptResult);
+            } else {
+                appendResultOutput(`${getDirectionLabel(selectedDirection)} — ${opLabel}`, {
+                    action: intent.action || "-",
+                    status: execResult.status || "completed",
                 });
-
-                const remediationSummary = evidenceAnalysis?.analysis?.summary || "Evidence analizi tamamlandi.";
-                appendStepOutput("Evidence & Remediation Analysis", remediationSummary);
-                appendAiEvaluation("Evidence ve Remediation Degerlendirmesi", remediationSummary);
-            } catch (analysisError) {
-                appendStepOutput("Evidence & Remediation Analysis", analysisError.message || "Evidence analizi alınamadı.");
             }
+            appendProcessLog(`${getDirectionLabel(selectedDirection)}: ${opLabel} tamamlandi (${execResult.status || "completed"}).`);
         }
 
         operationWindowExecuted = true;
+        // Replace the operation form with an inline "Yapılanlar + Sonuçlar"
+        // summary in the current tab (same as YZO), so the run + its results
+        // stay visible here until İlerle rolls them into a completed tab.
+        renderRunSummaryInto(directionOperationWindow, prepared.map((p) => p.intent));
         directionNote.innerText = "Tum gorev/scriptler tamamlandi. Ilerle ile sonraki asamaya gecebilirsiniz.";
         if (directionProceedBtn) {
+            // Operation ran: reveal İlerle so the user can advance to a new tab.
             directionProceedBtn.disabled = false;
+            directionProceedBtn.hidden = false;
         }
     } catch (error) {
         directionNote.innerText = error.message || "Validation action calistirilamadi.";
@@ -3502,9 +3851,12 @@ const orchestratorContainer = document.getElementById("orchestratorContainer");
 const orchestratorOps = document.getElementById("orchestratorOps");
 const orchestratorPlan = document.getElementById("orchestratorPlan");
 const orchestratorInstruction = document.getElementById("orchestratorInstruction");
+const orchestratorSuggestPanel = document.getElementById("orchestratorSuggestPanel");
 const orchestratorApproveBtn = document.getElementById("orchestratorApproveBtn");
+const orchestratorProceedBtn = document.getElementById("orchestratorProceedBtn");
 const orchestratorSuggestBtn = document.getElementById("orchestratorSuggestBtn");
 const orchestratorRedirect = document.getElementById("orchestratorRedirect");
+const orchestratorRedirectOp = document.getElementById("orchestratorRedirectOp");
 const orchestratorExitBtn = document.getElementById("orchestratorExitBtn");
 const orchestratorNote = document.getElementById("orchestratorNote");
 const orchestratorStageBadge = document.getElementById("orchestratorStageBadge");
@@ -3518,6 +3870,8 @@ let orchestratorBusy = false;
 let orchestratorStopRequested = false;
 let orchestratorRunningExecutionId = "";
 let orchestratorAbort = null;
+let orchestratorStage = "";
+let orchestratorCatalog = [];
 let workflowMode = "manual";
 let aiProvider = "local";
 
@@ -3549,6 +3903,15 @@ function setDirectionTabStage(stage) {
 
 function applyWorkflowMode() {
     const aiMode = workflowMode === "ai";
+    // Manual (3YM) is fully AI-free: hide the right-rail "AI Çıktısı" section
+    // (heading + output box) entirely; it only exists for the YZO/scan AI flow.
+    const aiHeading = document.querySelector(".right-rail h2:nth-of-type(2)");
+    if (aiHeading) {
+        aiHeading.style.display = aiMode ? "" : "none";
+    }
+    if (aiOutput) {
+        aiOutput.style.display = aiMode ? "" : "none";
+    }
     if (directionActions) {
         directionActions.style.display = aiMode ? "none" : "grid";
     }
@@ -3649,12 +4012,19 @@ function startOrchestrator() {
     if (directionProceedBtn) {
         directionProceedBtn.hidden = true;
     }
+    if (orchestratorProceedBtn) {
+        orchestratorProceedBtn.hidden = true;
+    }
+    setOrchestratorInteractionVisible(true);
     if (directionLockedWrap) {
         directionLockedWrap.style.display = "none";
     }
     if (orchestratorContainer) {
         orchestratorContainer.style.display = "block";
     }
+    // Refresh wordlist catalog so operation forms show current wordlists (the AI
+    // planning round-trip gives this ample time to complete before render).
+    loadWordlistCatalog();
     orchestratorTurn("", "");
 }
 
@@ -3667,6 +4037,9 @@ function exitOrchestrator() {
     }
     if (orchestratorOps) {
         orchestratorOps.innerHTML = "";
+    }
+    if (orchestratorProceedBtn) {
+        orchestratorProceedBtn.hidden = true;
     }
     operationWindowIntents = [];
     hideAiBusy();
@@ -3682,7 +4055,7 @@ function exitOrchestrator() {
     }
 }
 
-async function orchestratorTurn(userInstruction, preferredStage) {
+async function orchestratorTurn(userInstruction, preferredStage, preferredAction) {
     if (!orchestratorActive || orchestratorBusy) {
         return;
     }
@@ -3690,12 +4063,18 @@ async function orchestratorTurn(userInstruction, preferredStage) {
     orchestratorStopRequested = false;
     orchestratorAbort = new AbortController();
     setOrchestratorControlsEnabled(false);
+    // A user-picked operation opens directly (no slow AI selection round-trip).
+    const directRedirect = Boolean(preferredAction);
     showAiBusy(
-        t("orchestrate.planningTitle", "Yapay zeka bir sonraki islemi planliyor..."),
+        directRedirect
+            ? t("orchestrate.openingOp", "Seçilen operasyon açılıyor...")
+            : t("orchestrate.planningTitle", "Yapay zeka bir sonraki islemi planliyor..."),
         aiWorkingMessage(),
         true,
     );
-    appendProcessLog("AI Orkestrator: sonraki islem plani isteniyor.");
+    appendProcessLog(directRedirect
+        ? `AI Orkestrator: '${preferredAction}' operasyonuna yönlendiriliyor.`
+        : "AI Orkestrator: sonraki islem plani isteniyor.");
 
     try {
         const data = await apiRequest("/validation/ai-orchestrate", {
@@ -3705,6 +4084,7 @@ async function orchestratorTurn(userInstruction, preferredStage) {
                 target: resolveOperationTarget(),
                 user_instruction: String(userInstruction || ""),
                 preferred_stage: String(preferredStage || ""),
+                preferred_action: String(preferredAction || ""),
             }),
             signal: orchestratorAbort.signal,
         });
@@ -3726,11 +4106,62 @@ async function orchestratorTurn(userInstruction, preferredStage) {
     }
 }
 
+function redirectOpLabel(item) {
+    const notInstalled = item.installed ? "" : " (kurulu değil)";
+    return `<option value="${escapeHtml(String(item.action || ""))}">${escapeHtml(String(item.name || item.action || ""))}${notInstalled}</option>`;
+}
+
+// Render the operation picker. With a stage filter it lists only that stage's
+// operations; without one it groups all operations by stage.
+function renderRedirectOperationOptions(stageFilter) {
+    if (!orchestratorRedirectOp) {
+        return;
+    }
+    const filter = String(stageFilter || "").trim();
+    if (filter) {
+        const ops = orchestratorCatalog.filter((c) => String(c?.stage || "").trim() === filter);
+        let html = `<option value="">${escapeHtml(stageLabel(filter) || filter)} — operasyon seçin…</option>`;
+        html += ops.map(redirectOpLabel).join("");
+        orchestratorRedirectOp.innerHTML = html;
+        return;
+    }
+
+    const byStage = {};
+    for (const item of orchestratorCatalog) {
+        const st = String(item?.stage || "").trim();
+        (byStage[st] = byStage[st] || []).push(item);
+    }
+    let html = `<option value="">Operasyon Seç</option>`;
+    for (const st of ["scan", "attack", "remediation"]) {
+        const ops = byStage[st];
+        if (!ops || !ops.length) {
+            continue;
+        }
+        html += `<optgroup label="${escapeHtml(stageLabel(st) || st)}">${ops.map(redirectOpLabel).join("")}</optgroup>`;
+    }
+    orchestratorRedirectOp.innerHTML = html;
+}
+
+function populateRedirectOperations(catalog) {
+    orchestratorCatalog = Array.isArray(catalog) ? catalog : [];
+    renderRedirectOperationOptions(orchestratorRedirect ? orchestratorRedirect.value : "");
+}
+
 function renderOrchestratorProposal(data) {
     const plan = String(data?.plan || data?.summary || "").trim();
     const stage = String(data?.stage || "").trim();
     const intents = Array.isArray(data?.intents) ? data.intents : [];
     const done = Boolean(data?.done);
+
+    orchestratorStage = stage;
+    // A fresh proposal returns us to approve mode: hide the İlerle button and
+    // bring back the suggestion/redirect areas for review.
+    if (orchestratorProceedBtn) {
+        orchestratorProceedBtn.hidden = true;
+    }
+    setOrchestratorInteractionVisible(true);
+    // Keep the redirect operation picker in sync with the current catalog.
+    populateRedirectOperations(Array.isArray(data?.catalog) ? data.catalog : []);
 
     if (orchestratorPlan) {
         orchestratorPlan.innerText = plan || t("orchestrate.noPlan", "Yapay zeka plan uretemedi.");
@@ -3784,6 +4215,9 @@ async function runOrchestratorProposal() {
     const prepared = [];
     for (let i = 0; i < operationWindowIntents.length; i += 1) {
         const intent = operationWindowIntents[i];
+        if (intent?._cancelled) {
+            continue;
+        }
         const collected = collectWindowIntentParameters(intent, i, orchestratorOps);
         if (collected.error) {
             setOrchestratorNote(collected.error, true);
@@ -3791,10 +4225,19 @@ async function runOrchestratorProposal() {
         }
         prepared.push({ intent, parameters: { ...(intent?.parameters || {}), ...collected.values } });
     }
+    if (!prepared.length) {
+        setOrchestratorNote(t("orchestrate.allCancelled", "Tüm operasyonlar iptal edildi. Öneri/yönlendirme verebilir veya çıkabilirsiniz."), true);
+        return;
+    }
 
     orchestratorBusy = true;
     orchestratorStopRequested = false;
     setOrchestratorControlsEnabled(false);
+    // Approve+run hides the suggestion/redirect areas; they return on the next
+    // proposal (via renderOrchestratorProposal).
+    setOrchestratorInteractionVisible(false);
+    // Fresh capture window for this turn's tab results (Req 4).
+    resetCurrentTabOutputs();
 
     try {
         for (const { intent, parameters } of prepared) {
@@ -3802,9 +4245,10 @@ async function runOrchestratorProposal() {
                 break;
             }
 
+            const opLabel = String(intent?.script?.display_name || intent.action || "-");
             const executable = Boolean(intent?.executable ?? (String(intent?.item_type || "script").toLowerCase() === "script"));
             if (!executable) {
-                appendStepOutput(`AI Orkestrator - Manuel Gorev (${intent.action})`, JSON.stringify({ target: resolvedTarget, parameters }, null, 2));
+                appendStepOutputHtml(`AI Orkestrator — Manuel Görev (${opLabel})`, formatParametersHtml(resolvedTarget, parameters));
                 continue;
             }
 
@@ -3815,18 +4259,34 @@ async function runOrchestratorProposal() {
             );
             appendProcessLog(`AI Orkestrator: ${intent.action} calistiriliyor.`);
 
-            const executionStart = await apiRequest("/validation/execute-intent", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    step_key: intent.step_key || selectedDirectionStepKey,
-                    action: intent.action,
-                    target: resolvedTarget,
-                    reason: intent.reason || "AI orchestrator step",
-                    parameters,
-                    approved: true,
-                }),
-            });
+            // AI Orchestrator operations live in the independent ai_operations
+            // catalog and run through their own endpoint (operation_key based),
+            // fully separate from the manual step_items execute-intent path.
+            const isAiOperation = Boolean(intent.ai_operation || intent.operation_key);
+            const executionStart = isAiOperation
+                ? await apiRequest("/validation/ai-execute-intent", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        operation_key: intent.operation_key || intent.action,
+                        target: resolvedTarget,
+                        reason: intent.reason || "AI orchestrator operation",
+                        parameters,
+                        approved: true,
+                    }),
+                })
+                : await apiRequest("/validation/execute-intent", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        step_key: intent.step_key || selectedDirectionStepKey,
+                        action: intent.action,
+                        target: resolvedTarget,
+                        reason: intent.reason || "AI orchestrator step",
+                        parameters,
+                        approved: true,
+                    }),
+                });
 
             orchestratorRunningExecutionId = executionStart.execution_id;
             let executionState;
@@ -3840,18 +4300,19 @@ async function runOrchestratorProposal() {
             const execOutput = execResult?.output || {};
 
             if (executionState?.status === "cancelled" || execResult?.status === "cancelled") {
-                appendStepOutput(`AI Orkestrator - Durduruldu (${intent.action})`, t("orchestrate.stopped", "Islem durduruldu."));
+                appendStepOutput(`AI Orkestrator — Durduruldu (${opLabel})`, t("orchestrate.stopped", "Islem durduruldu."));
                 orchestratorStopRequested = true;
                 break;
             }
 
-            const outputText = execOutput?.result?.error
-                ? `Error: ${execOutput.result.error}`
-                : `Action: ${intent.action || "-"} | Status: ${execResult.status || "completed"}`;
-            appendStepOutput(`AI Orkestrator - Tool Runner (${intent.action})`, outputText);
-
-            if (execOutput.result && typeof execOutput.result === "object") {
-                appendStepOutput(`AI Orkestrator - Script Result (${intent.action})`, JSON.stringify(execOutput.result, null, 2));
+            const scriptResult = execOutput.result;
+            if (scriptResult && typeof scriptResult === "object") {
+                appendResultOutput(`AI Orkestrator — ${opLabel}`, scriptResult);
+            } else {
+                appendResultOutput(`AI Orkestrator — ${opLabel}`, {
+                    action: intent.action || "-",
+                    status: execResult.status || "completed",
+                });
             }
 
             const guidance = execOutput.ai_guidance || {};
@@ -3894,10 +4355,81 @@ async function runOrchestratorProposal() {
         return;
     }
 
-    // Results are in hand; ask the AI for the next turn.
+    // After an approved run we replace the parameter inputs with an inline
+    // "what ran + results" summary and then WAIT: no auto-advance to a new tab
+    // and no automatic AI planning request. The user must click "İlerle" to roll
+    // over and ask the AI for the next operation.
     if (orchestratorActive) {
-        orchestratorTurn("", "");
+        renderOrchestratorRunSummary(prepared.map((p) => p.intent));
+        if (orchestratorApproveBtn) {
+            orchestratorApproveBtn.disabled = true;
+        }
+        if (orchestratorProceedBtn) {
+            orchestratorProceedBtn.hidden = false;
+        }
+        setOrchestratorNote(t(
+            "orchestrate.runDoneProceed",
+            "İşlem tamamlandı. Sonraki operasyona geçmek için İlerle'ye basın.",
+        ));
     }
+}
+
+
+// Show, inside a container, exactly what ran in this turn and the results it
+// produced (the same formatted cards that go to İşlem Sonuçları). Reads the
+// current tab's output buffer without clearing it — İlerle takes it. Used by
+// both YZO (orchestratorOps) and 3YM (directionOperationWindow).
+function renderRunSummaryInto(container, intents) {
+    if (!container) {
+        return;
+    }
+    const names = (intents || [])
+        .map((i) => String(i?.script?.display_name || i?.action || "").trim())
+        .filter(Boolean);
+    const doneHtml = names.length
+        ? `<ul class="orchestrator-done-list">${names.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`
+        : `<p class="muted" style="margin:0;">-</p>`;
+    const resultsHtml = currentTabOutputsHtml.join("") || `<p class="muted" style="margin:0;">Sonuç üretilmedi.</p>`;
+    container.innerHTML = `
+        <div class="orchestrator-summary">
+            <p class="result-label" style="margin-top:0;">Yapılanlar</p>
+            ${doneHtml}
+            <p class="result-label">Sonuçlar</p>
+            <div class="archived-outputs">${resultsHtml}</div>
+        </div>
+    `;
+}
+
+function renderOrchestratorRunSummary(intents) {
+    renderRunSummaryInto(orchestratorOps, intents);
+}
+
+
+// İlerle: roll the completed operation into its own left tab (with its results)
+// and request the next AI plan. Only runs on an explicit user click.
+function proceedOrchestratorToNextTab() {
+    if (!orchestratorActive || orchestratorBusy) {
+        return;
+    }
+    const opNames = (operationWindowIntents || [])
+        .filter((i) => i && !i._cancelled)
+        .map((i) => i?.script?.display_name || i?.action)
+        .filter(Boolean);
+    const ranSummary = opNames.join(", ") || "-";
+    const stageText = stageLabel(orchestratorStage) || "YZO";
+    // Completed left-menu tab reads "Aşama (Operasyon)", e.g. "Tarama (Nmap)".
+    const completedTabLabel = opNames.length ? `${stageText} (${ranSummary})` : stageText;
+    if (orchestratorProceedBtn) {
+        orchestratorProceedBtn.hidden = true;
+    }
+    rolloverDirectionWorkflowTab(orchestratorStage || "scan", completedTabLabel, {
+        heading: stageText,
+        categoryLabel: stageText,
+        operationLabel: ranSummary,
+        outputsHtml: takeCurrentTabOutputsHtml(),
+    });
+    setActiveOperation(directionPanel.dataset.opPanel);
+    orchestratorTurn("", "");
 }
 
 async function stopOrchestrator() {
@@ -3921,11 +4453,27 @@ async function stopOrchestrator() {
 }
 
 function setOrchestratorControlsEnabled(enabled) {
-    [orchestratorApproveBtn, orchestratorSuggestBtn, orchestratorRedirect, orchestratorExitBtn].forEach((el) => {
+    [orchestratorApproveBtn, orchestratorProceedBtn, orchestratorSuggestBtn, orchestratorRedirect, orchestratorRedirectOp, orchestratorExitBtn].forEach((el) => {
         if (el) {
             el.disabled = !enabled;
         }
     });
+}
+
+// The "Yapay zekaya öneri" panel and the "Yönlendir"/"Operasyon Seç" selects are
+// shown while a proposal is under review, and hidden once the user approves and
+// runs it (they reappear with the next proposal). Çık stays visible throughout.
+function setOrchestratorInteractionVisible(visible) {
+    const display = visible ? "" : "none";
+    if (orchestratorSuggestPanel) {
+        orchestratorSuggestPanel.style.display = display;
+    }
+    if (orchestratorRedirect) {
+        orchestratorRedirect.style.display = display;
+    }
+    if (orchestratorRedirectOp) {
+        orchestratorRedirectOp.style.display = display;
+    }
 }
 
 const aiOrchestrateRestartBtn = document.getElementById("aiOrchestrateRestartBtn");
@@ -3939,6 +4487,11 @@ if (orchestratorApproveBtn) {
         runOrchestratorProposal();
     });
 }
+if (orchestratorProceedBtn) {
+    orchestratorProceedBtn.addEventListener("click", () => {
+        proceedOrchestratorToNextTab();
+    });
+}
 if (orchestratorSuggestBtn) {
     orchestratorSuggestBtn.addEventListener("click", () => {
         const instruction = String(orchestratorInstruction?.value || "").trim();
@@ -3950,14 +4503,22 @@ if (orchestratorSuggestBtn) {
     });
 }
 if (orchestratorRedirect) {
+    // Selecting a stage does NOT run a turn — it only filters the operation
+    // picker to that stage's operations. Picking an operation there runs it.
     orchestratorRedirect.addEventListener("change", () => {
-        const stage = String(orchestratorRedirect.value || "").trim();
-        if (!stage) {
+        renderRedirectOperationOptions(String(orchestratorRedirect.value || "").trim());
+    });
+}
+if (orchestratorRedirectOp) {
+    // Redirect straight to a specific operation: it opens with its parameters.
+    orchestratorRedirectOp.addEventListener("change", () => {
+        const action = String(orchestratorRedirectOp.value || "").trim();
+        if (!action) {
             return;
         }
         const instruction = String(orchestratorInstruction?.value || "").trim();
-        orchestratorTurn(instruction, stage);
-        orchestratorRedirect.value = "";
+        orchestratorRedirectOp.value = "";
+        orchestratorTurn(instruction, "", action);
     });
 }
 if (orchestratorExitBtn) {
@@ -4002,7 +4563,23 @@ if (directionProceedBtn) {
             directionResetBtn.hidden = true;
         }
 
-        rolloverDirectionWorkflowTab(completedDirection, details.categoryLabel, details.stepLabel);
+        // Completed tab reads "Aşama (Operasyon)" exactly like YZO, e.g.
+        // "Tarama (Nmap)" — the stage (Tarama/Atak/Düzenleme) plus the operations
+        // that actually ran. Read op names before prepareDirectionPanelForNextOperation
+        // clears operationWindowIntents.
+        const opNames = (operationWindowIntents || [])
+            .filter((i) => i && !i._cancelled)
+            .map((i) => i?.script?.display_name || i?.action)
+            .filter(Boolean);
+        const ranSummary = opNames.join(", ") || details.stepLabel;
+        const stageText = stageLabel(completedDirection) || getDirectionLabel(completedDirection);
+        const completedTabLabel = opNames.length ? `${stageText} (${ranSummary})` : stageText;
+        rolloverDirectionWorkflowTab(completedDirection, completedTabLabel, {
+            heading: stageText,
+            categoryLabel: details.categoryLabel,
+            operationLabel: ranSummary,
+            outputsHtml: takeCurrentTabOutputsHtml(),
+        });
         prepareDirectionPanelForNextOperation();
         setActiveOperation(directionPanel.dataset.opPanel);
     });
@@ -4454,6 +5031,7 @@ async function bootstrapApp() {
     await setLanguage(userLang);
     applyRoleRestrictions();
     await loadWorkflowMode();
+    await loadWordlistCatalog();
 
     if (hasAcceptedLegalNotice()) {
         if (legalConsent) {

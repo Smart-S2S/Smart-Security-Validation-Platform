@@ -425,6 +425,46 @@ button:disabled {
     box-shadow: 0 0 0 3px rgba(80, 133, 218, 0.2);
 }
 
+/* Wordlist upload: theme the native file input + its "browse" button so it
+   matches the dark/light theme instead of the raw browser control. */
+#wordlistFile {
+    flex: 1 1 260px;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-soft);
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 14px;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+#wordlistFile::file-selector-button {
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin-right: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+#wordlistFile::file-selector-button:hover {
+    border-color: #77a4ec;
+    background: rgba(119, 164, 236, 0.14);
+}
+
+#wordlistFile:focus,
+#wordlistFile:focus-visible {
+    outline: none;
+    border-color: #78a4eb;
+    box-shadow: 0 0 0 3px rgba(80, 133, 218, 0.2);
+}
+
 .status-select,
 .offer-message {
     border: 1px solid var(--line);
@@ -456,7 +496,9 @@ button:disabled {
 
 .two-col {
     display: grid;
-    grid-template-columns: minmax(380px, 0.95fr) minmax(420px, 1.05fr);
+    /* User Management: left (create/edit forms) is the compact, narrower side;
+       right (user list table) takes the extra width. */
+    grid-template-columns: minmax(300px, 0.7fr) minmax(440px, 1.3fr);
     gap: 18px;
 }
 
@@ -777,3 +819,648 @@ body.light-theme .tab-btn.active {
         grid-template-columns: 1fr;
     }
 }
+
+/* --- AI Orchestrator: per-tool operation properties (drill-in view) --------- */
+.pentest-ops-view {
+    margin-top: 4px;
+}
+
+.tool-op-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.tool-op-title {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text);
+}
+
+.tool-op-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.tool-op-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    background: var(--panel-soft);
+}
+
+.tool-op-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.tool-op-card-head strong {
+    color: var(--text);
+    font-size: 15px;
+}
+
+.tool-op-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    background: var(--bg-soft);
+}
+
+.tool-op-badge.stage-scan {
+    border-color: #3f6fb0;
+    color: #9fc0f0;
+}
+
+.tool-op-badge.stage-attack {
+    border-color: #b0553f;
+    color: #f0aa9f;
+}
+
+.tool-op-badge.stage-remediation {
+    border-color: #3fb06a;
+    color: #9ff0bd;
+}
+
+.tool-op-key {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.tool-op-hint {
+    margin: 4px 0 8px 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.tool-op-path {
+    margin: 0 0 10px 0;
+    font-family: monospace;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.tool-op-params-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.tool-op-params {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 640px;
+}
+
+.tool-op-params th {
+    background: var(--bg-soft);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+
+.tool-op-params td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    font-size: 12.5px;
+}
+
+.tool-op-params tr:last-child td {
+    border-bottom: none;
+}
+
+.tool-op-params code {
+    font-family: monospace;
+    color: var(--text);
+    background: var(--bg-soft);
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+
+.tool-op-required {
+    color: #f0aa9f;
+    font-weight: 600;
+}
+
+.tool-op-error {
+    color: #f87171;
+}
+
+
+/* --- Checkbox / radio sizing guard -----------------------------------------
+   Checkboxes and radios are fixed-size controls. Several generic form rules set
+   `width: 100%` on inputs (e.g. .form-grid input, #userAdminPanel .auth-form input),
+   some with ID-level specificity, which would stretch these controls into
+   full-width blocks. Pin them to a square size in every container and at every
+   resolution. !important is used deliberately to beat those higher-specificity
+   width rules without editing each one. */
+input[type="checkbox"],
+input[type="radio"] {
+    box-sizing: border-box !important;
+    flex: 0 0 auto !important;
+    padding: 0 !important;
+    min-width: 0;
+}
+input[type="checkbox"] {
+    width: 20px !important;
+    height: 20px !important;
+    min-height: 20px;
+}
+input[type="radio"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-height: 18px;
+}
+
+/* --- Pentest tools: action selectbox ---------------------------------------- */
+.pentest-action-cell {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.pentest-action-select {
+    min-width: 160px;
+    padding: 9px 11px;
+    border-radius: 10px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-soft);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pentest-action-select:focus {
+    outline: none;
+    border-color: #77a9ee;
+    box-shadow: 0 0 0 3px rgba(93, 146, 225, 0.24);
+}
+
+.pentest-action-cell .btn {
+    white-space: nowrap;
+}
+
+/* ===================== Operation Tester (Panel) ===================== */
+.op-tester-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(320px, 1.2fr);
+    gap: 18px;
+    align-items: start;
+    margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+    .op-tester-grid { grid-template-columns: 1fr; }
+}
+
+.op-tester-controls,
+.op-tester-output {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.op-tester-controls label {
+    display: block;
+    margin: 12px 0 6px 0;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.ot-select,
+#otTarget {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-soft);
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+}
+
+.ot-select:focus,
+#otTarget:focus {
+    outline: none;
+    border-color: #78a4eb;
+    box-shadow: 0 0 0 3px rgba(80, 133, 218, 0.2);
+}
+
+.ot-param-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.ot-param-field {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    background: var(--bg-soft);
+}
+
+.ot-param-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.ot-param-label > span:first-child {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.ot-req {
+    font-size: 11px;
+    color: #f4a4a4;
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    border-radius: 6px;
+    padding: 1px 6px;
+}
+
+.ot-help {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.ot-param-field input[type="text"],
+.ot-param-field input[type="number"],
+.ot-param-field select,
+.ot-param-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
+.ot-param-field textarea {
+    resize: vertical;
+    min-height: 72px;
+    font-family: monospace;
+}
+
+/* Upload-type param widget (OSINT scan/exclude list) */
+.upload-param {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Hidden native picker; the styled label acts as the "Dosya Seç" button. */
+.upload-param-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.upload-file-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    padding: 7px 12px;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    background: transparent;
+    transition: border-color .15s ease, background .15s ease;
+}
+
+.upload-file-btn::before {
+    content: "📎";
+    font-size: 12px;
+}
+
+.upload-file-btn:hover {
+    border-color: #78a4eb;
+    background: rgba(120, 164, 235, 0.08);
+}
+
+.upload-param-name {
+    font-size: 12px;
+    color: #78a4eb;
+    word-break: break-all;
+    flex-basis: 100%;
+}
+
+/* "Taranacak sayfa listesi" list source sits above the target; an "ya da" (or)
+   divider separates it from the target + parameter fields. */
+.ot-list-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    margin: 14px 0;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.ot-list-divider::before,
+.ot-list-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+.ot-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 !important;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.op-tester-actions {
+    margin-top: 14px;
+}
+
+#otRunBtn {
+    background: linear-gradient(180deg, #3f74c8 0%, #315aa2 100%);
+    border-color: #4f84d8;
+    color: #fff;
+}
+
+.ot-log {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 60px;
+    max-height: 220px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12.5px;
+    color: var(--text);
+    white-space: pre-wrap;
+}
+
+.ot-result {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.ot-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-size: 13px;
+    background: rgba(148, 163, 184, 0.15);
+}
+
+.ot-status-finished { background: rgba(74, 222, 128, 0.15); color: #86efac; }
+.ot-status-failed { background: rgba(248, 113, 113, 0.15); color: #fca5a5; }
+.ot-status-cancelled { background: rgba(251, 191, 36, 0.15); color: #fcd34d; }
+
+.ot-label {
+    margin: 0 0 6px 0;
+    font-weight: 700;
+    color: var(--text);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ot-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: #cde0ff;
+    background: rgba(96, 139, 196, 0.28);
+    border-radius: 999px;
+    padding: 1px 8px;
+}
+
+.ot-section {
+    margin: 12px 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+}
+
+.ot-detail { margin: 4px 0; font-size: 13px; }
+
+.ot-tbl, .ot-tbl2 { border-collapse: collapse; width: 100%; font-size: 12.5px; margin: 4px 0 8px 0; }
+.ot-tbl th { width: 38%; text-align: left; color: var(--muted); font-weight: 600; vertical-align: top; }
+.ot-tbl th, .ot-tbl td, .ot-tbl2 th, .ot-tbl2 td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+.ot-tbl2 th { color: var(--muted); font-weight: 600; background: var(--bg-soft); }
+.ot-tbl-wrap { overflow-x: auto; }
+
+.ot-list {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: var(--text);
+}
+.ot-list li { margin: 3px 0; word-break: break-word; }
+
+.ot-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.ot-chip {
+    font-size: 12px;
+    color: var(--text);
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+.ot-chip b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+
+.ot-summary {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-left: 3px solid #5b8fdd;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+}
+
+/* AI report block for fully AI-driven operations (e.g. AI OSINT) */
+.ot-ai-report {
+    background: linear-gradient(180deg, rgba(91, 143, 221, 0.14), rgba(91, 143, 221, 0.06));
+    border: 1px solid #4f7fc8;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 0 0 12px 0;
+}
+
+.ot-ai-report-head {
+    font-weight: 700;
+    font-size: 13px;
+    color: #93c5fd;
+    margin-bottom: 6px;
+}
+
+.ot-ai-report-body {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+body.light-theme .ot-ai-report-head { color: #1d4ed8; }
+
+.ot-risk {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 8px;
+    padding: 3px 10px;
+    margin: 0 0 10px 0;
+}
+.ot-risk-low { background: rgba(74, 222, 128, 0.16); color: #4ade80; }
+.ot-risk-medium { background: rgba(251, 191, 36, 0.16); color: #f59e0b; }
+.ot-risk-high { background: rgba(248, 113, 113, 0.16); color: #f87171; }
+
+.ot-console {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 0 0 8px 0;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text);
+    max-height: 300px;
+    overflow: auto;
+}
+
+.ot-error {
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    color: #fca5a5;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 6px 0;
+    font-size: 13px;
+    white-space: pre-wrap;
+}
+
+.ot-ai {
+    background: rgba(99, 139, 196, 0.12);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--text);
+    white-space: pre-wrap;
+}
+
+.ot-risk-critical { background: rgba(220, 38, 38, 0.2); color: #f87171; }
+
+/* ---- Pentest Records (Panel → "Pentest Kayıtları") ------------------- */
+#prNote.error { color: #f87171; }
+
+/* List "Aşamalar/Açıklama" cell: limit to 2 lines, full text on hover. */
+.pr-clamp2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-width: 360px;
+}
+
+.pr-actions-cell { white-space: nowrap; }
+.pr-actions-cell > * { margin-right: 8px; }
+.pr-actions-cell > *:last-child { margin-right: 0; }
+
+.pr-danger {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.5);
+}
+.pr-danger:hover {
+    background: rgba(248, 113, 113, 0.12);
+    border-color: #f87171;
+}
+
+.pr-badge {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 2px 8px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    color: var(--text);
+}
+.pr-stage { background: rgba(119, 164, 236, 0.16); border-color: transparent; color: #78a4eb; }
+.pr-status-success { background: rgba(74, 222, 128, 0.16); border-color: transparent; color: #4ade80; }
+.pr-status-failed { background: rgba(248, 113, 113, 0.16); border-color: transparent; color: #f87171; }
+.pr-status-running { background: rgba(251, 191, 36, 0.16); border-color: transparent; color: #f59e0b; }
+.pr-status-cancelled { background: rgba(148, 163, 184, 0.18); border-color: transparent; color: var(--muted); }
+
+.pr-section-title { margin: 20px 0 8px 0; }
+
+.pr-action {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: var(--bg-soft);
+}
+.pr-action-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.pr-action-head strong { margin: 0 8px; }
+.pr-action-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+.pr-result { margin-top: 8px; }
+.pr-logs { margin-top: 8px; }
+.pr-logs > summary { cursor: pointer; color: var(--muted); font-size: 12px; }

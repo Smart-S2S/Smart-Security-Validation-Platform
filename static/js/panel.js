@@ -753,6 +753,11 @@ if (pathBreadcrumb) {
         const allowedTabs = currentUser?.is_admin
             ? new Set(['profile', 'users', 'roles', 'offers', 'tools', 'progress-categories'])
             : new Set(['profile']);
+        // The Pentest Records tab is available to test roles too; only allow it as
+        // an initial/deep-linked tab when its button actually rendered.
+        if (tabButtons.some((button) => button.dataset.tab === 'pentest-records')) {
+            allowedTabs.add('pentest-records');
+        }
         const targetTab = allowedTabs.has(requested) ? requested : 'profile';
         activateTab(targetTab);
         renderPathNavigation(targetTab);

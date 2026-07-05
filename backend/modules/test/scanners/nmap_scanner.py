@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -265,12 +266,19 @@ def run_nmap_scan(
 
     add_log(job_id, t(language, "nmap.running", "Nmap taramasi calistiriliyor..."))
 
+    # nmap only auto-detects privilege via euid==0. The binary is granted
+    # cap_net_raw/cap_net_admin (see deploy), so NMAP_PRIVILEGED=1 tells nmap to
+    # use them — enabling -O/-sS/-sU/-A without running the server as root.
+    scan_env = os.environ.copy()
+    scan_env["NMAP_PRIVILEGED"] = "1"
+
     try:
         completed = subprocess.run(
             command,
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            env=scan_env,
         )
 
         if completed.returncode != 0:

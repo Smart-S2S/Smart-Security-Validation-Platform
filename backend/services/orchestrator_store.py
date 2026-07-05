@@ -640,6 +640,32 @@ def init_orchestrator_store() -> None:
         # Workflow entities (categories/steps) are now fully DB-driven from settings.
 
 
+def get_catalog_snapshot(active_only: bool = True) -> dict:
+    """Bulk-fetch categories + steps + step_items in ONE init + 3 queries.
+
+    Building a full catalog tree with the per-entity getters is slow because each
+    getter re-runs ``init_orchestrator_store`` (→ full ``init_mysql_schema``).
+    This returns everything needed to assemble the tree in memory instead.
+    """
+    init_orchestrator_store()
+    where = "WHERE is_active = 1" if active_only else ""
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT id, category_key, display_name, workflow_key FROM progress_categories {where} ORDER BY category_key ASC"
+            )
+            categories = cur.fetchall() or []
+            cur.execute(
+                f"SELECT id, step_key, display_name, workflow_key, category_id FROM steps {where} ORDER BY display_name ASC"
+            )
+            steps = cur.fetchall() or []
+            cur.execute(
+                f"SELECT id, step_id, item_key, display_name, description, item_type FROM step_items {where} ORDER BY id ASC"
+            )
+            items = cur.fetchall() or []
+    return {"categories": categories, "steps": steps, "items": items}
+
+
 def list_progress_categories(active_only: bool = False) -> list[dict]:
     init_orchestrator_store()
     where_clause = "WHERE is_active = 1" if active_only else ""
@@ -2241,6 +2267,7 @@ def create_validation_action(
     evidence: dict,
     ai_analysis: dict,
     status: str,
+    allow_orphan_step: bool = False,
 ) -> int:
     init_orchestrator_store()
     now = _utc_now_iso()
@@ -2282,10 +2309,13 @@ def create_validation_action(
             ]
 
             if has_step_id:
-                if step_id is None or int(step_id) <= 0:
+                orphan = step_id is None or int(step_id) <= 0
+                if orphan and not allow_orphan_step:
                     raise ValueError("STEP_ID_REQUIRED")
                 columns.insert(0, "step_id")
-                values.insert(0, int(step_id))
+                # AI-orchestrator operations have no manual step -> store NULL
+                # (the column was widened to NULL in ai_operations_store).
+                values.insert(0, None if orphan else int(step_id))
 
             placeholders = ", ".join(["%s"] * len(columns))
             columns_sql = ", ".join(columns)
@@ -2352,3 +2382,174 @@ def list_validation_actions(target: str | None = None) -> list[dict]:
         )
 
     return items
+
+
+# ---------------------------------------------------------------------------
+# Pentest records: validation_actions grouped by target. One "pentest" == every
+# operation executed against a single target. Used by the Panel "Pentest
+# Kayıtları" page (list + detail + cascade delete). User attribution is resolved
+# via a LEFT JOIN to users so the UI can show who ran each operation.
+# ---------------------------------------------------------------------------
+_RISK_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def _action_risk(ai_analysis: dict) -> str:
+    risk = str((ai_analysis or {}).get("risk_level") or "").strip().lower()
+    return risk if risk in _RISK_RANK else ""
+
+
+def _display_actor(row: dict) -> str:
+    """Best human label for who ran an action: username, else full name, else id."""
+    username = str(row.get("username") or "").strip()
+    if username:
+        return username
+    full_name = str(row.get("full_name") or "").strip()
+    if full_name:
+        return full_name
+    created_by = row.get("created_by")
+    return f"#{created_by}" if created_by else ""
+
+
+def _fetch_action_rows(cur, target: str | None = None, created_by: int | None = None) -> list[dict]:
+    """Fetch action rows, optionally scoped to a target and/or owning user.
+
+    ``created_by`` is the ownership filter: pass a user id to restrict rows to
+    that user's actions (non-admins only see their own pentests); pass None for
+    all rows (admins).
+    """
+    base = (
+        "SELECT va.id, va.step_key, va.step_name, va.action_key, va.target, "
+        "va.reason, va.parameters_json, va.tool_run_id, va.evidence_json, "
+        "va.ai_analysis_json, va.status, va.created_by, va.created_at, "
+        "va.updated_at, u.username, u.full_name "
+        "FROM validation_actions va "
+        "LEFT JOIN users u ON u.id = va.created_by "
+    )
+    conditions = []
+    params: list = []
+    if target:
+        conditions.append("va.target = %s")
+        params.append(target)
+    if created_by is not None:
+        conditions.append("va.created_by = %s")
+        params.append(created_by)
+    where = ("WHERE " + " AND ".join(conditions) + " ") if conditions else ""
+    cur.execute(base + where + "ORDER BY va.id DESC", tuple(params))
+    return cur.fetchall() or []
+
+
+def list_pentests(created_by: int | None = None) -> list[dict]:
+    """One row per target: aggregate stages, statuses, risk, runners and dates.
+
+    ``created_by`` scopes the list to one user's own pentests (None = all).
+    """
+    init_orchestrator_store()
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            rows = _fetch_action_rows(cur, created_by=created_by)
+
+    groups: dict[str, dict] = {}
+    order: list[str] = []
+    for row in rows:
+        target = row.get("target") or ""
+        group = groups.get(target)
+        if group is None:
+            group = {
+                "target": target,
+                "action_count": 0,
+                "stages": [],
+                "status_counts": {},
+                "risk": "",
+                "runners": [],
+                "first_run": row.get("created_at"),
+                "last_run": row.get("created_at"),
+            }
+            groups[target] = group
+            order.append(target)
+
+        group["action_count"] += 1
+
+        stage = str(row.get("step_name") or "").strip()
+        if stage and stage not in group["stages"]:
+            group["stages"].append(stage)
+
+        status = str(row.get("status") or "unknown").strip().lower()
+        group["status_counts"][status] = group["status_counts"].get(status, 0) + 1
+
+        risk = _action_risk(_safe_loads(row.get("ai_analysis_json"), {}))
+        if risk and _RISK_RANK[risk] > _RISK_RANK.get(group["risk"], 0):
+            group["risk"] = risk
+
+        actor = _display_actor(row)
+        if actor and actor not in group["runners"]:
+            group["runners"].append(actor)
+
+        created_at = row.get("created_at")
+        if created_at:
+            if not group["first_run"] or created_at < group["first_run"]:
+                group["first_run"] = created_at
+            if not group["last_run"] or created_at > group["last_run"]:
+                group["last_run"] = created_at
+
+    # Preserve newest-first ordering (rows already sorted by id DESC).
+    return [groups[target] for target in order]
+
+
+def get_pentest_actions(target: str, created_by: int | None = None) -> list[dict]:
+    """All operations run against one target, newest first, with actor labels.
+
+    ``created_by`` scopes the result to one user's own actions (None = all).
+    """
+    init_orchestrator_store()
+    if not str(target or "").strip():
+        return []
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            rows = _fetch_action_rows(cur, target=target, created_by=created_by)
+
+    items: list[dict] = []
+    for row in rows:
+        ai_analysis = _safe_loads(row.get("ai_analysis_json"), {})
+        items.append(
+            {
+                "id": int(row["id"]),
+                "step_key": row.get("step_key"),
+                "step_name": row.get("step_name"),
+                "action_key": row.get("action_key"),
+                "target": row.get("target"),
+                "reason": row.get("reason"),
+                "parameters": _safe_loads(row.get("parameters_json"), {}),
+                "evidence": _safe_loads(row.get("evidence_json"), {}),
+                "ai_analysis": ai_analysis,
+                "risk": _action_risk(ai_analysis),
+                "status": row.get("status", "unknown"),
+                "created_by": row.get("created_by"),
+                "actor": _display_actor(row),
+                "created_at": row.get("created_at"),
+                "updated_at": row.get("updated_at"),
+            }
+        )
+    return items
+
+
+def delete_validation_actions_for_target(target: str, created_by: int | None = None) -> int:
+    """Delete validation_actions for a target. Returns rows removed.
+
+    ``created_by`` scopes the delete to one user's own actions (None = all), so a
+    non-admin can only remove their own pentest records.
+    """
+    init_orchestrator_store()
+    if not str(target or "").strip():
+        return 0
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            if created_by is not None:
+                cur.execute(
+                    "DELETE FROM validation_actions WHERE target = %s AND created_by = %s",
+                    (target, created_by),
+                )
+            else:
+                cur.execute("DELETE FROM validation_actions WHERE target = %s", (target,))
+            deleted = int(cur.rowcount or 0)
+        conn.commit()
+    return deleted

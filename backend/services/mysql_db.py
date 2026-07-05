@@ -370,6 +370,22 @@ def init_mysql_schema() -> None:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS wordlists (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    path VARCHAR(1024) NOT NULL,
+                    size_bytes BIGINT NOT NULL DEFAULT 0,
+                    source VARCHAR(32) NOT NULL DEFAULT 'scan',
+                    created_at VARCHAR(64) NOT NULL,
+                    updated_at VARCHAR(64) NOT NULL,
+                    UNIQUE KEY uq_wordlists_path (path(255)),
+                    INDEX idx_wordlists_name (name),
+                    INDEX idx_wordlists_source (source)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
 
             # The tool_runs subsystem was removed; tool_run_id remains only as a
             # nullable reference column. Drop any legacy FK so tool_runs can be

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="settings.meta.title">SSVP Ayarlar</title>
-    <link rel="stylesheet" href="/static/css/settings.css?v=20260704e">
+    <link rel="stylesheet" href="/static/css/settings.css?v=20260705m">
     <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
 </head>
 <body>
@@ -33,6 +33,7 @@
         <button class="tab-btn" data-tab="ai" data-i18n="settings.tab.ai">AI Model</button>
         <button class="tab-btn" data-tab="scan" data-i18n="settings.tab.scan">Tarama Ayarları</button>
         <button class="tab-btn" data-tab="toolsmgmt" data-i18n="settings.tab.toolsmgmt">Pentest Araçları</button>
+        <button class="tab-btn" data-tab="wordlists" data-i18n="settings.tab.wordlists">Sözlük Yönetimi</button>
         {% endif %}
         <button class="tab-btn" data-tab="system" data-i18n="settings.tab.system">Sistem ve Proje</button>
     </aside>
@@ -180,20 +181,23 @@
                     <button id="pentestToolsRefreshBtn" type="button" data-i18n="settings.toolsmgmt.refresh">Listeyi Yenile</button>
                 </div>
             </div>
-            <p class="muted" data-i18n="settings.toolsmgmt.note">Sunucudaki güvenlik araçlarını görüntüle, kur, güncelle veya kaldır. İşlemler yalnızca izinli lab sunucusunda çalışır.</p>
-            <div style="overflow:auto;">
-                <table id="pentestToolsTable">
-                    <thead>
-                        <tr>
-                            <th data-i18n="settings.toolsmgmt.tool">Araç</th>
-                            <th data-i18n="settings.toolsmgmt.status">Durum</th>
-                            <th data-i18n="settings.toolsmgmt.version">Sürüm</th>
-                            <th data-i18n="settings.toolsmgmt.actions">İşlemler</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pentestToolsTbody"></tbody>
-                </table>
+            <div id="pentestListWrap">
+                <p class="muted" data-i18n="settings.toolsmgmt.note">Sunucudaki güvenlik araçlarını görüntüle, kur, güncelle veya kaldır. İşlemler yalnızca izinli lab sunucusunda çalışır.</p>
+                <div style="overflow:auto;">
+                    <table id="pentestToolsTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="settings.toolsmgmt.tool">Araç</th>
+                                <th data-i18n="settings.toolsmgmt.status">Durum</th>
+                                <th data-i18n="settings.toolsmgmt.version">Sürüm</th>
+                                <th data-i18n="settings.toolsmgmt.actions">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pentestToolsTbody"></tbody>
+                    </table>
+                </div>
             </div>
+            <div id="pentestOpsView" class="pentest-ops-view" hidden></div>
             <div class="step-list-header-row" style="margin-top:12px;">
                 <h3 style="margin:0;" data-i18n="settings.toolsmgmt.logTitle">İşlem Kaydı</h3>
                 <div class="user-edit-actions" style="justify-content:flex-end;">
@@ -201,6 +205,37 @@
                 </div>
             </div>
             <div id="pentestToolsLog" style="max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--bg-soft); color:var(--text); font-family:monospace; font-size:12px; white-space:pre-wrap;"></div>
+        </section>
+
+        <section class="panel" data-panel="wordlists" hidden>
+            <div class="step-list-header-row">
+                <h2 class="step-list-title" data-i18n="settings.wordlist.title">Sözlük Yönetimi</h2>
+                <div class="user-edit-actions" style="justify-content:flex-end; gap:8px;">
+                    <button id="wordlistScanBtn" type="button" data-i18n="settings.wordlist.scan">Tara</button>
+                    <button id="wordlistRefreshBtn" type="button" data-i18n="settings.wordlist.refresh">Yenile</button>
+                </div>
+            </div>
+            <p class="muted" data-i18n="settings.wordlist.note">Veritabanında kayıtlı sözlükler. "Tara" ile sunucudaki (Ubuntu/araç) sözlükler taranır ve eklenir; "Yeni Ekle" ile .txt sözlük yükleyebilirsiniz. Sözlükler operasyon formlarındaki sözlük alanlarında seçilebilir olur.</p>
+
+            <form id="wordlistUploadForm" class="user-edit-actions" style="gap:10px; align-items:center; margin:10px 0 16px 0; flex-wrap:wrap;">
+                <input type="file" id="wordlistFile" accept=".txt" required>
+                <button id="wordlistUploadBtn" type="submit" data-i18n="settings.wordlist.add" disabled>Yeni Ekle</button>
+            </form>
+
+            <div style="overflow:auto;">
+                <table id="wordlistTable">
+                    <thead>
+                        <tr>
+                            <th data-i18n="settings.wordlist.name">Ad</th>
+                            <th data-i18n="settings.wordlist.path">Konum</th>
+                            <th data-i18n="settings.wordlist.size">Boyut</th>
+                            <th data-i18n="settings.wordlist.source">Kaynak</th>
+                            <th data-i18n="settings.wordlist.actions">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wordlistTbody"></tbody>
+                </table>
+            </div>
         </section>
 
 
@@ -212,6 +247,6 @@
 
 <script src="/static/js/notify.js?v=20260703b"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/static/js/settings.js?v=20260704k"></script>
+<script src="/static/js/settings.js?v=20260705h"></script>
 </body>
 </html>

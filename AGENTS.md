@@ -1,52 +1,80 @@
 # SSVP Agent Contract
 
-This repository is a defensive Security Validation platform.
+Defensive Security Validation platform. **Read this before changing anything** —
+it captures the current architecture so a fresh session can continue safely.
 
 ## Mission Boundaries
-- Defensive use only.
-- Authorized pentest in owned/lab systems only.
-- No third-party attack operations.
-- Focus on validation, hardening, remediation, retest, and reporting.
+- Defensive use only; authorized pentest in owned/lab systems only.
+- No third-party attack operations, no destructive actions outside an approved lab
+  workflow. Focus: validation, hardening, remediation, retest, reporting.
 
-## Core Workflow
-1. Discovery / Scan
-2. Validation Plan
-3. Evidence & Risk Analysis
-4. Remediation Plan
-5. Retest
-6. Report
+## Two independent flows (DO NOT merge or cross-wire them)
+1. **3YM — manual 3-way** (`scan/attack/remediation`). **NEVER sends any AI prompt.**
+   Tables: `progress_categories → steps → step_items → step_item_parameters`.
+   Endpoints: `/validation/workflow-steps`, `/validation/step-scripts` (AI-free
+   loader), `/validation/execute-intent`. Catalog editors live on the Panel page.
+2. **YZO — AI Orchestrator.** LLM picks stage+operation turn by turn.
+   Tables: `ai_operations → ai_operation_params` (separate from 3YM).
+   Endpoints: `/validation/ai-orchestrate`, `/validation/ai-execute-intent`.
 
-## Architecture Constraints
-- Keep `main.py` minimal.
-- FastAPI routers must be registered with `include_router`.
-- Routes in `backend/routes`.
-- Business logic in `backend/services`.
-- AI logic in `backend/ai`.
-- Tool execution in `backend/tools`.
+Changing one flow must not touch the other. When a prompt says "3YM", do not use
+`ai_operations`/AI; when it says "YZO", do not touch the manual `step_items` tables.
 
-## Tooling and AI Constraints
-- AI must not generate terminal command strings or binary paths.
-- AI returns only action intents.
-- Canonical intent format:
-  - `action`: action key in Tool Registry
-  - `target`: authorized target label/value
-  - `reason`: defensive rationale
-  - `parameters`: user-editable parameter object
-- Tool definitions are NOT stored in JSON files.
-- Tool definitions are stored in MySQL Tool Registry.
-- Backend resolves action key to tool metadata:
-  - tool name
-  - module/path mapping
-  - command template
-  - risk level
-  - approval requirement
+## Tool specs — single source of truth
+- `backend/services/pentest_tool_specs.py` holds ALL 23 tool definitions (~258
+  params) via `P(...)` entries. `build_argv` is generic and **argv-list only, no
+  shell**; every value is regex-validated. `positionals_first` (dirb) and
+  `fixed_pre` (gobuster `dir`) control argv shape; default is `tool [opts] positionals`.
+- `iter_operations()` yields the normalized ops that BOTH catalogs seed from —
+  so they stay identical per tool. `build_wrapper_source(tool)` renders the runnable
+  wrapper. `WHEN_TO_USE` gives the YZO an AI hint per operation.
+- After editing specs, re-seed BOTH: `python -m scripts.seed_ai_operations` (YZO,
+  upsert) + `manual_catalog_store.refresh_manual_catalog()` (3YM, in-place, ids
+  stable). `seed_manual_catalog.py` WIPES the 3YM catalog — use `refresh_` to avoid
+  id churn / disrupting active sessions.
+
+## Intent format (both flows)
+Backend builds fully-prefilled, executable intents; the AI only supplies an
+`action`/`preferred_action` and optional `parameters`. An intent carries:
+`action`, `step_key` (3YM) or `operation_key` + `ai_operation:true` (YZO),
+`target`, `reason`, `parameters` (prefilled), `parameter_schema` (rich, editable).
+The frontend renders `parameter_schema` (basic + collapsible "Gelişmiş" via
+`sort_order >= 500`) and runs manual intents through `execute-intent`, YZO intents
+through `ai-execute-intent`.
 
 ## Approval Policy
-- Active validation/attack-style actions require explicit user approval.
-- User can edit parameters in UI before execution.
-- Backend must enforce approval checks before runner execution.
+Active validation/attack actions require explicit user approval; the user edits
+parameters in the UI first; the backend enforces the approval check. YZO runs one
+turn per "Onayla ve Çalıştır" and rolls into a new tab afterward.
 
-## Quality Standards
-- Production-ready code.
-- Modular, readable, extensible implementation.
-- Refactor existing structure instead of full rewrite.
+## Pentest records (Panel → "Pentest Kayıtları")
+`validation_actions` grouped **one pentest = one target**. Visible to admins + any
+`test`/`attack`/`remediation` role. **Ownership is enforced on every endpoint:**
+admins see all, everyone else only their own (`created_by`) — thread the
+`created_by` filter through `list_pentests` / `get_pentest_actions` /
+`delete_validation_actions_for_target` (`_pentest_owner_filter(current_user)` in
+`validation_routes`). Endpoints: `/validation/pentests[/detail|/delete|/file-delete|
+/file-download|/report]`. Cascade delete removes rows + the scan files they
+produced. `pentest_artifacts.py` links files by matching `evidence.result` strings
+to real files under `scans/` (path-traversal-safe — never trust a raw name).
+`pentest_report.py` builds HTML/PDF/Word; **PDF Turkish needs the DejaVuSans
+`@font-face`** (a bare font-family name silently drops ş/ğ/ı/İ), and all report
+text must pass through `_clean()` (python-docx rejects XML-illegal control chars).
+Deps: `xhtml2pdf`, `python-docx` (in `requirements.txt`).
+
+## Architecture Constraints
+- Keep `main.py` minimal (bootstrap + startup seeds only).
+- Routes in `backend/routes/`, business logic in `backend/services/`, AI in
+  `backend/ai/`, scanners in `backend/scanner/`. Register routers with `include_router`.
+- New feature stores may self-init their tables (see `ai_operations_store`,
+  `pentest_tools`) instead of editing the shared `mysql_db` bootstrap — safer for
+  the live server.
+- Type hints; structured dict returns; validate all input; never hardcode secrets;
+  refactor the existing structure instead of rewriting.
+
+## Runtime facts
+- Run with `./run.sh` (venv `venv/`, port 80). MySQL env: `MYSQL_*` (defaults
+  ssvp/ssvp/ssvp123). Ollama CPU ~180 s/turn — always keep deterministic fallbacks.
+- Frontend is served from disk + Jinja (auto-reload); backend changes need a
+  server restart, static/template changes just need a browser refresh (bump the
+  `?v=` query in the template). No JS build step.

@@ -400,7 +400,7 @@ def _public_user(user: dict) -> dict:
 def settings_access(current_user: dict = Depends(get_current_user)):
     tabs = ["appearance", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "system", "ai", "scan", "toolsmgmt", "tools", "progress-categories"]
+        tabs = ["appearance", "system", "ai", "scan", "toolsmgmt", "wordlists", "tools", "progress-categories"]
 
     return {
         "user": _public_user(current_user),
@@ -631,6 +631,27 @@ def settings_pentest_tools_list(
     # Page load reads the DB cache (fast); "Yenile" (refresh=1) syncs with the
     # real server state.
     return {"items": list_tools(reconcile=refresh), "reconciled": bool(refresh)}
+
+
+@router.get("/settings/pentest-tools/{tool_key}/operations")
+def settings_pentest_tool_operations(
+    tool_key: str,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """AI Orchestrator operations (scripts + parameters) provided by one tool.
+
+    Lets an admin inspect, per tool, exactly which YZO operations, wrapper scripts
+    and parameters that tool exposes — the AI catalog's tool-side view.
+    """
+    lang = request_lang(request)
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+
+    from backend.services.ai_operations_store import list_operations
+
+    operations = list_operations(tool_key=tool_key, active_only=True)
+    return {"tool": tool_key, "operations": operations, "count": len(operations)}
 
 
 @router.post("/settings/pentest-tools/action")
@@ -1173,3 +1194,89 @@ def settings_step_item_parameters_delete(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Wordlist (sözlük) management — admin only. Scan the host for tool/OS
+# wordlists, upload new .txt wordlists, list and delete catalog entries.
+# ---------------------------------------------------------------------------
+def _require_admin(current_user: dict, lang: str) -> None:
+    if not current_user.get("is_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"),
+        )
+
+
+@router.get("/settings/wordlists")
+def settings_wordlists_list(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    from backend.services.wordlist_store import list_wordlists
+
+    items = list_wordlists()
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/settings/wordlists/scan")
+def settings_wordlists_scan(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    from backend.services.wordlist_store import list_wordlists, scan_system_wordlists
+
+    summary = scan_system_wordlists()
+    return {"summary": summary, "items": list_wordlists()}
+
+
+@router.post("/settings/wordlists/upload")
+async def settings_wordlists_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    from backend.services.wordlist_store import add_uploaded_wordlist, list_wordlists
+
+    filename = (file.filename or "").strip()
+    if not filename.lower().endswith(".txt"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=t(lang, "settings.wordlist.onlyTxt", "Sadece .txt biçiminde sözlük yükleyebilirsiniz."),
+        )
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=t(lang, "settings.wordlist.empty", "Yüklenen sözlük dosyası boş."),
+        )
+
+    try:
+        added = add_uploaded_wordlist(filename, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    return {"added": added, "items": list_wordlists()}
+
+
+@router.delete("/settings/wordlists/{wordlist_id}")
+def settings_wordlists_delete(
+    wordlist_id: int,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    from backend.services.wordlist_store import delete_wordlist, list_wordlists
+
+    deleted = delete_wordlist(wordlist_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
+    return {"ok": True, "items": list_wordlists()}

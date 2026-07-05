@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Smart Security Validation Platform (SSVP v1.0)</title>
-    <link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="/static/css/index.css?v=20260705h">
     <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
 </head>
 <body>
@@ -180,11 +180,12 @@
                             </div>
                             <div class="direction-global-actions" style="margin-top:12px;">
                                 <button id="orchestratorApproveBtn" type="button">Onayla ve Çalıştır</button>
+                                <button id="orchestratorProceedBtn" type="button" hidden>İlerle</button>
                             </div>
                             <p id="orchestratorNote" class="action-note"></p>
                         </div>
 
-                        <div class="next-test-panel">
+                        <div class="next-test-panel" id="orchestratorSuggestPanel">
                             <label for="orchestratorInstruction" class="muted" style="display:block;">Yapay zekaya öneri / yönlendirme (opsiyonel)</label>
                             <textarea id="orchestratorInstruction" rows="2" placeholder="Örn: önce port taraması yap / bu adımı atla / şu parametreyi kullan" style="width:100%;"></textarea>
                             <div class="direction-global-actions" style="margin-top:10px;">
@@ -194,11 +195,14 @@
 
                         <div class="next-test-panel">
                             <div class="direction-global-actions" style="flex-wrap:wrap; gap:8px;">
-                                <select id="orchestratorRedirect" class="field-select" style="max-width:220px;">
-                                    <option value="">Yönlendir (aşama)…</option>
+                                <select id="orchestratorRedirect" class="field-select" style="max-width:200px;">
+                                    <option value="">Yönlendir</option>
                                     <option value="scan">Tarama</option>
                                     <option value="attack">Atak</option>
                                     <option value="remediation">Düzenleme</option>
+                                </select>
+                                <select id="orchestratorRedirectOp" class="field-select" style="max-width:280px;">
+                                    <option value="">Operasyon Seç</option>
                                 </select>
                                 <button id="orchestratorExitBtn" type="button">Çık</button>
                             </div>
@@ -348,7 +352,7 @@
 </div>
 
 <script src="/static/js/notify.js?v=20260703b"></script>
-<script src="/static/js/index.js?v=20260703b"></script>
+<script src="/static/js/index.js?v=20260705q"></script>
 
 </body>
 </html>

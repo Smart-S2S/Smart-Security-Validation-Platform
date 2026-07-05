@@ -531,6 +531,33 @@ body.light-theme .step-output-text span {
     color: #1f2937;
 }
 
+body.light-theme .result-detail,
+body.light-theme .result-summary td,
+body.light-theme .result-table td {
+    color: #1f2937;
+}
+
+body.light-theme .result-summary th,
+body.light-theme .result-table th,
+body.light-theme .result-label {
+    color: #1d4ed8;
+}
+
+body.light-theme .result-console {
+    background: #f1f5f9;
+    border-color: #c7d5e8;
+    color: #1f2937;
+}
+
+body.light-theme .result-table th {
+    background: #eef2f7;
+}
+
+body.light-theme .archived-outputs .step-output-item {
+    border-color: #c7d5e8;
+    background: #f8fafc;
+}
+
 body.light-theme th,
 body.light-theme td {
     border-bottom-color: #c7d5e8;
@@ -734,6 +761,107 @@ body.light-theme .submenu-item:hover {
     margin: 0;
     color: #d1d5db;
     font-size: 14px;
+}
+
+/* Formatted operation results (Req 5) */
+.result-summary,
+.result-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 6px 0 10px 0;
+    font-size: 13px;
+}
+
+.result-summary th {
+    width: 38%;
+    color: #93c5fd;
+    font-weight: 600;
+    vertical-align: top;
+    white-space: nowrap;
+}
+
+.result-summary th,
+.result-summary td,
+.result-table th,
+.result-table td {
+    border-bottom: 1px solid #1f2937;
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.result-table th {
+    color: #93c5fd;
+    font-weight: 600;
+    background: #0b1220;
+}
+
+.result-table-wrap {
+    overflow-x: auto;
+    margin: 6px 0 10px 0;
+}
+
+.result-label {
+    margin: 10px 0 4px 0;
+    font-weight: 600;
+    color: #bfdbfe;
+    font-size: 13px;
+}
+
+.result-detail {
+    margin: 4px 0;
+    color: #d1d5db;
+    font-size: 13px;
+}
+
+.result-console {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #030712;
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 0 0 10px 0;
+    font-family: monospace;
+    font-size: 12.5px;
+    color: #d1d5db;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.result-error {
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    color: #fca5a5;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 6px 0 10px 0;
+    font-size: 13px;
+    white-space: pre-wrap;
+}
+
+.orchestrator-done-list {
+    margin: 0 0 4px 0;
+    padding-left: 18px;
+    color: #d1d5db;
+    font-size: 13px;
+}
+
+.orchestrator-done-list li {
+    margin: 2px 0;
+}
+
+/* Completed-tab archived results (Req 4) */
+.archived-outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.archived-outputs .step-output-item {
+    border: 1px solid #374151;
+    border-radius: 8px;
+    background: #0b1220;
+    padding: 10px;
 }
 input {
     padding: 12px;
@@ -1044,6 +1172,67 @@ pre {
     gap: 10px;
 }
 
+/* YZO proposed-operation cards: a single card spans full width; multiple cards
+   sit two-per-row (50% each) rather than packing at ~25%. */
+#orchestratorOps {
+    grid-template-columns: 1fr;
+    align-items: start;
+}
+
+#orchestratorOps.ops-multi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+    #orchestratorOps.ops-multi {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Cancel (×) button on each proposed operation card */
+.op-intent-card {
+    position: relative;
+}
+
+.op-cancel-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    line-height: 1;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 8px;
+    border: 1px solid #4b5b74;
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.op-cancel-btn:hover {
+    background: rgba(248, 113, 113, 0.18);
+    border-color: #f87171;
+    color: #fca5a5;
+}
+
+body.light-theme .op-cancel-btn {
+    border-color: #cbd5e1;
+    background: #eef2f7;
+    color: #475569;
+}
+
+body.light-theme .op-cancel-btn:hover {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: #dc2626;
+    color: #b91c1c;
+}
+
 .dynamic-param-field {
     border: 1px solid var(--home-line, #374151);
     border-radius: 12px;
@@ -1065,15 +1254,69 @@ pre {
     font-size: 12px;
 }
 
+.dynamic-param-label > span:first-child {
+    font-weight: 600;
+}
+
+.dynamic-param-help {
+    margin: 0 0 8px 0;
+    color: var(--home-muted, #94a3b8);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.dynamic-param-advanced {
+    margin-top: 12px;
+    border: 1px solid var(--home-line, #374151);
+    border-radius: 12px;
+    padding: 8px 11px;
+    background: var(--home-panel-soft, #0f172a);
+}
+
+.dynamic-param-advanced > summary {
+    cursor: pointer;
+    color: var(--home-text, #cbd5e1);
+    font-size: 13px;
+    font-weight: 600;
+    user-select: none;
+    list-style: revert;
+}
+
+.dynamic-param-advanced[open] > summary {
+    margin-bottom: 6px;
+}
+
 .dynamic-param-field input,
 .dynamic-param-field textarea,
 .dynamic-param-field select {
     width: 100%;
     box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 14px;
     border: 1px solid var(--home-line, #374151);
     border-radius: 10px;
-    background: var(--home-panel, #111827);
+    background-color: var(--home-panel, #111827);
     color: var(--home-text, #e5e7eb);
+}
+
+/* Themed dropdown (used by wordlist + select params): hide the native arrow and
+   draw our own so it matches the dark/light theme like .field-select does. */
+.dynamic-param-field select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 38px;
+    font-weight: 600;
+    cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, #60a5fa 50%), linear-gradient(135deg, #60a5fa 50%, transparent 50%);
+    background-position: calc(100% - 20px) calc(50% - 3px), calc(100% - 14px) calc(50% - 3px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+}
+
+.dynamic-param-field select option {
+    background: #111827;
+    color: #e5e7eb;
 }
 
 .dynamic-param-field textarea {
@@ -1089,6 +1332,145 @@ pre {
     box-shadow: 0 0 0 3px rgba(93, 146, 225, 0.24);
 }
 
+body.light-theme .dynamic-param-field input,
+body.light-theme .dynamic-param-field textarea,
+body.light-theme .dynamic-param-field select {
+    background-color: #f8fafc;
+    border-color: #bcc9dc;
+    color: #0b1220;
+}
+
+body.light-theme .dynamic-param-field select option {
+    background: #f8fafc;
+    color: #0b1220;
+}
+
+/* Upload-type param (OSINT scan/exclude list) */
+.upload-param {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Hidden native picker; the styled label acts as the "Dosya Seç" button. */
+.upload-param-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.upload-file-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--home-text, #e5e7eb);
+    padding: 7px 12px;
+    border: 1px dashed var(--home-line, #374151);
+    border-radius: 8px;
+    background: transparent;
+    transition: border-color .15s ease, background .15s ease;
+}
+
+.upload-file-btn::before {
+    content: "📎";
+    font-size: 12px;
+}
+
+.upload-file-btn:hover {
+    border-color: #78a4eb;
+    background: rgba(120, 164, 235, 0.08);
+}
+
+.upload-param-name {
+    font-size: 12px;
+    color: #93c5fd;
+    word-break: break-all;
+    flex-basis: 100%;
+}
+
+/* "Taranacak sayfa listesi" block: the list source sits above the target,
+   separated by an "ya da" (or) divider from the parameter grid below. */
+.dynamic-param-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    margin: 14px 0;
+    color: var(--home-muted, #9ca3af);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.dynamic-param-divider::before,
+.dynamic-param-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--home-line, #374151);
+}
+
+/* Searchable wordlist combobox */
+.wl-combo {
+    position: relative;
+}
+
+.wl-combo-list {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--home-panel, #111827);
+    border: 1px solid #4b6086;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+}
+
+.wl-combo-item {
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--home-text, #e5e7eb);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wl-combo-item:hover {
+    background: rgba(96, 165, 250, 0.18);
+}
+
+.wl-combo-empty {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    color: #9ca3af;
+}
+
+body.light-theme .wl-combo-list {
+    background: #f8fafc;
+    border-color: #bcc9dc;
+}
+
+body.light-theme .wl-combo-item {
+    color: #0b1220;
+}
+
+body.light-theme .wl-combo-item:hover {
+    background: rgba(59, 130, 246, 0.14);
+}
+
 .action-note {
     margin-top: 10px;
     color: #9ca3af;
@@ -1097,7 +1479,9 @@ pre {
 
 .user-admin-grid {
     display: grid;
-    grid-template-columns: 1fr 1.4fr;
+    /* Left (create-user form) is the compact, narrower side; right (user list
+       table) gets the extra room. */
+    grid-template-columns: 0.8fr 1.6fr;
     gap: 12px;
     align-items: start;
     margin-top: 12px;
@@ -1459,4 +1843,30 @@ body.light-theme .stage-tab.active {
 
 @keyframes ai-busy-spin {
     to { transform: rotate(360deg); }
+}
+
+
+/* --- Checkbox / radio sizing guard -----------------------------------------
+   Checkboxes and radios are fixed-size controls. Several generic form rules set
+   `width: 100%` on inputs (e.g. .form-grid input, #userAdminPanel .auth-form input),
+   some with ID-level specificity, which would stretch these controls into
+   full-width blocks. Pin them to a square size in every container and at every
+   resolution. !important is used deliberately to beat those higher-specificity
+   width rules without editing each one. */
+input[type="checkbox"],
+input[type="radio"] {
+    box-sizing: border-box !important;
+    flex: 0 0 auto !important;
+    padding: 0 !important;
+    min-width: 0;
+}
+input[type="checkbox"] {
+    width: 20px !important;
+    height: 20px !important;
+    min-height: 20px;
+}
+input[type="radio"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-height: 18px;
 }

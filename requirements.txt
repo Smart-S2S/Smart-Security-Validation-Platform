@@ -4,3 +4,5 @@ pydantic
 requests
 python-multipart
 pymysql
+xhtml2pdf
+python-docx

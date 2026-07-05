@@ -316,6 +316,43 @@ const I18N = {
         "settings.toolsmgmt.check": "Kontrol Et",
         "settings.toolsmgmt.logTitle": "İşlem Kaydı",
         "settings.toolsmgmt.clearLog": "Temizle",
+        "settings.tab.wordlists": "Sözlük Yönetimi",
+        "settings.wordlist.title": "Sözlük Yönetimi",
+        "settings.wordlist.scan": "Tara",
+        "settings.wordlist.refresh": "Yenile",
+        "settings.wordlist.note": "Veritabanında kayıtlı sözlükler. \"Tara\" ile sunucudaki (Ubuntu/araç) sözlükler taranır ve eklenir; \"Yeni Ekle\" ile .txt sözlük yükleyebilirsiniz. Sözlükler operasyon formlarındaki sözlük alanlarında seçilebilir olur.",
+        "settings.wordlist.add": "Yeni Ekle",
+        "settings.wordlist.name": "Ad",
+        "settings.wordlist.path": "Konum",
+        "settings.wordlist.size": "Boyut",
+        "settings.wordlist.source": "Kaynak",
+        "settings.wordlist.actions": "İşlem",
+        "settings.wordlist.none": "Kayıtlı sözlük yok. 'Tara' veya 'Yeni Ekle' ile ekleyin.",
+        "settings.wordlist.sourceUpload": "Yüklendi",
+        "settings.wordlist.sourceScan": "Tarama",
+        "settings.wordlist.delete": "Sil",
+        "settings.wordlist.loadFail": "Sözlük listesi alınamadı.",
+        "settings.wordlist.scanDone": "Tarama tamamlandı.",
+        "settings.wordlist.scanFail": "Tarama başarısız.",
+        "settings.wordlist.pickFile": "Önce bir .txt dosyası seçin.",
+        "settings.wordlist.added": "Sözlük eklendi",
+        "settings.wordlist.uploadFail": "Sözlük yüklenemedi.",
+        "settings.wordlist.deleted": "Sözlük silindi.",
+        "settings.wordlist.deleteFail": "Sözlük silinemedi.",
+        "passMismatch": "Şifreler eşleşmiyor.",
+        "profileSaved": "Profil kaydedildi.",
+        "passwordSaved": "Şifre güncellendi.",
+        "userCreated": "Kullanıcı oluşturuldu.",
+        "userUpdated": "Kullanıcı güncellendi.",
+        "userDeleted": "Kullanıcı silindi.",
+        "usersLoaded": "Kullanıcı listesi yüklendi.",
+        "rolesUpdated": "Roller güncellendi.",
+        "aiSaved": "AI ayarları kaydedildi.",
+        "scanSaved": "Tarama ayarları kaydedildi.",
+        "settings.ai.cloudRequired": "Bulut AI için API adresi ve model zorunlu.",
+        "settings.ai.testing": "Doğrulanıyor… (kaydedilen ayar test ediliyor)",
+        "settings.workflow.saved": "İlerleme modu kaydedildi.",
+        "settings.workflow.saveError": "İlerleme modu kaydedilemedi.",
         "settings.scan.title": "Tarama Ayarları",
         "settings.scan.nmapTimeout": "Nmap Zaman Aşımı (sn)",
         "settings.scan.masscanTimeout": "Masscan Zaman Aşımı (sn)",
@@ -481,6 +518,43 @@ const I18N = {
         "settings.toolsmgmt.check": "Check",
         "settings.toolsmgmt.logTitle": "Operation Log",
         "settings.toolsmgmt.clearLog": "Clear",
+        "settings.tab.wordlists": "Wordlists",
+        "settings.wordlist.title": "Wordlist Management",
+        "settings.wordlist.scan": "Scan",
+        "settings.wordlist.refresh": "Refresh",
+        "settings.wordlist.note": "Wordlists stored in the database. \"Scan\" discovers wordlists on the server (Ubuntu/tools) and adds them; \"Add New\" uploads a .txt wordlist. Wordlists become selectable in the wordlist fields of operation forms.",
+        "settings.wordlist.add": "Add New",
+        "settings.wordlist.name": "Name",
+        "settings.wordlist.path": "Path",
+        "settings.wordlist.size": "Size",
+        "settings.wordlist.source": "Source",
+        "settings.wordlist.actions": "Action",
+        "settings.wordlist.none": "No wordlists yet. Use 'Scan' or 'Add New'.",
+        "settings.wordlist.sourceUpload": "Uploaded",
+        "settings.wordlist.sourceScan": "Scan",
+        "settings.wordlist.delete": "Delete",
+        "settings.wordlist.loadFail": "Could not load wordlist list.",
+        "settings.wordlist.scanDone": "Scan complete.",
+        "settings.wordlist.scanFail": "Scan failed.",
+        "settings.wordlist.pickFile": "Select a .txt file first.",
+        "settings.wordlist.added": "Wordlist added",
+        "settings.wordlist.uploadFail": "Could not upload wordlist.",
+        "settings.wordlist.deleted": "Wordlist deleted.",
+        "settings.wordlist.deleteFail": "Could not delete wordlist.",
+        "passMismatch": "Passwords do not match.",
+        "profileSaved": "Profile saved.",
+        "passwordSaved": "Password updated.",
+        "userCreated": "User created.",
+        "userUpdated": "User updated.",
+        "userDeleted": "User deleted.",
+        "usersLoaded": "Users loaded.",
+        "rolesUpdated": "Roles updated.",
+        "aiSaved": "AI settings saved.",
+        "scanSaved": "Scan settings saved.",
+        "settings.ai.cloudRequired": "Cloud AI requires an API URL and model.",
+        "settings.ai.testing": "Testing… (validating the saved setting)",
+        "settings.workflow.saved": "Workflow mode saved.",
+        "settings.workflow.saveError": "Could not save workflow mode.",
         "settings.scan.title": "Scan Settings",
         "settings.scan.nmapTimeout": "Nmap Timeout (sec)",
         "settings.scan.masscanTimeout": "Masscan Timeout (sec)",
@@ -2218,7 +2292,7 @@ function renderStepItemParametersTable() {
                 <td>${item.param_type}</td>
                 <td>${item.default_value || ""}</td>
                 <td>${item.description || ""}</td>
-                <td>${escapeHtml(optionsRaw)}</td>
+                <td>${escPentest(optionsRaw)}</td>
                 <td>${item.is_required ? "yes" : "no"}</td>
                 <td>${item.sort_order}</td>
                 <td>
@@ -2748,6 +2822,10 @@ tabButtons.forEach((button) => {
 
         if (tab === "toolsmgmt" && hasTab("toolsmgmt")) {
             await loadPentestTools();
+        }
+
+        if (tab === "wordlists" && hasTab("wordlists")) {
+            await loadWordlists();
         }
 
         if (tab === "ai" && hasTab("ai")) {
@@ -3322,6 +3400,8 @@ async function loadPentestTools(reconcile = false) {
     if (!tbody) {
         return;
     }
+    // Always return to the list view when (re)loading tools.
+    showToolList();
     // Only show a loading placeholder on the very first load; on refresh keep the
     // existing rows in place until the new data arrives so the layout doesn't
     // collapse and jump.
@@ -3361,25 +3441,137 @@ function renderPentestToolsTable(items) {
         const label = escPentest(tool.label || tool.key);
         const pkg = escPentest(tool.package);
         const updateBadge = tool.update_available ? ` <span style="color:#fbbf24;">• güncelleme var</span>` : "";
-        let actions = "";
-        if (installed) {
-            // Update-check first (item 2); the actual Güncelle button only shows
-            // once a check found an update.
-            actions += `<button type="button" class="btn ghost" data-tool="${key}" data-action="check">${escPentest(t("settings.toolsmgmt.check"))}</button> `;
-            if (tool.update_available) {
-                actions += `<button type="button" class="btn" data-tool="${key}" data-action="update">${escPentest(t("settings.toolsmgmt.update"))}</button> `;
-            }
-            actions += `<button type="button" class="btn ghost" data-tool="${key}" data-action="remove">${escPentest(t("settings.toolsmgmt.remove"))}</button>`;
-        } else {
-            actions += `<button type="button" class="btn" data-tool="${key}" data-action="install">${escPentest(t("settings.toolsmgmt.install"))}</button>`;
-        }
-        return `<tr>
+        // Actions are a select — choosing an option runs it directly.
+        const actions = `
+            <div class="pentest-action-cell">
+                <select class="pentest-action-select" data-tool="${key}" data-tool-label="${label}">
+                    ${pentestActionOptions(tool)}
+                </select>
+            </div>
+        `;
+        return `<tr id="pentest-row-${key}">
             <td>${label}<div class="muted" style="font-size:12px;">${pkg}</div></td>
             <td style="color:${statusColor};">${escPentest(statusText)}${updateBadge}</td>
             <td>${version}</td>
             <td>${actions}</td>
         </tr>`;
     }).join("");
+}
+
+// Build the <option> list for one tool's action select, based on its state.
+function pentestActionOptions(tool) {
+    const installed = Boolean(tool.installed);
+    const opts = [`<option value="">İşlem seçin…</option>`];
+    if (installed) {
+        opts.push(`<option value="check">${escPentest(t("settings.toolsmgmt.check"))}</option>`);
+        if (tool.update_available) {
+            opts.push(`<option value="update">${escPentest(t("settings.toolsmgmt.update"))}</option>`);
+        }
+        opts.push(`<option value="remove">${escPentest(t("settings.toolsmgmt.remove"))}</option>`);
+    } else {
+        opts.push(`<option value="install">${escPentest(t("settings.toolsmgmt.install"))}</option>`);
+    }
+    opts.push(`<option value="operations">Operasyon Özellikleri</option>`);
+    return opts.join("");
+}
+
+const PENTEST_STAGE_LABELS = { scan: "Tarama", attack: "Atak", remediation: "Düzeltme" };
+
+function renderToolOperationsCards(data) {
+    const ops = Array.isArray(data?.operations) ? data.operations : [];
+    if (!ops.length) {
+        return `<p class="muted">Bu araç için tanımlı YZO operasyonu yok.</p>`;
+    }
+    return ops.map((op) => {
+        const params = Array.isArray(op.parameters) ? op.parameters : [];
+        const rows = params.map((p) => {
+            const opts = Array.isArray(p.options_json) && p.options_json.length
+                ? escPentest(p.options_json.join(" | ")) : "—";
+            const req = p.is_required
+                ? `<span class="tool-op-required">gerekli</span>`
+                : `<span class="muted">—</span>`;
+            const def = (p.default_value === "" || p.default_value == null) ? "—" : escPentest(String(p.default_value));
+            return `<tr>
+                <td><code>${escPentest(p.param_key)}</code></td>
+                <td>${escPentest(p.label || "")}</td>
+                <td>${escPentest(p.param_type || "string")}</td>
+                <td>${req}</td>
+                <td>${def}</td>
+                <td>${opts}</td>
+                <td class="muted">${escPentest(p.description || "")}</td>
+            </tr>`;
+        }).join("");
+        const stageLabel = escPentest(PENTEST_STAGE_LABELS[op.stage] || op.stage);
+        return `
+            <div class="tool-op-card">
+                <div class="tool-op-card-head">
+                    <strong>${escPentest(op.display_name || op.operation_key)}</strong>
+                    <span class="tool-op-badge stage-${escPentest(op.stage)}">${stageLabel}</span>
+                    <span class="muted tool-op-key">${escPentest(op.operation_key)}</span>
+                </div>
+                ${op.when_to_use ? `<p class="tool-op-hint">${escPentest(op.when_to_use)}</p>` : ""}
+                <p class="muted tool-op-path">${escPentest(op.script_path || "")}</p>
+                <div class="tool-op-params-wrap">
+                    <table class="tool-op-params">
+                        <thead><tr>
+                            <th>Parametre</th><th>Etiket</th><th>Tip</th><th>Zorunlu</th><th>Varsayılan</th><th>Seçenekler</th><th>Açıklama</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+    }).join("");
+}
+
+// Drill-in: hide the tool list and show the selected tool's operations, with a
+// back button to return to the list.
+function showToolList() {
+    const listWrap = document.getElementById("pentestListWrap");
+    const opsView = document.getElementById("pentestOpsView");
+    if (opsView) {
+        opsView.hidden = true;
+        opsView.innerHTML = "";
+    }
+    if (listWrap) {
+        listWrap.hidden = false;
+    }
+}
+
+async function showToolOperations(toolKey, toolLabel) {
+    const listWrap = document.getElementById("pentestListWrap");
+    const opsView = document.getElementById("pentestOpsView");
+    if (!opsView) {
+        return;
+    }
+    if (listWrap) {
+        listWrap.hidden = true;
+    }
+    opsView.hidden = false;
+    const title = escPentest(toolLabel || toolKey);
+    opsView.innerHTML = `
+        <div class="tool-op-header">
+            <button type="button" class="btn ghost" id="pentestOpsBackBtn">← Araç listesine dön</button>
+            <h3 class="tool-op-title">${title} — Operasyon Özellikleri</h3>
+        </div>
+        <p class="muted tool-op-loading">Operasyonlar yükleniyor…</p>`;
+    const backBtn = document.getElementById("pentestOpsBackBtn");
+    if (backBtn) {
+        backBtn.addEventListener("click", showToolList);
+    }
+    try {
+        const data = await apiRequest(`/settings/pentest-tools/${encodeURIComponent(toolKey)}/operations`);
+        const body = opsView.querySelector(".tool-op-loading");
+        const cards = renderToolOperationsCards(data);
+        if (body) {
+            body.outerHTML = `<div class="tool-op-list">${cards}</div>`;
+        }
+    } catch (error) {
+        const body = opsView.querySelector(".tool-op-loading");
+        if (body) {
+            body.className = "tool-op-error";
+            body.textContent = `Operasyonlar yüklenemedi: ${error.message || "hata"}`;
+        }
+    }
 }
 
 const PENTEST_ACTION_LABELS = { install: "Kurulum", update: "Güncelleme", remove: "Kaldırma", check: "Güncelleme kontrolü" };
@@ -3409,13 +3601,26 @@ async function runPentestToolAction(toolKey, action) {
 
 const pentestToolsTbody = document.getElementById("pentestToolsTbody");
 if (pentestToolsTbody) {
-    pentestToolsTbody.addEventListener("click", async (event) => {
-        const btn = event.target.closest("button[data-tool][data-action]");
-        if (!btn) {
+    // Selecting an option in a tool's action dropdown runs it directly.
+    pentestToolsTbody.addEventListener("change", async (event) => {
+        const select = event.target.closest("select.pentest-action-select");
+        if (!select) {
             return;
         }
-        btn.disabled = true;
-        await runPentestToolAction(btn.dataset.tool, btn.dataset.action);
+        const key = select.dataset.tool;
+        const action = select.value;
+        if (!action) {
+            return;
+        }
+        // "Operasyon Özellikleri" is a drill-in view, not a tool action.
+        if (action === "operations") {
+            select.value = "";
+            await showToolOperations(key, select.dataset.toolLabel);
+            return;
+        }
+        select.disabled = true;
+        // runPentestToolAction reloads the table afterwards, which resets the select.
+        await runPentestToolAction(key, action);
     });
 }
 
@@ -3430,6 +3635,140 @@ if (pentestToolsClearLogBtn) {
         const box = document.getElementById("pentestToolsLog");
         if (box) {
             box.innerHTML = "";
+        }
+    });
+}
+
+
+// ---------------------------------------------------------------------------
+// Wordlist (sözlük) management — list DB entries, scan the host, upload .txt.
+// ---------------------------------------------------------------------------
+function renderWordlistTable(items) {
+    const tbody = document.getElementById("wordlistTbody");
+    if (!tbody) {
+        return;
+    }
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">${escPentest(t("settings.wordlist.none") || "Kayıtlı sözlük yok. 'Tara' veya 'Yeni Ekle' ile ekleyin.")}</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = items.map((item) => {
+        const name = escPentest(item.name || "-");
+        const path = escPentest(item.path || "-");
+        const size = escPentest(item.size_h || "-");
+        const source = item.source === "upload"
+            ? (t("settings.wordlist.sourceUpload") || "Yüklendi")
+            : (t("settings.wordlist.sourceScan") || "Tarama");
+        const del = t("settings.wordlist.delete") || "Sil";
+        return `<tr>
+            <td>${name}</td>
+            <td><code style="font-size:12px; word-break:break-all;">${path}</code></td>
+            <td>${size}</td>
+            <td>${escPentest(source)}</td>
+            <td><button type="button" class="wordlist-delete-btn" data-id="${escPentest(item.id)}">${escPentest(del)}</button></td>
+        </tr>`;
+    }).join("");
+}
+
+async function loadWordlists() {
+    const tbody = document.getElementById("wordlistTbody");
+    if (!tbody) {
+        return;
+    }
+    if (!tbody.children.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">…</td></tr>`;
+    }
+    try {
+        const data = await apiRequest("/settings/wordlists", { cache: "no-store" });
+        renderWordlistTable(Array.isArray(data.items) ? data.items : []);
+    } catch (error) {
+        setFeedback(error.message || (t("settings.wordlist.loadFail") || "Sözlük listesi alınamadı."), true);
+    }
+}
+
+const wordlistScanBtn = document.getElementById("wordlistScanBtn");
+if (wordlistScanBtn) {
+    wordlistScanBtn.addEventListener("click", async () => {
+        wordlistScanBtn.disabled = true;
+        try {
+            const data = await apiRequest("/settings/wordlists/scan", { method: "POST" });
+            renderWordlistTable(Array.isArray(data.items) ? data.items : []);
+            const s = data.summary || {};
+            setFeedback(`${t("settings.wordlist.scanDone")} (+${s.added || 0} / ${s.total || 0})${s.truncated ? " …" : ""}`);
+        } catch (error) {
+            setFeedback(error.message || (t("settings.wordlist.scanFail") || "Tarama başarısız."), true);
+        } finally {
+            wordlistScanBtn.disabled = false;
+        }
+    });
+}
+
+const wordlistRefreshBtn = document.getElementById("wordlistRefreshBtn");
+if (wordlistRefreshBtn) {
+    wordlistRefreshBtn.addEventListener("click", () => loadWordlists());
+}
+
+const wordlistUploadForm = document.getElementById("wordlistUploadForm");
+const wordlistFileInput = document.getElementById("wordlistFile");
+const wordlistUploadBtn = document.getElementById("wordlistUploadBtn");
+
+// The upload button stays disabled until a file is chosen.
+function syncWordlistUploadBtn() {
+    if (wordlistUploadBtn) {
+        wordlistUploadBtn.disabled = !(wordlistFileInput && wordlistFileInput.files && wordlistFileInput.files.length);
+    }
+}
+if (wordlistFileInput) {
+    wordlistFileInput.addEventListener("change", syncWordlistUploadBtn);
+    syncWordlistUploadBtn();
+}
+
+if (wordlistUploadForm) {
+    wordlistUploadForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = wordlistFileInput?.files?.[0];
+        if (!file) {
+            setFeedback(t("settings.wordlist.pickFile") || "Önce bir .txt dosyası seçin.", true);
+            return;
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        if (wordlistUploadBtn) wordlistUploadBtn.disabled = true;
+        try {
+            const data = await apiRequest("/settings/wordlists/upload", { method: "POST", body: formData });
+            renderWordlistTable(Array.isArray(data.items) ? data.items : []);
+            const added = data.added || {};
+            setFeedback((t("settings.wordlist.added") || "Sözlük eklendi") + `: ${added.name || file.name}`);
+            wordlistUploadForm.reset();
+        } catch (error) {
+            setFeedback(error.message || (t("settings.wordlist.uploadFail") || "Sözlük yüklenemedi."), true);
+        } finally {
+            // After reset the input is empty → stays disabled; on error the file
+            // is still selected → re-enabled.
+            syncWordlistUploadBtn();
+        }
+    });
+}
+
+const wordlistTbody = document.getElementById("wordlistTbody");
+if (wordlistTbody) {
+    wordlistTbody.addEventListener("click", async (event) => {
+        const btn = event.target.closest(".wordlist-delete-btn");
+        if (!btn) {
+            return;
+        }
+        const id = btn.dataset.id;
+        if (!id) {
+            return;
+        }
+        btn.disabled = true;
+        try {
+            const data = await apiRequest(`/settings/wordlists/${encodeURIComponent(id)}`, { method: "DELETE" });
+            renderWordlistTable(Array.isArray(data.items) ? data.items : []);
+            setFeedback(t("settings.wordlist.deleted") || "Sözlük silindi.");
+        } catch (error) {
+            btn.disabled = false;
+            setFeedback(error.message || (t("settings.wordlist.deleteFail") || "Sözlük silinemedi."), true);
         }
     });
 }

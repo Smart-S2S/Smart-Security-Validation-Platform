@@ -668,7 +668,12 @@ Kullanici talimati/onerisi (varsa dikkate al): {instruction}
 Simdiye kadarki islem gecmisi ve sonuclari:
 {history_json}
 
-Secebilecegin islem katalogu (yalnizca buradaki action + step_key ciftlerini kullan):
+Secebilecegin islem katalogu (yalnizca buradaki action + step_key ciftlerini kullan).
+Her katalog kaydinda su alanlar var:
+- "when_to_use": bu operasyonun ne zaman/neden uygun oldugunu anlatir; kararini buna gore ver.
+- "installed": arac sunucuda kurulu mu (true/false). Mumkunse kurulu araclari onceliklendir.
+- "params": operasyonun girdileri; "ad*" zorunlu, "ad=secim1|secim2" ise secim listesidir.
+Katalog:
 {catalog_json}
 
 Sadece su JSON formatinda cevap ver:
@@ -688,8 +693,9 @@ Sadece su JSON formatinda cevap ver:
 
 Kurallar:
 - operations sadece katalogdaki action/step_key ciftlerinden secilmeli.
+- Once "when_to_use" ve simdiye kadarki sonuclara bakarak en mantikli operasyonu sec; gereksiz/erken adim onerme.
 - Tum asamalar tamamlandiysa veya yapilacak anlamli islem kalmadiysa done=true ve operations=[] dondur.
-- parameters alanini mumkun oldugunca MANTIKLI degerlerle DOLDUR: hedef/host/url alanlarina hedefi, port/rport alanlarina onceki sonuclardan cikan portlari, wordlist gibi alanlara tipik degerleri yaz. Emin olmadigin bir alani bos birak; sistem hedeften makul varsayilan uretir.
+- parameters alanini "params" ipuclarina gore MANTIKLI degerlerle DOLDUR: hedef/host/url alanlarina hedefi, port/rport alanlarina onceki sonuclardan cikan portlari, secim listesi olan alanlara listeden bir deger, wordlist gibi alanlara tipik degerleri yaz. Emin olmadigin bir alani bos birak; sistem hedeften makul varsayilan uretir.
 - JSON disinda hicbir metin dondurme.
 - Yanitini {_get_language_label(language)} dilinde ver.
 """

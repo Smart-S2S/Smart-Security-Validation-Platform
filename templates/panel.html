@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSVP Panel</title>
-    <link rel="stylesheet" href="/static/css/settings.css?v=20260704e">
+    <link rel="stylesheet" href="/static/css/settings.css?v=20260705m">
     <link rel="stylesheet" href="/static/css/notify.css?v=20260703">
 </head>
 <body>
@@ -29,11 +29,18 @@
 <main class="settings-shell">
     <aside class="settings-tabs">
         <button class="tab-btn" data-tab="profile" active>Profil</button>
+        {% set _roles = current_user.roles or [] %}
+        {% set can_pentest = current_user.is_admin or 'test' in _roles or 'attack' in _roles or 'remediation' in _roles %}
+        {% if can_pentest %}
+        <button class="tab-btn" data-tab="pentest-records">Pentest Kayıtları</button>
+        {% endif %}
         {% if current_user.is_admin %}
         <button class="tab-btn" data-tab="users">Kullanıcı Yönetimi</button>
         <button class="tab-btn" data-tab="roles">Rol Yönetimi</button>
         <button class="tab-btn" data-tab="progress-categories">İlerleme Kategorileri</button>
         <button class="tab-btn" data-tab="tools">Adım Listesi</button>
+        <button class="tab-btn" data-tab="op-tester">Operasyon Test</button>
+        <button class="tab-btn" data-tab="osint-files">Ön Bellek</button>
         <button class="tab-btn" data-tab="offers">Teklifler</button>
         {% endif %}
     </aside>
@@ -465,14 +472,162 @@
                 </div>
             </form>
         </section>
+
+        <section class="panel" data-panel="op-tester" hidden>
+            <h2>Operasyon Test</h2>
+            <p class="muted">YZA ve 3YM operasyonlarını tek başına seçip, parametreleriyle çalıştırıp test edin. İlerleme ve sonuç sağda görünür.</p>
+            <div class="op-tester-grid">
+                <div class="op-tester-controls card">
+                    <label for="otFlow">1. Akış</label>
+                    <select id="otFlow" class="ot-select">
+                        <option value="">Seçiniz…</option>
+                        <option value="yzo">YZA — Yapay Zeka Orkestratörü</option>
+                        <option value="3ym">3YM — Manuel</option>
+                    </select>
+
+                    <label for="otStage" id="otStageLabel" hidden>2. İlerleme Yönü</label>
+                    <select id="otStage" class="ot-select" hidden></select>
+
+                    <label for="otCategory" id="otCategoryLabel" hidden>3. Kategori</label>
+                    <select id="otCategory" class="ot-select" hidden></select>
+
+                    <label for="otStep" id="otStepLabel" hidden>4. Adım</label>
+                    <select id="otStep" class="ot-select" hidden></select>
+
+                    <label for="otOperation" id="otOperationLabel" hidden>Operasyon</label>
+                    <select id="otOperation" class="ot-select" hidden></select>
+
+                    <p id="otOperationDesc" class="muted" hidden></p>
+
+                    <div id="otOperationForm" hidden>
+                        <div id="otListSource" hidden></div>
+                        <label for="otTarget">Hedef</label>
+                        <input id="otTarget" type="text" placeholder="ör. 192.168.1.10 veya https://hedef" autocomplete="off">
+                        <div id="otParamForm" class="ot-param-grid"></div>
+                        <div class="op-tester-actions">
+                            <button id="otRunBtn" type="button">Operasyonu Başlat</button>
+                        </div>
+                    </div>
+                    <p id="otNote" class="muted"></p>
+                </div>
+
+                <div class="op-tester-output card">
+                    <h3 style="margin-top:0;">İşlem Takibi</h3>
+                    <div id="otLog" class="ot-log"></div>
+                    <h3>Sonuç</h3>
+                    <div id="otResult" class="ot-result"><p class="muted" style="margin:0;">Operasyon çalıştırıldığında sonuç burada görünür.</p></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" data-panel="osint-files" hidden>
+            <div class="step-list-header-row">
+                <h2 class="step-list-title">Ön Bellek</h2>
+                <div class="user-edit-actions" style="justify-content:flex-end; gap:8px;">
+                    <button id="otfRefresh" type="button">Yenile</button>
+                    <button id="otfDeleteSelected" type="button">Seçilenleri Sil</button>
+                </div>
+            </div>
+            <p class="muted">AI OSINT operasyonlarında kullanılan "taranacak" ve "hariç tutulacak" sayfa listeleri (.xml/.txt) burada önbelleğe alınır. Dosyalar yalnızca operasyon formundaki dosya alanından yüklenir; buradan indirebilir veya silebilirsiniz.</p>
+
+            <div style="overflow:auto; margin-top:12px;">
+                <table id="otfTable">
+                    <thead>
+                        <tr>
+                            <th style="width:34px;"><input type="checkbox" id="otfSelectAll"></th>
+                            <th>Ad</th>
+                            <th>Boyut</th>
+                            <th>Tarih</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="otfTbody"></tbody>
+                </table>
+            </div>
+            <p id="otfNote" class="muted"></p>
+        </section>
+        {% endif %}
+
+        {% if can_pentest %}
+        <section class="panel" data-panel="pentest-records" hidden>
+            <!-- List view: one row per target (a "pentest"). -->
+            <div id="prListView">
+                <div class="step-list-header-row">
+                    <h2 class="step-list-title">Pentest Kayıtları</h2>
+                    <div class="user-edit-actions" style="justify-content:flex-end; gap:8px;">
+                        <button id="prRefresh" type="button">Yenile</button>
+                    </div>
+                </div>
+                <p class="muted">Yapılan pentestler hedefe göre listelenir. Bir kayda tıklayınca o hedefte çalıştırılan tüm operasyonların raporu, sonuçları ve üretilen dosyaları görünür. Bir kaydı silmek, o hedefe ait tüm operasyon kayıtlarını ve üretilen dosyaları birlikte siler.</p>
+
+                <div style="overflow:auto; margin-top:12px;">
+                    <table id="prTable">
+                        <thead>
+                            <tr>
+                                <th>Hedef</th>
+                                <th>Aşamalar</th>
+                                <th>Operasyon</th>
+                                <th>Durum</th>
+                                <th>Risk</th>
+                                <th>Çalıştıran(lar)</th>
+                                <th>Son Çalıştırma</th>
+                                <th>İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prTbody"></tbody>
+                    </table>
+                </div>
+                <p id="prNote" class="muted"></p>
+            </div>
+
+            <!-- Detail view: report + results + produced files for one target. -->
+            <div id="prDetailView" hidden>
+                <div class="step-list-header-row">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <button id="prBack" type="button">← Geri</button>
+                        <h2 class="step-list-title" style="margin:0;">Pentest: <span id="prDetailTarget"></span></h2>
+                    </div>
+                    <div class="user-edit-actions" style="justify-content:flex-end; gap:8px; flex-wrap:wrap;">
+                        <button id="prPdf" type="button">PDF İndir</button>
+                        <button id="prPrint" type="button">Yazdır</button>
+                        <button id="prWord" type="button">Word İndir</button>
+                        <button id="prDeleteAll" type="button" class="pr-danger">Bu Pentest Kaydını Sil</button>
+                    </div>
+                </div>
+
+                <h3 class="pr-section-title">Üretilen Dosyalar</h3>
+                <p class="muted" id="prFilesEmpty" hidden>Bu pentest sırasında indirilebilir dosya üretilmedi.</p>
+                <div id="prFilesWrap" style="overflow:auto;">
+                    <table id="prFilesTable">
+                        <thead>
+                            <tr>
+                                <th>Dosya</th>
+                                <th>Boyut</th>
+                                <th>Tarih</th>
+                                <th>İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prFilesTbody"></tbody>
+                    </table>
+                </div>
+
+                <h3 class="pr-section-title">Operasyonlar &amp; Rapor</h3>
+                <div id="prActions"></div>
+            </div>
+        </section>
         {% endif %}
     </section>
 </main>
 
 <script src="/static/js/notify.js?v=20260703b"></script>
-<script src="/static/js/panel.js?v=20260703b"></script>
+<script src="/static/js/panel.js?v=20260705c"></script>
+<!-- Ace editor: the step-item script editor lives on this page, so the library
+     must be loaded here (settings.js's ensureStepItemScriptCodeEditor needs window.ace). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- Catalog (steps/items/scripts/params + progress categories) editors; settings.js
      detects the Panel page and only wires those tabs here. -->
-<script src="/static/js/settings.js?v=20260704k"></script>
+<script src="/static/js/settings.js?v=20260705e"></script>
+<script src="/static/js/op_tester.js?v=20260705f"></script>
+<script src="/static/js/pentest_records.js?v=20260705b"></script>
 </body>
 </html>
