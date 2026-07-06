@@ -29,8 +29,8 @@
 <main class="settings-shell">
     <aside class="settings-tabs">
         <button class="tab-btn" data-tab="appearance" data-i18n="settings.tab.appearance">Görünüm</button>
-        {% if current_user and current_user.is_admin %}
         <button class="tab-btn" data-tab="ai" data-i18n="settings.tab.ai">AI Model</button>
+        {% if current_user and current_user.is_admin %}
         <button class="tab-btn" data-tab="scan" data-i18n="settings.tab.scan">Tarama Ayarları</button>
         <button class="tab-btn" data-tab="toolsmgmt" data-i18n="settings.tab.toolsmgmt">Pentest Araçları</button>
         <button class="tab-btn" data-tab="wordlists" data-i18n="settings.tab.wordlists">Sözlük Yönetimi</button>
@@ -81,7 +81,6 @@
             </div>
         </section>
 
-        {% if current_user and current_user.is_admin %}
         <section class="panel" data-panel="ai" hidden>
             <div class="ai-two-col">
                 <div>
@@ -124,7 +123,7 @@
                         <label class="chip"><input id="aiFakeResponse" type="checkbox"> <span data-i18n="settings.ai.useDemo">Demo AI yanıtı kullan</span></label>
                         <div class="user-edit-actions" style="justify-content:flex-start; gap:8px; flex-wrap:wrap;">
                             <button type="submit" data-i18n="settings.ai.save">AI Ayarlarını Kaydet</button>
-                            <button id="aiTestBtn" type="button" data-i18n="settings.ai.test">Bağlantıyı Doğrula</button>
+                            <button id="aiTestBtn" type="button" data-i18n="settings.ai.test" hidden>Bağlantıyı Doğrula</button>
                         </div>
                         <p id="aiTestResult" class="muted" style="margin:6px 0 0 0; white-space:pre-wrap;"></p>
                     </form>
@@ -142,6 +141,7 @@
                         <button type="submit" data-i18n="settings.workflow.save">İlerleme Modunu Kaydet</button>
                     </form>
 
+                    {% if current_user and current_user.is_admin %}
                     <h2 data-i18n="settings.services.title" style="margin-top:40px;">Servisler</h2>
                     <div class="card compact-settings-card">
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -158,10 +158,12 @@
                         </div>
                         <p class="muted" style="margin:10px 0 0 0; font-size:12px;" data-i18n="settings.services.hint">Kullanmadığınız servisleri durdurarak RAM/CPU boşaltabilirsiniz.</p>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </section>
 
+        {% if current_user and current_user.is_admin %}
         <section class="panel" data-panel="scan" hidden>
             <h2 data-i18n="settings.scan.title">Tarama Ayarları</h2>
             <form id="scanSettingsForm" class="form-grid card compact-settings-card">
@@ -306,6 +308,6 @@
 
 <script src="/static/js/notify.js?v=20260706b"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/static/js/settings.js?v=20260706a"></script>
+<script src="/static/js/settings.js?v=20260706f"></script>
 </body>
 </html>

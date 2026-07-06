@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "nmap"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "target_host", "label": "Hedef host/IP", "kind": "positional", "flag": "", "setting": "TARGET_HOST", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "scan_type", "label": "Tarama tipi", "kind": "token", "flag": "", "setting": "SCAN_TYPE", "default": "-sT", "required": false, "pattern": "safe", "choices": ["-sS", "-sT", "-sU", "-sA", "-sn"], "must_exist": false}, {"key": "ports", "label": "Portlar", "kind": "opt", "flag": "-p", "setting": "PORTS", "default": "1-1024", "required": false, "pattern": "ports", "choices": [], "must_exist": false}, {"key": "nse_scripts", "label": "NSE scriptleri", "kind": "opt", "flag": "--script", "setting": "NSE_SCRIPTS", "default": "vuln", "required": false, "pattern": "nse", "choices": [], "must_exist": false}, {"key": "service_version", "label": "Servis sürümü (-sV)", "kind": "flag", "flag": "-sV", "setting": "SERVICE_VERSION", "default": "on", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timing", "label": "Hız şablonu", "kind": "token", "flag": "", "setting": "TIMING", "default": "-T3", "required": false, "pattern": "safe", "choices": ["-T0", "-T1", "-T2", "-T3", "-T4", "-T5"], "must_exist": false}, {"key": "os_detect", "label": "İşletim sistemi tespiti (-O)", "kind": "flag", "flag": "-O", "setting": "OS_DETECT", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "script_args", "label": "NSE script argümanları", "kind": "opt", "flag": "--script-args", "setting": "SCRIPT_ARGS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "min_rate", "label": "Min paket hızı", "kind": "opt", "flag": "--min-rate", "setting": "MIN_RATE", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "extra_flags", "label": "Ek nmap bayrakları", "kind": "token", "flag": "", "setting": "EXTRA_FLAGS", "default": "", "required": false, "pattern": "flag", "choices": [], "must_exist": false}, {"key": "top_ports", "label": "En yaygın N port", "kind": "opt", "flag": "--top-ports", "setting": "TOP_PORTS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "no_ping", "label": "Ping'i atla (-Pn)", "kind": "flag", "flag": "-Pn", "setting": "NO_PING", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "aggressive", "label": "Agresif (-A)", "kind": "flag", "flag": "-A", "setting": "AGGRESSIVE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "open_only", "label": "Sadece açık portlar (--open)", "kind": "flag", "flag": "--open", "setting": "OPEN_ONLY", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "reason", "label": "Neden (--reason)", "kind": "flag", "flag": "--reason", "setting": "REASON", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "target_host", "label": "Target host/IP", "kind": "positional", "flag": "", "setting": "TARGET_HOST", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "scan_type", "label": "Scan type", "kind": "token", "flag": "", "setting": "SCAN_TYPE", "default": "-sT", "required": false, "pattern": "safe", "choices": ["-sS", "-sT", "-sU", "-sA", "-sn"], "must_exist": false}, {"key": "ports", "label": "Ports", "kind": "opt", "flag": "-p", "setting": "PORTS", "default": "1-1024", "required": false, "pattern": "ports", "choices": [], "must_exist": false}, {"key": "nse_scripts", "label": "NSE scripts", "kind": "opt", "flag": "--script", "setting": "NSE_SCRIPTS", "default": "vuln", "required": false, "pattern": "nse", "choices": [], "must_exist": false}, {"key": "service_version", "label": "Service version (-sV)", "kind": "flag", "flag": "-sV", "setting": "SERVICE_VERSION", "default": "on", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timing", "label": "Timing template", "kind": "token", "flag": "", "setting": "TIMING", "default": "-T3", "required": false, "pattern": "safe", "choices": ["-T0", "-T1", "-T2", "-T3", "-T4", "-T5"], "must_exist": false}, {"key": "os_detect", "label": "OS detection (-O)", "kind": "flag", "flag": "-O", "setting": "OS_DETECT", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "script_args", "label": "NSE script arguments", "kind": "opt", "flag": "--script-args", "setting": "SCRIPT_ARGS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "min_rate", "label": "Min packet rate", "kind": "opt", "flag": "--min-rate", "setting": "MIN_RATE", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "extra_flags", "label": "Extra nmap flags", "kind": "token", "flag": "", "setting": "EXTRA_FLAGS", "default": "", "required": false, "pattern": "flag", "choices": [], "must_exist": false}, {"key": "top_ports", "label": "Most common N ports", "kind": "opt", "flag": "--top-ports", "setting": "TOP_PORTS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "no_ping", "label": "Skip ping (-Pn)", "kind": "flag", "flag": "-Pn", "setting": "NO_PING", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "aggressive", "label": "Aggressive (-A)", "kind": "flag", "flag": "-A", "setting": "AGGRESSIVE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "open_only", "label": "Open ports only (--open)", "kind": "flag", "flag": "--open", "setting": "OPEN_ONLY", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "reason", "label": "Reason (--reason)", "kind": "flag", "flag": "--reason", "setting": "REASON", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

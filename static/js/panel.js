@@ -72,6 +72,60 @@ const PANEL_I18N = {
             approved: 'Onaylandi',
             rejected: 'Reddedildi',
         },
+        breadcrumb: {
+            root: 'ana', panel: 'panel',
+            profile: 'profil', users: 'kullanıcılar', roles: 'roller', offers: 'teklifler',
+            tools: 'adım listesi', 'progress-categories': 'kategoriler', 'op-tester': 'operasyon test',
+            'osint-files': 'ön bellek', 'pentest-records': 'pentest kayıtları',
+        },
+        ui: {
+            'panel.header.title': 'Yönetim Paneli',
+            'panel.menu.profile': 'Profil', 'panel.menu.settings': 'Ayarlar', 'panel.menu.panel': 'Panel',
+            'panel.menu.app': 'Pentest', 'panel.menu.logout': 'Çıkış Yap',
+            'panel.tab.profile': 'Profil', 'panel.tab.pentest-records': 'Pentest Kayıtları',
+            'panel.tab.users': 'Kullanıcı Yönetimi', 'panel.tab.roles': 'Rol Yönetimi',
+            'panel.tab.progress-categories': 'İlerleme Kategorileri', 'panel.tab.tools': 'Adım Listesi',
+            'panel.tab.op-tester': 'Operasyon Test', 'panel.tab.osint-files': 'Ön Bellek',
+            'panel.tab.offers': 'Teklifler',
+            'panel.profile.title': 'Profil Düzenle', 'panel.profile.save': 'Profili Kaydet', 'panel.profile.changePassword': 'Şifreyi Güncelle',
+            'panel.field.username': 'Kullanıcı Adı', 'panel.field.fullName': 'Ad Soyad', 'panel.field.jobTitle': 'İş / Ünvan',
+            'panel.field.phone': 'Telefon', 'panel.field.currentPassword': 'Mevcut Şifre', 'panel.field.newPassword': 'Yeni Şifre',
+            'panel.field.newPasswordConfirm': 'Yeni Şifre (Doğrula)', 'panel.field.password': 'Şifre', 'panel.field.passwordConfirm': 'Şifre (Doğrula)',
+            'panel.field.admin': 'Yönetici', 'panel.field.active': 'Aktif', 'panel.field.roles': 'Roller', 'panel.field.newPasswordOptional': 'Yeni Şifre (opsiyonel)',
+            'panel.offers.title': 'Teklif Başvuruları',
+            'panel.common.refresh': 'Yenile', 'panel.common.save': 'Kaydet', 'panel.common.saveChanges': 'Değişiklikleri Kaydet', 'panel.common.cancel': 'İptal',
+            'panel.col.id': 'ID', 'panel.col.date': 'Tarih', 'panel.col.email': 'E-posta', 'panel.col.company': 'Şirket',
+            'panel.col.message': 'Mesaj', 'panel.col.status': 'Durum', 'panel.col.user': 'Kullanıcı', 'panel.col.actions': 'İşlemler',
+            'panel.users.title': 'Kullanıcı Yönetimi', 'panel.users.add': 'Kullanıcı Ekle', 'panel.users.edit': 'Kullanıcı Düzenle', 'panel.users.listTitle': 'Kullanıcılar',
+            'panel.roles.title': 'Rol Yönetimi', 'panel.roles.note': 'Yönetici, bu sekmede kullanıcı rollerini toplu olarak düzenleyebilir.',
+            'panel.common.new': 'Yeni', 'panel.common.backArrow': '← Geri',
+            'panel.steps.title': 'Adım Listesi', 'panel.steps.new': 'Yeni Adım', 'panel.categories.title': 'İlerleme Kategorileri',
+            'panel.optest.title': 'Operasyon Test', 'panel.optest.note': 'YZO ve 3YM operasyonlarını tek başına seçip, parametreleriyle çalıştırıp test edin. İlerleme ve sonuç sağda görünür.',
+            'panel.optest.flow': '1. Akış', 'panel.optest.select': 'Seçiniz…', 'panel.optest.flowYzo': 'YZO — Yapay Zeka Orkestratörü', 'panel.optest.flow3ym': '3YM — Manuel',
+            'panel.optest.stage': '2. İlerleme Yönü', 'panel.optest.category': '3. Kategori', 'panel.optest.step': '4. Adım', 'panel.optest.operation': 'Operasyon',
+            'panel.optest.target': 'Hedef', 'panel.optest.run': 'Operasyonu Başlat', 'panel.optest.progress': 'İşlem Takibi', 'panel.optest.result': 'Sonuç',
+            'panel.optest.resultHint': 'Operasyon çalıştırıldığında sonuç burada görünür.',
+            'panel.cache.title': 'Ön Bellek', 'panel.cache.deleteSelected': 'Seçilenleri Sil',
+            'panel.cache.note': 'AI OSINT operasyonlarında kullanılan "taranacak" ve "hariç tutulacak" sayfa listeleri (.xml/.txt) burada önbelleğe alınır. Dosyalar yalnızca operasyon formundaki dosya alanından yüklenir; buradan indirebilir veya silebilirsiniz.',
+            'panel.col.name': 'Ad', 'panel.col.size': 'Boyut', 'panel.col.op': 'İşlem', 'panel.col.target': 'Hedef', 'panel.col.stages': 'Aşamalar',
+            'panel.col.operation': 'Operasyon', 'panel.col.risk': 'Risk', 'panel.col.runBy': 'Çalıştıran(lar)', 'panel.col.lastRun': 'Son Çalıştırma', 'panel.col.file': 'Dosya',
+            'panel.records.title': 'Pentest Kayıtları', 'panel.records.detailPrefix': 'Pentest', 'panel.records.pdf': 'PDF İndir', 'panel.records.print': 'Yazdır', 'panel.records.word': 'Word İndir',
+            'panel.records.deleteAll': 'Bu Pentest Kaydını Sil', 'panel.records.producedFiles': 'Üretilen Dosyalar', 'panel.records.noFiles': 'Bu pentest sırasında indirilebilir dosya üretilmedi.',
+            'panel.records.opsAndReport': 'Operasyonlar & Rapor',
+            'panel.records.note': 'Yapılan pentestler hedefe göre listelenir. Bir kayda tıklayınca o hedefte çalıştırılan tüm operasyonların raporu, sonuçları ve üretilen dosyaları görünür. Bir kaydı silmek, o hedefe ait tüm operasyon kayıtlarını ve üretilen dosyaları birlikte siler.',
+            'panel.dyn.edit': 'Düzenle', 'panel.dyn.delete': 'Sil', 'panel.dyn.yes': 'Evet', 'panel.dyn.no': 'Hayır',
+            'panel.dyn.active': 'Aktif', 'panel.dyn.passive': 'Pasif',
+            'panel.dyn.noUsers': 'Kullanıcı bulunamadı.', 'panel.dyn.noOffers': 'Henüz teklif yok.',
+            'panel.msg.opFailed': 'İşlem başarısız.', 'panel.msg.listUpdated': 'Liste güncellendi.', 'panel.msg.offersLoadFail': 'Teklifler yüklenemedi.',
+            'panel.msg.profileUpdated': 'Profil güncellendi.', 'panel.msg.profileUpdateFail': 'Profil güncellenemedi.',
+            'panel.msg.passwordMismatch': 'Şifre alanları aynı olmalı.', 'panel.msg.passwordUpdated': 'Şifre güncellendi.', 'panel.msg.passwordUpdateFail': 'Şifre güncellenemedi.',
+            'panel.msg.userCreated': 'Kullanıcı oluşturuldu.', 'panel.msg.userCreateFail': 'Kullanıcı oluşturulamadı.',
+            'panel.msg.usersUpdated': 'Kullanıcı listesi güncellendi.', 'panel.msg.listLoadFail': 'Liste yüklenemedi.',
+            'panel.msg.userDeleted': 'Kullanıcı silindi.', 'panel.msg.userDeleteFail': 'Kullanıcı silinemedi.',
+            'panel.msg.userUpdated': 'Kullanıcı güncellendi.', 'panel.msg.userUpdateFail': 'Kullanıcı güncellenemedi.',
+            'panel.msg.rolesUpdated': 'Roller güncellendi.', 'panel.msg.rolesUpdateFail': 'Roller güncellenemedi.',
+            'panel.msg.panelLoadFail': 'Panel verileri yüklenemedi.',
+        },
     },
     en: {
         role: {
@@ -86,8 +140,78 @@ const PANEL_I18N = {
             approved: 'Approved',
             rejected: 'Rejected',
         },
+        breadcrumb: {
+            root: 'home', panel: 'panel',
+            profile: 'profile', users: 'users', roles: 'roles', offers: 'offers',
+            tools: 'steps', 'progress-categories': 'categories', 'op-tester': 'op test',
+            'osint-files': 'cache', 'pentest-records': 'pentest records',
+        },
+        ui: {
+            'panel.header.title': 'Management Panel',
+            'panel.menu.profile': 'Profile', 'panel.menu.settings': 'Settings', 'panel.menu.panel': 'Panel',
+            'panel.menu.app': 'Pentest', 'panel.menu.logout': 'Log out',
+            'panel.tab.profile': 'Profile', 'panel.tab.pentest-records': 'Pentest Records',
+            'panel.tab.users': 'User Management', 'panel.tab.roles': 'Role Management',
+            'panel.tab.progress-categories': 'Progress Categories', 'panel.tab.tools': 'Step List',
+            'panel.tab.op-tester': 'Operation Test', 'panel.tab.osint-files': 'Cache',
+            'panel.tab.offers': 'Offers',
+            'panel.profile.title': 'Edit Profile', 'panel.profile.save': 'Save Profile', 'panel.profile.changePassword': 'Change Password',
+            'panel.field.username': 'Username', 'panel.field.fullName': 'Full Name', 'panel.field.jobTitle': 'Job / Title',
+            'panel.field.phone': 'Phone', 'panel.field.currentPassword': 'Current Password', 'panel.field.newPassword': 'New Password',
+            'panel.field.newPasswordConfirm': 'New Password (confirm)', 'panel.field.password': 'Password', 'panel.field.passwordConfirm': 'Password (confirm)',
+            'panel.field.admin': 'Admin', 'panel.field.active': 'Active', 'panel.field.roles': 'Roles', 'panel.field.newPasswordOptional': 'New Password (optional)',
+            'panel.offers.title': 'Offer Applications',
+            'panel.common.refresh': 'Refresh', 'panel.common.save': 'Save', 'panel.common.saveChanges': 'Save Changes', 'panel.common.cancel': 'Cancel',
+            'panel.col.id': 'ID', 'panel.col.date': 'Date', 'panel.col.email': 'Email', 'panel.col.company': 'Company',
+            'panel.col.message': 'Message', 'panel.col.status': 'Status', 'panel.col.user': 'User', 'panel.col.actions': 'Actions',
+            'panel.users.title': 'User Management', 'panel.users.add': 'Add User', 'panel.users.edit': 'Edit User', 'panel.users.listTitle': 'Users',
+            'panel.roles.title': 'Role Management', 'panel.roles.note': 'As an admin, you can bulk-edit user roles on this tab.',
+            'panel.common.new': 'New', 'panel.common.backArrow': '← Back',
+            'panel.steps.title': 'Step List', 'panel.steps.new': 'New Step', 'panel.categories.title': 'Progress Categories',
+            'panel.optest.title': 'Operation Test', 'panel.optest.note': 'Select a single YZO/3YM operation, fill its parameters and run it to test. Progress and result appear on the right.',
+            'panel.optest.flow': '1. Flow', 'panel.optest.select': 'Select…', 'panel.optest.flowYzo': 'YZO — AI Orchestrator', 'panel.optest.flow3ym': '3YM — Manual',
+            'panel.optest.stage': '2. Stage', 'panel.optest.category': '3. Category', 'panel.optest.step': '4. Step', 'panel.optest.operation': 'Operation',
+            'panel.optest.target': 'Target', 'panel.optest.run': 'Run Operation', 'panel.optest.progress': 'Progress', 'panel.optest.result': 'Result',
+            'panel.optest.resultHint': 'The result appears here when the operation runs.',
+            'panel.cache.title': 'Cache', 'panel.cache.deleteSelected': 'Delete Selected',
+            'panel.cache.note': 'The "scan" and "exclude" page lists (.xml/.txt) used by AI OSINT operations are cached here. Files are only uploaded from the file field of the operation form; you can download or delete them here.',
+            'panel.col.name': 'Name', 'panel.col.size': 'Size', 'panel.col.op': 'Action', 'panel.col.target': 'Target', 'panel.col.stages': 'Stages',
+            'panel.col.operation': 'Operation', 'panel.col.risk': 'Risk', 'panel.col.runBy': 'Run by', 'panel.col.lastRun': 'Last Run', 'panel.col.file': 'File',
+            'panel.records.title': 'Pentest Records', 'panel.records.detailPrefix': 'Pentest', 'panel.records.pdf': 'Download PDF', 'panel.records.print': 'Print', 'panel.records.word': 'Download Word',
+            'panel.records.deleteAll': 'Delete This Pentest Record', 'panel.records.producedFiles': 'Produced Files', 'panel.records.noFiles': 'No downloadable files were produced during this pentest.',
+            'panel.records.opsAndReport': 'Operations & Report',
+            'panel.records.note': 'Pentests are listed per target. Click a record to see the report, results and produced files of every operation run against that target. Deleting a record removes all operation records and produced files for that target.',
+            'panel.dyn.edit': 'Edit', 'panel.dyn.delete': 'Delete', 'panel.dyn.yes': 'Yes', 'panel.dyn.no': 'No',
+            'panel.dyn.active': 'Active', 'panel.dyn.passive': 'Passive',
+            'panel.dyn.noUsers': 'No users found.', 'panel.dyn.noOffers': 'No offers yet.',
+            'panel.msg.opFailed': 'Operation failed', 'panel.msg.listUpdated': 'List updated.', 'panel.msg.offersLoadFail': 'Could not load offers.',
+            'panel.msg.profileUpdated': 'Profile updated.', 'panel.msg.profileUpdateFail': 'Could not update profile.',
+            'panel.msg.passwordMismatch': 'Password fields must match.', 'panel.msg.passwordUpdated': 'Password updated.', 'panel.msg.passwordUpdateFail': 'Could not update password.',
+            'panel.msg.userCreated': 'User created.', 'panel.msg.userCreateFail': 'Could not create user.',
+            'panel.msg.usersUpdated': 'User list updated.', 'panel.msg.listLoadFail': 'Could not load list.',
+            'panel.msg.userDeleted': 'User deleted.', 'panel.msg.userDeleteFail': 'Could not delete user.',
+            'panel.msg.userUpdated': 'User updated.', 'panel.msg.userUpdateFail': 'Could not update user.',
+            'panel.msg.rolesUpdated': 'Roles updated.', 'panel.msg.rolesUpdateFail': 'Could not update roles.',
+            'panel.msg.panelLoadFail': 'Could not load panel data.',
+        },
     },
 };
+
+function applyPanelI18n() {
+    const dict = PANEL_I18N[currentLanguage]?.ui || PANEL_I18N.tr.ui;
+    document.querySelectorAll('[data-i18n]').forEach((node) => {
+        const key = node.getAttribute('data-i18n');
+        const val = dict[key] || PANEL_I18N.tr.ui[key];
+        if (val) {
+            node.textContent = val;
+        }
+    });
+}
+
+// Translate a dynamic (JS-rendered) panel string by key.
+function tp(key) {
+    return PANEL_I18N[currentLanguage]?.ui?.[key] || PANEL_I18N.tr.ui[key] || key;
+}
 
 function tRole(roleName) {
     return PANEL_I18N[currentLanguage]?.role?.[roleName] || roleName;
@@ -95,6 +219,13 @@ function tRole(roleName) {
 
 function tOfferStatus(statusName) {
     return PANEL_I18N[currentLanguage]?.offerStatus?.[statusName] || statusName;
+}
+
+function tCrumb(key) {
+    const k = String(key || '').trim().toLowerCase();
+    return PANEL_I18N[currentLanguage]?.breadcrumb?.[k]
+        || PANEL_I18N.tr.breadcrumb[k]
+        || k.replace(/[-_]+/g, ' ');
 }
 
 function normalizeTheme(value) {
@@ -136,7 +267,7 @@ async function apiRequest(url, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error(payload.detail || payload.error || 'İşlem başarısız');
+        throw new Error(payload.detail || payload.error || tp('panel.msg.opFailed'));
     }
 
     return payload;
@@ -167,9 +298,9 @@ function renderPathNavigation(activeTab = 'profile') {
 
     const safeTab = String(activeTab || 'profile').trim().toLowerCase() || 'profile';
     const crumbs = [
-        { label: 'root', href: '/' },
-        { label: 'panel', href: '/panel' },
-        { label: safeTab, href: `/panel#${safeTab}` },
+        { label: tCrumb('root'), href: '/' },
+        { label: tCrumb('panel'), href: '/panel' },
+        { label: tCrumb(safeTab), href: `/panel#${safeTab}` },
     ];
 
     pathBreadcrumb.innerHTML = crumbs
@@ -280,7 +411,7 @@ function openEditForm(user) {
 
 function renderUsersTable() {
     if (!users.length) {
-        usersTbody.innerHTML = '<tr><td colspan="6">Kullanıcı bulunamadı.</td></tr>';
+        usersTbody.innerHTML = '<tr><td colspan="6">' + tp('panel.dyn.noUsers') + '</td></tr>';
         return;
     }
 
@@ -291,13 +422,13 @@ function renderUsersTable() {
             <tr>
                 <td>${item.username || ''}</td>
                 <td>${item.full_name || '-'}</td>
-                <td>${item.is_admin ? 'Evet' : 'Hayır'}</td>
-                <td>${item.is_active ? 'Aktif' : 'Pasif'}</td>
+                <td>${item.is_admin ? tp('panel.dyn.yes') : tp('panel.dyn.no')}</td>
+                <td>${item.is_active ? tp('panel.dyn.active') : tp('panel.dyn.passive')}</td>
                 <td>${(item.roles || []).map((roleName) => tRole(roleName)).join(', ') || '-'}</td>
                 <td>
                     <div class="actions">
-                        <button class="btn" data-action="edit" data-user-id="${item.id}"${canManage ? '' : ' disabled'}>Düzenle</button>
-                        <button class="btn" data-action="delete" data-user-id="${item.id}"${canManage && !isSelf ? '' : ' disabled'}>Sil</button>
+                        <button class="btn" data-action="edit" data-user-id="${item.id}"${canManage ? '' : ' disabled'}>${tp('panel.dyn.edit')}</button>
+                        <button class="btn" data-action="delete" data-user-id="${item.id}"${canManage && !isSelf ? '' : ' disabled'}>${tp('panel.dyn.delete')}</button>
                     </div>
                 </td>
             </tr>
@@ -337,7 +468,7 @@ function renderRoleManagementTable() {
                 <td>${item.username}</td>
                 <td><label><input type="checkbox" data-admin="1"${adminChecked}><span>Admin</span></label></td>
                 <td><div class="roles-grid">${roleControls}</div></td>
-                <td><button class="btn" data-action="save-roles" data-user-id="${item.id}">Kaydet</button></td>
+                <td><button class="btn" data-action="save-roles" data-user-id="${item.id}">${tp('panel.common.save')}</button></td>
             </tr>
         `;
     }).join('');
@@ -349,7 +480,7 @@ function renderOffers(items) {
     }
 
     if (!Array.isArray(items) || !items.length) {
-        offersTbody.innerHTML = '<tr><td colspan="9">Henüz teklif yok.</td></tr>';
+        offersTbody.innerHTML = '<tr><td colspan="9">' + tp('panel.dyn.noOffers') + '</td></tr>';
         return;
     }
 
@@ -372,7 +503,7 @@ function renderOffers(items) {
                         <option value="rejected" ${item.status === 'rejected' ? 'selected' : ''}>${tOfferStatus('rejected')}</option>
                     </select>
                 </td>
-                <td><button class="btn" data-role="save" data-id="${item.id}">Kaydet</button></td>
+                <td><button class="btn" data-role="save" data-id="${item.id}">${tp('panel.common.save')}</button></td>
             </tr>
         `;
     }).join('');
@@ -386,6 +517,8 @@ async function loadOffers() {
 async function loadCurrentUser() {
     currentUser = await apiRequest('/auth/me', { cache: 'no-store' });
     currentLanguage = currentUser?.ui_language === 'en' ? 'en' : 'tr';
+    window.__ssvpLang = currentLanguage;  // shared with op_tester.js / pentest_records.js
+    applyPanelI18n();
     const preferredTheme = currentUser?.ui_theme || localStorage.getItem(THEME_STORAGE_KEY) || 'dark';
     applyTheme(preferredTheme);
     localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(preferredTheme));
@@ -437,9 +570,9 @@ if (refreshOffersBtn) {
     refreshOffersBtn.addEventListener('click', async () => {
         try {
             await loadOffers();
-            setFeedback('Liste güncellendi.');
+            setFeedback(tp('panel.msg.listUpdated'));
         } catch (error) {
-            setFeedback(error.message || 'Teklifler yüklenemedi.', true);
+            setFeedback(error.message || tp('panel.msg.offersLoadFail'), true);
         }
     });
 }
@@ -481,9 +614,9 @@ if (profileForm) {
                 }),
             });
             currentUser = payload.item;
-            setFeedback('Profil güncellendi.');
+            setFeedback(tp('panel.msg.profileUpdated'));
         } catch (error) {
-            setFeedback(error.message || 'Profil güncellenemedi.', true);
+            setFeedback(error.message || tp('panel.msg.profileUpdateFail'), true);
         }
     });
 }
@@ -492,7 +625,7 @@ if (profilePasswordForm) {
     profilePasswordForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (profileNewPassword.value !== profileNewPasswordConfirm.value) {
-            setFeedback('Şifre alanları aynı olmalı.', true);
+            setFeedback(tp('panel.msg.passwordMismatch'), true);
             return;
         }
         try {
@@ -505,9 +638,9 @@ if (profilePasswordForm) {
                 }),
             });
             profilePasswordForm.reset();
-            setFeedback('Şifre güncellendi.');
+            setFeedback(tp('panel.msg.passwordUpdated'));
         } catch (error) {
-            setFeedback(error.message || 'Şifre güncellenemedi.', true);
+            setFeedback(error.message || tp('panel.msg.passwordUpdateFail'), true);
         }
     });
 }
@@ -516,7 +649,7 @@ if (createUserForm) {
     createUserForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (newPassword.value !== newPasswordConfirm.value) {
-            setFeedback('Şifre alanları aynı olmalı.', true);
+            setFeedback(tp('panel.msg.passwordMismatch'), true);
             return;
         }
         try {
@@ -539,9 +672,9 @@ if (createUserForm) {
             renderRolesCheckboxes(newUserRoles, []);
             syncCreateRolesWithAdmin();
             await initializePanelData();
-            setFeedback('Kullanıcı oluşturuldu.');
+            setFeedback(tp('panel.msg.userCreated'));
         } catch (error) {
-            setFeedback(error.message || 'Kullanıcı oluşturulamadı.', true);
+            setFeedback(error.message || tp('panel.msg.userCreateFail'), true);
         }
     });
 }
@@ -554,9 +687,9 @@ if (refreshUsersBtn) {
     refreshUsersBtn.addEventListener('click', async () => {
         try {
             await initializePanelData();
-            setFeedback('Kullanıcı listesi güncellendi.');
+            setFeedback(tp('panel.msg.usersUpdated'));
         } catch (error) {
-            setFeedback(error.message || 'Liste yüklenemedi.', true);
+            setFeedback(error.message || tp('panel.msg.listLoadFail'), true);
         }
     });
 }
@@ -584,9 +717,9 @@ if (usersTbody) {
             try {
                 await apiRequest(`/users/${userId}`, { method: 'DELETE' });
                 await initializePanelData();
-                setFeedback('Kullanıcı silindi.');
+                setFeedback(tp('panel.msg.userDeleted'));
             } catch (error) {
-                setFeedback(error.message || 'Kullanıcı silinemedi.', true);
+                setFeedback(error.message || tp('panel.msg.userDeleteFail'), true);
             }
         }
     });
@@ -598,7 +731,7 @@ if (editUserForm) {
         const userId = Number(editUserId.value || '0');
         if (editNewPassword.value || editNewPasswordConfirm.value) {
             if (editNewPassword.value !== editNewPasswordConfirm.value) {
-                setFeedback('Şifre alanları aynı olmalı.', true);
+                setFeedback(tp('panel.msg.passwordMismatch'), true);
                 return;
             }
         }
@@ -619,9 +752,9 @@ if (editUserForm) {
                 }),
             });
             await initializePanelData();
-            setFeedback('Kullanıcı güncellendi.');
+            setFeedback(tp('panel.msg.userUpdated'));
         } catch (error) {
-            setFeedback(error.message || 'Kullanıcı güncellenemedi.', true);
+            setFeedback(error.message || tp('panel.msg.userUpdateFail'), true);
         }
     });
 }
@@ -669,9 +802,9 @@ if (rolesTbody) {
                 }),
             });
             await initializePanelData();
-            setFeedback('Roller güncellendi.');
+            setFeedback(tp('panel.msg.rolesUpdated'));
         } catch (error) {
-            setFeedback(error.message || 'Roller güncellenemedi.', true);
+            setFeedback(error.message || tp('panel.msg.rolesUpdateFail'), true);
         }
     });
 }
@@ -759,9 +892,19 @@ if (pathBreadcrumb) {
             allowedTabs.add('pentest-records');
         }
         const targetTab = allowedTabs.has(requested) ? requested : 'profile';
-        activateTab(targetTab);
+        // Fire the tab's click handlers (panel.js visibility + settings.js catalog
+        // loaders + pentest_records loader) so the initial/deep-linked tab loads
+        // its data on first paint — not only when the user clicks it. Previously a
+        // plain activateTab() only toggled visibility, leaving those tabs empty on
+        // refresh until the user navigated away and back.
+        const targetBtn = tabButtons.find((button) => button.dataset.tab === targetTab);
+        if (targetBtn) {
+            targetBtn.click();
+        } else {
+            activateTab(targetTab);
+        }
         renderPathNavigation(targetTab);
     } catch (error) {
-        setFeedback(error.message || 'Panel verileri yüklenemedi.', true);
+        setFeedback(error.message || tp('panel.msg.panelLoadFail'), true);
     }
 })();

@@ -18,6 +18,12 @@ from fastapi.responses import FileResponse
 
 from backend.auth import get_current_user, require_roles
 from backend.services import db_admin
+from backend.services.user_settings import (
+    resolve_user_ai,
+    resolve_user_workflow_mode,
+    set_user_workflow_mode,
+    update_user_ai,
+)
 from backend.i18n import request_lang, t
 from backend.models.orchestrator_models import (
     StepItemCreateRequest,
@@ -400,9 +406,11 @@ def _public_user(user: dict) -> dict:
 
 @router.get("/settings/access")
 def settings_access(current_user: dict = Depends(get_current_user)):
-    tabs = ["appearance", "system"]
+    # AI Model settings + progression mode are per-user, so the "ai" tab is open to
+    # everyone. The admin-only tabs stay admin-only.
+    tabs = ["appearance", "ai", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "system", "ai", "scan", "toolsmgmt", "wordlists", "database", "tools", "progress-categories"]
+        tabs = ["appearance", "ai", "scan", "toolsmgmt", "wordlists", "database", "tools", "progress-categories", "system"]
 
     return {
         "user": _public_user(current_user),
@@ -475,17 +483,14 @@ def _mask_ai_secrets(ai_settings: dict) -> dict:
 @router.get("/settings/config")
 def settings_config(current_user: dict = Depends(require_roles(allow_must_change_password=False))):
     settings = get_app_settings()
-    # The workflow mode drives the operation window for every role, so it is
-    # exposed to non-admins too (unlike the AI/scan tuning, which stays admin-only).
-    workflow = settings.get("workflow") or DEFAULT_SETTINGS.get("workflow", {"mode": "manual"})
-    if current_user.get("is_admin"):
-        result = dict(settings)
-        result["ai"] = _mask_ai_secrets(settings.get("ai", {}))
-        return result
-    # Non-admins get only the non-sensitive provider flag (drives UI copy), never
-    # URLs/keys/models.
-    provider = str(settings.get("ai", {}).get("provider") or "local").strip().lower()
-    return {"ai": {"provider": provider}, "scan": {}, "workflow": workflow}
+    # AI settings + progression mode are per-user (every user sees their own,
+    # masked). Scan tuning stays a global admin-only setting.
+    result = {
+        "ai": _mask_ai_secrets(resolve_user_ai(current_user)),
+        "workflow": {"mode": resolve_user_workflow_mode(current_user)},
+        "scan": settings.get("scan", {}) if current_user.get("is_admin") else {},
+    }
+    return result
 
 
 @router.patch("/settings/workflow")
@@ -495,15 +500,13 @@ def settings_workflow_update(
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
-    if not current_user.get("is_admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-
+    # Progression mode is per-user — every user picks their own.
     mode = (payload.mode or "manual").strip().lower()
     if mode not in {"manual", "ai"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=t(lang, "settings.invalidWorkflowMode", "Gecersiz ilerleme modu"))
 
-    settings = update_app_settings({"workflow": {"mode": mode}})
-    return {"workflow": settings["workflow"]}
+    workflow = set_user_workflow_mode(int(current_user["id"]), mode)
+    return {"workflow": workflow}
 
 
 @router.get("/settings/system-info")
@@ -576,9 +579,7 @@ def settings_ai_update(
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
     lang = request_lang(request)
-    if not current_user.get("is_admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
-
+    # AI settings are per-user — every user configures their own provider/model.
     data = payload.model_dump()
     provider = (data.get("provider") or "local").strip().lower()
     if provider not in {"local", "cloud"}:
@@ -590,13 +591,13 @@ def settings_ai_update(
         cloud_format = "openai"
     data["cloud_format"] = cloud_format
 
-    # An empty API key on save means "keep the stored key" (the client never
-    # receives it back, so a blank field must not wipe it).
+    # An empty API key on save means "keep the stored key" — update_user_ai skips
+    # empty cloud_api_key, so drop it here to be explicit.
     if not str(data.get("cloud_api_key") or "").strip():
-        data["cloud_api_key"] = get_app_settings().get("ai", {}).get("cloud_api_key", "")
+        data.pop("cloud_api_key", None)
 
-    settings = update_app_settings({"ai": data})
-    return {"ai": _mask_ai_secrets(settings["ai"])}
+    ai = update_user_ai(int(current_user["id"]), data)
+    return {"ai": _mask_ai_secrets(ai)}
 
 
 @router.post("/settings/ai/test")
@@ -604,12 +605,10 @@ def settings_ai_test(
     request: Request,
     current_user: dict = Depends(require_roles(allow_must_change_password=False)),
 ):
-    lang = request_lang(request)
-    if not current_user.get("is_admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanUpdate", "Sadece admin bu ayarı değiştirebilir"))
+    # Test the current user's own AI settings (per-user).
+    from backend.ai.ollama_client import set_ai_settings_override, test_ai_connection
 
-    from backend.ai.ollama_client import test_ai_connection
-
+    set_ai_settings_override(resolve_user_ai(current_user))
     return test_ai_connection()
 
 
@@ -762,12 +761,9 @@ def settings_ollama_service(
 
 @router.get("/settings/ai-models")
 def settings_ai_models(request: Request, current_user: dict = Depends(require_roles(allow_must_change_password=False))):
-    lang = request_lang(request)
-    if not current_user.get("is_admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=t(lang, "settings.onlyAdminCanViewModels", "Sadece admin bu listeyi görebilir"))
-
-    settings = get_app_settings()
-    ollama_url = settings.get("ai", {}).get("ollama_url") or DEFAULT_SETTINGS.get("ai", {}).get("ollama_url", "http://localhost:11434/api/chat")
+    # The installed-model list uses the current user's own Ollama URL (per-user AI).
+    user_ai = resolve_user_ai(current_user)
+    ollama_url = user_ai.get("ollama_url") or DEFAULT_SETTINGS.get("ai", {}).get("ollama_url", "http://localhost:11434/api/chat")
     tags_url = ollama_url.replace("/api/chat", "/api/tags")
 
     try:
@@ -779,7 +775,7 @@ def settings_ai_models(request: Request, current_user: dict = Depends(require_ro
         models = []
 
     return {
-        "active_model": settings.get("ai", {}).get("model_name"),
+        "active_model": user_ai.get("model_name"),
         "models": models,
     }
 

@@ -2552,6 +2552,11 @@ function getActiveOperationFromUi() {
 }
 
 
+function crumbLabel(key) {
+    const k = String(key || "").trim().toLowerCase();
+    return t("breadcrumb." + k, k.replace(/[-_]+/g, " "));
+}
+
 function renderPathNavigation(opName = "") {
     if (!pathBreadcrumb) {
         return;
@@ -2559,9 +2564,9 @@ function renderPathNavigation(opName = "") {
 
     const activeOp = String(opName || getActiveOperationFromUi() || "legal").trim().toLowerCase();
     const crumbs = [
-        { label: "root", href: "/" },
-        { label: "app", href: "/app" },
-        { label: activeOp, href: `/app#${activeOp}` },
+        { label: crumbLabel("root"), href: "/" },
+        { label: crumbLabel("app"), href: "/app" },
+        { label: crumbLabel(activeOp), href: `/app#${activeOp}` },
     ];
 
     pathBreadcrumb.innerHTML = crumbs

@@ -247,7 +247,8 @@ def step_system_packages(env: dict) -> None:
 
 def step_mysql(env: dict, args) -> None:
     step("MySQL kuruluyor ve yapılandırılıyor")
-    apt_install(["mysql-server"], env)
+    # mysql-client provides `mysqldump`, used by the Database & Backup admin tab.
+    apt_install(["mysql-server", "mysql-client"], env)
     run(["systemctl", "enable", "--now", "mysql"], check=False)
 
     db, usr, pwd_ = args.mysql_database, args.mysql_user, args.mysql_password
@@ -585,6 +586,10 @@ def step_seed_database(app_user: str, app_dir: Path, venv_py: Path, args) -> Non
         "main.on_startup()\n"
         "from backend.services.manual_catalog_store import count_manual_items\n"
         "from backend.services.auth_store import provision_admin_user, set_active_by_username\n"
+        # Ensure the per-user settings column exists up front (otherwise it is
+        # created lazily on the first settings request).
+        "from backend.services.user_settings import _ensure_column as _ensure_user_settings\n"
+        "_ensure_user_settings()\n"
         "res = provision_admin_user(os.environ['SSVP_ADMIN_USER'], os.environ['SSVP_ADMIN_PASSWORD'])\n"
         "print('ADMIN_%s user=%s' % ('CREATED' if res.get('created') else 'EXISTS', res.get('username')))\n"
         "if os.environ.get('SSVP_DISABLE_DEFAULT_ADMIN') == '1':\n"

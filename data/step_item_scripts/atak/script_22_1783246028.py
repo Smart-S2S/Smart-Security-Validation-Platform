@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "hydra"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "username", "label": "Kullanıcı", "kind": "opt", "flag": "-l", "setting": "USERNAME", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "userlist", "label": "Kullanıcı listesi", "kind": "opt", "flag": "-L", "setting": "USERLIST", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "password", "label": "Parola", "kind": "opt", "flag": "-p", "setting": "PASSWORD", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "passlist", "label": "Parola listesi", "kind": "opt", "flag": "-P", "setting": "PASSLIST", "default": "/usr/share/wordlists/rockyou.txt", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "port", "label": "Port", "kind": "opt", "flag": "-s", "setting": "PORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "tasks", "label": "Paralel görev (-t)", "kind": "opt", "flag": "-t", "setting": "TASKS", "default": "4", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "stop_first", "label": "İlk bulunca dur (-f)", "kind": "flag", "flag": "-f", "setting": "STOP_FIRST", "default": "on", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "target", "label": "Hedef host", "kind": "positional", "flag": "", "setting": "TARGET", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "service", "label": "Servis", "kind": "positional", "flag": "", "setting": "SERVICE", "default": "ssh", "required": true, "pattern": "word", "choices": ["ssh", "ftp", "telnet", "smb", "rdp", "mysql", "postgres", "vnc", "http-get", "http-post-form", "https-get"], "must_exist": false}, {"key": "ssl", "label": "SSL kullan (-S)", "kind": "flag", "flag": "-S", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "verbose", "label": "Ayrıntılı (-V)", "kind": "flag", "flag": "-V", "setting": "VERBOSE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "combo_file", "label": "user:pass listesi", "kind": "opt", "flag": "-C", "setting": "COMBO_FILE", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "null_options", "label": "Ek deneme (-e)", "kind": "opt", "flag": "-e", "setting": "NULL_OPTIONS", "default": "", "required": false, "pattern": "safe", "choices": ["n", "s", "r", "ns", "nr", "sr", "nsr"], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "username", "label": "User", "kind": "opt", "flag": "-l", "setting": "USERNAME", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "userlist", "label": "User list", "kind": "opt", "flag": "-L", "setting": "USERLIST", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "password", "label": "Password", "kind": "opt", "flag": "-p", "setting": "PASSWORD", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "passlist", "label": "Password list", "kind": "opt", "flag": "-P", "setting": "PASSLIST", "default": "/usr/share/wordlists/rockyou.txt", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "port", "label": "Port", "kind": "opt", "flag": "-s", "setting": "PORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "tasks", "label": "Parallel tasks (-t)", "kind": "opt", "flag": "-t", "setting": "TASKS", "default": "4", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "stop_first", "label": "Stop at first hit (-f)", "kind": "flag", "flag": "-f", "setting": "STOP_FIRST", "default": "on", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "target", "label": "Target host", "kind": "positional", "flag": "", "setting": "TARGET", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "service", "label": "Service", "kind": "positional", "flag": "", "setting": "SERVICE", "default": "ssh", "required": true, "pattern": "word", "choices": ["ssh", "ftp", "telnet", "smb", "rdp", "mysql", "postgres", "vnc", "http-get", "http-post-form", "https-get"], "must_exist": false}, {"key": "ssl", "label": "Use SSL (-S)", "kind": "flag", "flag": "-S", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "verbose", "label": "Verbose (-V)", "kind": "flag", "flag": "-V", "setting": "VERBOSE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "combo_file", "label": "user:pass list", "kind": "opt", "flag": "-C", "setting": "COMBO_FILE", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "null_options", "label": "Extra attempt (-e)", "kind": "opt", "flag": "-e", "setting": "NULL_OPTIONS", "default": "", "required": false, "pattern": "safe", "choices": ["n", "s", "r", "ns", "nr", "sr", "nsr"], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

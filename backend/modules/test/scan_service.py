@@ -15,8 +15,15 @@ def run_scan_job(
     scan_params: list[str] | None = None,
     scan_ports: list[str] | None = None,
     language: str = "tr",
+    ai_settings: dict | None = None,
+    use_ai: bool = True,
 ):
     set_status(job_id, "running")
+    # Use the requesting user's own AI settings for the post-scan AI summary.
+    if ai_settings:
+        from backend.ai.ollama_client import set_ai_settings_override
+
+        set_ai_settings_override(ai_settings)
 
     selected_params = scan_params or []
     selected_ports = scan_ports or []
@@ -42,7 +49,9 @@ def run_scan_job(
         result["selected_params"] = selected_params
         result["selected_ports"] = selected_ports
 
-        if not result.get("error") and scan_tool == "nmap":
+        # The post-scan AI interpretation only runs in AI (YZO) mode. In manual
+        # (3YM) mode the scan table is returned parsed, with no AI call.
+        if not result.get("error") and scan_tool == "nmap" and use_ai:
             add_log(job_id, t(language, "scan.job.analyzing", "Bulgular yorumlanıyor..."))
             ai_payload = suggest_action_intents(result, stage="scan", language=language)
             result["ai_action_intents"] = ai_payload.get("actions", [])
@@ -59,9 +68,14 @@ def run_scan_job(
             result["ai_analysis"] = "\n".join(rendered).strip() or t(language, "ai.noResponse", "Yorumlama yapılamadı.")
             add_log(job_id, t(language, "scan.job.analysisDone", "Analiz tamamlandı."))
         elif not result.get("error"):
-            result["ai_analysis"] = t(language, "scan.job.aiDisabled", "Bu araç için AI yorum adımı henüz aktif değil.")
             result["ai_action_intents"] = []
             result["ai_summary"] = ""
+            if use_ai:
+                # AI mode but this tool has no AI interpretation step yet.
+                result["ai_analysis"] = t(language, "scan.job.aiDisabled", "Bu araç için AI yorum adımı henüz aktif değil.")
+            else:
+                # Manual (3YM) mode: parsed results only, no interpretation.
+                result["ai_analysis"] = ""
 
         add_log(job_id, t(language, "scan.job.processing", "Tarama sonucu işleniyor..."))
         time.sleep(0.5)

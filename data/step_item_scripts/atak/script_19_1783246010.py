@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "nikto"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "target_url", "label": "Hedef URL/host", "kind": "opt", "flag": "-h", "setting": "TARGET_URL", "default": "", "required": true, "pattern": "url", "choices": [], "must_exist": false}, {"key": "port", "label": "Port", "kind": "opt", "flag": "-p", "setting": "PORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ssl", "label": "SSL/TLS kullan", "kind": "flag", "flag": "-ssl", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "tuning", "label": "Tuning", "kind": "opt", "flag": "-Tuning", "setting": "TUNING", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "evasion", "label": "IDS kaçınma", "kind": "opt", "flag": "-evasion", "setting": "EVASION", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "user_agent", "label": "User-Agent", "kind": "opt", "flag": "-useragent", "setting": "USER_AGENT", "default": "", "required": false, "pattern": "text", "choices": [], "must_exist": false}, {"key": "maxtime", "label": "Azami süre", "kind": "opt", "flag": "-maxtime", "setting": "MAXTIME", "default": "120", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "vhost", "label": "Sanal host", "kind": "opt", "flag": "-vhost", "setting": "VHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "root", "label": "Kök dizin", "kind": "opt", "flag": "-root", "setting": "ROOT", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "nossl", "label": "SSL kullanma (-nossl)", "kind": "flag", "flag": "-nossl", "setting": "NOSSL", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "auth_id", "label": "Kimlik (user:pass)", "kind": "opt", "flag": "-id", "setting": "AUTH_ID", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "mutate", "label": "Mutasyon (-mutate)", "kind": "opt", "flag": "-mutate", "setting": "MUTATE", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "target_url", "label": "Target URL/host", "kind": "opt", "flag": "-h", "setting": "TARGET_URL", "default": "", "required": true, "pattern": "url", "choices": [], "must_exist": false}, {"key": "port", "label": "Port", "kind": "opt", "flag": "-p", "setting": "PORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ssl", "label": "Use SSL/TLS", "kind": "flag", "flag": "-ssl", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "tuning", "label": "Tuning", "kind": "opt", "flag": "-Tuning", "setting": "TUNING", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "evasion", "label": "IDS evasion", "kind": "opt", "flag": "-evasion", "setting": "EVASION", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "user_agent", "label": "User-Agent", "kind": "opt", "flag": "-useragent", "setting": "USER_AGENT", "default": "", "required": false, "pattern": "text", "choices": [], "must_exist": false}, {"key": "maxtime", "label": "Max time", "kind": "opt", "flag": "-maxtime", "setting": "MAXTIME", "default": "120", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "vhost", "label": "Virtual host", "kind": "opt", "flag": "-vhost", "setting": "VHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "root", "label": "Root directory", "kind": "opt", "flag": "-root", "setting": "ROOT", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "nossl", "label": "Don't use SSL (-nossl)", "kind": "flag", "flag": "-nossl", "setting": "NOSSL", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "auth_id", "label": "Credential (user:pass)", "kind": "opt", "flag": "-id", "setting": "AUTH_ID", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "mutate", "label": "Mutation (-mutate)", "kind": "opt", "flag": "-mutate", "setting": "MUTATE", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

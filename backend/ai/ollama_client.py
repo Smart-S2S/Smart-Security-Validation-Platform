@@ -1,3 +1,4 @@
+import contextvars
 import json
 import re
 import time
@@ -5,7 +6,32 @@ import time
 import requests
 
 from backend.i18n import t
-from backend.services.settings_store import DEFAULT_SETTINGS, get_app_settings
+from backend.services.settings_store import DEFAULT_SETTINGS
+
+
+# Per-user AI settings override. AI settings are per-user: a request handler (or a
+# background job) sets the requesting user's resolved AI config here, and every AI
+# call in that context uses it instead of the global default. When unset, calls
+# fall back to the global app settings (backward compatible). contextvars keep
+# this isolated per request/thread, so concurrent users never see each other's
+# provider/keys.
+_AI_SETTINGS_OVERRIDE: "contextvars.ContextVar[dict | None]" = contextvars.ContextVar(
+    "ssvp_ai_settings_override", default=None
+)
+
+
+def set_ai_settings_override(settings: dict | None) -> None:
+    """Set (or clear with None/empty) the AI settings for the current context."""
+    _AI_SETTINGS_OVERRIDE.set(settings if settings else None)
+
+
+def _effective_ai_settings() -> dict:
+    override = _AI_SETTINGS_OVERRIDE.get()
+    if override:
+        return override
+    # No per-user override in this context → the install-time local-AI default
+    # (never the global app_settings row, which is no longer used for AI).
+    return DEFAULT_SETTINGS.get("ai", {})
 
 
 FAKE_AI_RESPONSE = {
@@ -204,7 +230,7 @@ def suggest_action_intents(
 
     target = str(scan_result.get("target") or "authorized-target")
 
-    settings = get_app_settings().get("ai", {})
+    settings = _effective_ai_settings()
     ai_defaults = DEFAULT_SETTINGS.get("ai", {})
     use_fake = bool(settings.get("use_fake_response", ai_defaults.get("use_fake_response", False)))
 
@@ -248,7 +274,7 @@ def _ollama_chat(prompt: str, *, expect_json: bool = True, num_predict: int = 80
     so switching provider in Settings switches the whole platform. Returns None on
     any failure so callers fall back to their deterministic paths.
     """
-    settings = get_app_settings().get("ai", {})
+    settings = _effective_ai_settings()
     ai_defaults = DEFAULT_SETTINGS.get("ai", {})
     provider = str(settings.get("provider") or ai_defaults.get("provider") or "local").strip().lower()
 
@@ -364,7 +390,7 @@ def test_ai_connection() -> dict:
     Settings UI can tell the operator exactly why a call fails (quota, wrong
     model, bad key, unreachable host) instead of silently falling back.
     """
-    settings = get_app_settings().get("ai", {})
+    settings = _effective_ai_settings()
     ai_defaults = DEFAULT_SETTINGS.get("ai", {})
     provider = str(settings.get("provider") or ai_defaults.get("provider") or "local").strip().lower()
     # Cap the test wait so the UI never hangs on a slow local model.
@@ -437,6 +463,25 @@ def test_ai_connection() -> dict:
         }
     except requests.exceptions.Timeout:
         return {"ok": False, "provider": provider, "message": f"Zaman asimi ({timeout_sec}s). Adres/erisim dogru mu?"}
+    except requests.exceptions.ConnectionError:
+        # The endpoint refused/could not be reached. For local this almost always
+        # means the Ollama service is stopped (e.g. an admin turned it off from
+        # Settings > Servisler). Give a plain-language hint instead of a raw
+        # HTTPConnectionPool traceback.
+        if provider == "cloud":
+            return {
+                "ok": False,
+                "provider": provider,
+                "message": "Bulut AI adresine ulasilamadi. API adresini ve sunucunun internet erisimini kontrol edin.",
+            }
+        return {
+            "ok": False,
+            "provider": provider,
+            "message": (
+                "Yerel yapay zeka (Ollama) su an calismiyor. Yonetici servisi kapatmis olabilir. "
+                "Yoneticiden Ollama'yi baslatmasini isteyin ya da AI Model ayarlarindan Bulut saglayiciya gecin."
+            ),
+        }
     except Exception as exc:
         return {"ok": False, "provider": provider, "message": "Baglanti kurulamadi.", "detail": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
@@ -533,7 +578,7 @@ def evaluate_script_result(
     process_logs = [str(item) for item in (process_logs or [])]
     script_result = script_result if isinstance(script_result, dict) else {"raw": script_result}
 
-    settings = get_app_settings().get("ai", {})
+    settings = _effective_ai_settings()
     ai_defaults = DEFAULT_SETTINGS.get("ai", {})
     use_fake = bool(settings.get("use_fake_response", ai_defaults.get("use_fake_response", False)))
     if use_fake:
@@ -736,7 +781,7 @@ def orchestrate_next_operation(
     }
     valid_actions = {action for action, _ in valid_pairs}
 
-    settings = get_app_settings().get("ai", {})
+    settings = _effective_ai_settings()
     ai_defaults = DEFAULT_SETTINGS.get("ai", {})
     use_fake = bool(settings.get("use_fake_response", ai_defaults.get("use_fake_response", False)))
     if use_fake:

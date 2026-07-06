@@ -1,5 +1,5 @@
 // Standalone operation tester (Panel → "Operasyon Test").
-// Cascade: flow (YZA/3YM) → stage → [category → step →] operation → parameter
+// Cascade: flow (YZO/3YM) → stage → [category → step →] operation → parameter
 // form → run → live progress + formatted result on the right. Self-contained so
 // it never collides with panel.js / settings.js globals.
 (function () {
@@ -32,6 +32,50 @@
     let currentOp = null;    // selected operation descriptor
     let running = false;
 
+    // --- i18n (language shared from panel.js via window.__ssvpLang) ----------
+    const _LANG = () => (window.__ssvpLang === "en" ? "en" : "tr");
+    const T = {
+        tr: {
+            opFailed: "İşlem başarısız.", selectStage: "İlerleme yönü seçin…", loadingCatalog: "Katalog yükleniyor…",
+            catalogFail: "Katalog alınamadı.", noCategory: "Bu yönde kategori yok.", selectCategory: "Kategori seçin…",
+            noOperation: "Bu yönde operasyon yok.", selectOperation: "Operasyon seçin…", selectStep: "Adım seçin…",
+            loadingParams: "Parametreler yükleniyor…", paramsFail: "Parametreler alınamadı.", noFile: "Dosya seçilmedi",
+            pickFile: "Dosya Seç", runFailed: "Çalıştırılamadı.", timeout: "Zaman aşımı", tool: "Araç", target: "Hedef",
+            result: "Sonuç", success: "Başarılı", failure: "Başarısız", setup: "Kurulum", notInstalled: "Kurulu değil",
+            exit: "Çıkış", lines: "Satır", page: "Sayfa", output: "Çıktı", done: "Tamamlandı", cancelled: "İptal edildi",
+            error: "Hata", status: "Durum", loading: "Yükleniyor…", loadFail: "Yüklenemedi: ", download: "İndir",
+            xmlDownload: "XML indir", fileListFail: "Dosya listesi alınamadı.", pickToDelete: "Silmek için dosya seçin.", del: "Sil",
+        },
+        en: {
+            opFailed: "Operation failed.", selectStage: "Select a stage…", loadingCatalog: "Loading catalog…",
+            catalogFail: "Could not load catalog.", noCategory: "No category in this stage.", selectCategory: "Select a category…",
+            noOperation: "No operation in this stage.", selectOperation: "Select an operation…", selectStep: "Select a step…",
+            loadingParams: "Loading parameters…", paramsFail: "Could not load parameters.", noFile: "No file selected",
+            pickFile: "Choose File", runFailed: "Could not run.", timeout: "Timeout", tool: "Tool", target: "Target",
+            result: "Result", success: "Success", failure: "Failure", setup: "Setup", notInstalled: "Not installed",
+            exit: "Exit", lines: "Lines", page: "Page", output: "Output", done: "Completed", cancelled: "Cancelled",
+            error: "Error", status: "Status", loading: "Loading…", loadFail: "Could not load: ", download: "Download",
+            xmlDownload: "download XML", fileListFail: "Could not load file list.", pickToDelete: "Select files to delete.", del: "Delete",
+        },
+    };
+    const t = (k) => (T[_LANG()][k] || T.tr[k] || k);
+    const LBL = {
+        tr: {
+            emails: "E-postalar", phones: "Telefonlar", names: "İsimler", usernames: "Kullanıcı adları",
+            addresses: "Adresler", social_profiles: "Sosyal medya", credentials: "Kimlik/Parola bulguları",
+            employees: "Çalışanlar", technologies: "Teknolojiler", other: "Diğer bulgular",
+            scanned_urls: "Taranan sayfalar", pages_scanned: "Taranan sayfa sayısı", ai_available: "Yapay zeka",
+            hosts: "Hostlar", ports: "Portlar",
+        },
+        en: {
+            emails: "Emails", phones: "Phones", names: "Names", usernames: "Usernames",
+            addresses: "Addresses", social_profiles: "Social media", credentials: "Credentials/Password findings",
+            employees: "Employees", technologies: "Technologies", other: "Other findings",
+            scanned_urls: "Scanned pages", pages_scanned: "Pages scanned", ai_available: "AI",
+            hosts: "Hosts", ports: "Ports",
+        },
+    };
+
     function esc(value) {
         if (value === null || value === undefined) return "";
         return String(value)
@@ -40,11 +84,11 @@
     }
 
     async function api(url, options = {}) {
-        const res = await fetch(url, { headers: { "Accept-Language": "tr" }, ...options });
+        const res = await fetch(url, { headers: { "Accept-Language": _LANG() }, ...options });
         const ctype = res.headers.get("content-type") || "";
         const payload = ctype.includes("application/json") ? await res.json().catch(() => ({})) : { detail: await res.text() };
         if (!res.ok) {
-            const err = new Error(payload?.detail || payload?.error || "İşlem başarısız.");
+            const err = new Error(payload?.detail || payload?.error || t("opFailed"));
             err.status = res.status;
             throw err;
         }
@@ -102,19 +146,19 @@
         if (catalogCache[flow]) {
             catalog = catalogCache[flow];
             setNote("");
-            fillSelect(otStage, catalog.stages || [], "İlerleme yönü seçin…");
+            fillSelect(otStage, catalog.stages || [], t("selectStage"));
             show(otStage, otStageLabel, true);
             return;
         }
-        setNote("Katalog yükleniyor…");
+        setNote(t("loadingCatalog"));
         try {
             catalog = await api(`/validation/op-test-catalog?flow=${encodeURIComponent(flow)}`, { cache: "no-store" });
             catalogCache[flow] = catalog;
             setNote("");
-            fillSelect(otStage, catalog.stages || [], "İlerleme yönü seçin…");
+            fillSelect(otStage, catalog.stages || [], t("selectStage"));
             show(otStage, otStageLabel, true);
         } catch (e) {
-            setNote(e.message || "Katalog alınamadı.", true);
+            setNote(e.message || t("catalogFail"), true);
         }
     });
 
@@ -124,14 +168,14 @@
         if (!st) return;
         if (catalog.has_categories) {
             const cats = st.categories || [];
-            if (!cats.length) { setNote("Bu yönde kategori yok.", true); return; }
-            fillSelect(otCategory, cats, "Kategori seçin…");
+            if (!cats.length) { setNote(t("noCategory"), true); return; }
+            fillSelect(otCategory, cats, t("selectCategory"));
             show(otCategory, otCategoryLabel, true);
         } else {
-            // YZA: no category/step — operations directly under the stage.
+            // YZO: no category/step — operations directly under the stage.
             const ops = st.operations || [];
-            if (!ops.length) { setNote("Bu yönde operasyon yok.", true); return; }
-            fillSelect(otOperation, ops, "Operasyon seçin…");
+            if (!ops.length) { setNote(t("noOperation"), true); return; }
+            fillSelect(otOperation, ops, t("selectOperation"));
             show(otOperation, otOperationLabel, true);
         }
     });
@@ -140,7 +184,7 @@
         resetBelow("step");
         const cat = categoryObj();
         if (!cat) return;
-        fillSelect(otStep, cat.steps || [], "Adım seçin…");
+        fillSelect(otStep, cat.steps || [], t("selectStep"));
         show(otStep, otStepLabel, true);
     });
 
@@ -148,7 +192,7 @@
         resetBelow("operation");
         const step = stepObj();
         if (!step) return;
-        fillSelect(otOperation, step.operations || [], "Operasyon seçin…");
+        fillSelect(otOperation, step.operations || [], t("selectOperation"));
         show(otOperation, otOperationLabel, true);
     });
 
@@ -163,7 +207,7 @@
             otOperationDesc.hidden = !currentOp.description;
         }
         // Schema is fetched lazily (keeps the catalog fast).
-        setNote("Parametreler yükleniyor…");
+        setNote(t("loadingParams"));
         if (otParamForm) otParamForm.innerHTML = "";
         if (otListSource) { otListSource.innerHTML = ""; otListSource.hidden = true; }
         try {
@@ -176,7 +220,7 @@
             if (otOperationForm) otOperationForm.hidden = false;
             setNote("");
         } catch (e) {
-            setNote(e.message || "Parametreler alınamadı.", true);
+            setNote(e.message || t("paramsFail"), true);
         }
     });
 
@@ -217,10 +261,10 @@
         } else if (type === "textarea") {
             control = `<textarea ${attrs} rows="4" placeholder="XML / liste">${esc(def ?? "")}</textarea>`;
         } else if (type === "upload") {
-            const shown = def ? esc(def) : "Dosya seçilmedi";
+            const shown = def ? esc(def) : t("noFile");
             // Hidden input carries the value (uploaded cache filename); data-type
             // string so collectParams reads it as a plain string. The native file
-            // input is hidden and triggered by the styled "Dosya Seç" button.
+            // input is hidden and triggered by the styled t("pickFile") button.
             control = `<div class="upload-param">
                 <label class="upload-file-btn">
                     <input type="file" class="upload-param-input" accept=".xml,.txt">
@@ -330,7 +374,7 @@
         setNote("");
         otLog.innerHTML = "";
         otResult.innerHTML = `<p class="muted" style="margin:0;">Çalışıyor…</p>`;
-        logLine(`Başlatılıyor: ${currentOp.display_name} (${currentOp.exec === "ai" ? "YZA" : "3YM"})`);
+        logLine(`Başlatılıyor: ${currentOp.display_name} (${currentOp.exec === "ai" ? "YZO" : "3YM"})`);
 
         try {
             let start;
@@ -349,7 +393,7 @@
             renderResult(state);
         } catch (e) {
             logLine(`Hata: ${e.message || e}`);
-            otResult.innerHTML = `<div class="ot-error">${esc(e.message || "Çalıştırılamadı.")}</div>`;
+            otResult.innerHTML = `<div class="ot-error">${esc(e.message || t("runFailed"))}</div>`;
         } finally {
             running = false;
             otRunBtn.disabled = false;
@@ -362,7 +406,7 @@
         let last = 0;
         const startedAt = Date.now();
         while (true) {
-            if (Date.now() - startedAt > 12 * 60 * 1000) throw new Error("Zaman aşımı");
+            if (Date.now() - startedAt > 12 * 60 * 1000) throw new Error(t("timeout"));
             const state = await api(`/validation/executions/${encodeURIComponent(id)}`, { cache: "no-store" });
             const logs = Array.isArray(state.logs) ? state.logs : [];
             while (last < logs.length) { logLine(logs[last]?.message || ""); last += 1; }
@@ -379,30 +423,23 @@
     function downloadLink(fileName) {
         const name = String(fileName || "").trim();
         if (!name) return "";
-        const url = `/download-scan-file?file_name=${encodeURIComponent(name)}&language=tr`;
-        return `<div class="ot-section"><p class="ot-label">Taranan sayfalar</p><p class="ot-detail"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(name)} — XML indir</a></p></div>`;
+        const url = `/download-scan-file?file_name=${encodeURIComponent(name)}&language=${_LANG()}`;
+        return `<div class="ot-section"><p class="ot-label">Taranan sayfalar</p><p class="ot-detail"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(name)} — ${t("xmlDownload")}</a></p></div>`;
     }
-    const LABELS = {
-        emails: "E-postalar", phones: "Telefonlar", names: "İsimler", usernames: "Kullanıcı adları",
-        addresses: "Adresler", social_profiles: "Sosyal medya", credentials: "Kimlik/Parola bulguları",
-        employees: "Çalışanlar", technologies: "Teknolojiler", other: "Diğer bulgular",
-        scanned_urls: "Taranan sayfalar", pages_scanned: "Taranan sayfa sayısı", ai_available: "Yapay zeka",
-        hosts: "Hostlar", ports: "Portlar",
-    };
 
     function humanize(k) {
-        return LABELS[k] || String(k || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+        return LBL[_LANG()][k] || String(k || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
     }
 
     function metaChips(result) {
         const chips = [];
-        if (result.tool) chips.push(["Araç", result.tool]);
-        if (result.target) chips.push(["Hedef", result.target]);
-        if (typeof result.ok === "boolean") chips.push(["Sonuç", result.ok ? "Başarılı" : "Başarısız"]);
-        if (result.tool_installed === false) chips.push(["Kurulum", "Kurulu değil"]);
-        if (result.exit_code !== undefined && result.exit_code !== null) chips.push(["Çıkış", result.exit_code]);
-        if (result.line_count !== undefined && result.line_count !== null) chips.push(["Satır", result.line_count]);
-        if (result.pages_scanned !== undefined) chips.push(["Sayfa", result.pages_scanned]);
+        if (result.tool) chips.push([t("tool"), result.tool]);
+        if (result.target) chips.push([t("target"), result.target]);
+        if (typeof result.ok === "boolean") chips.push([t("result"), result.ok ? t("success") : t("failure")]);
+        if (result.tool_installed === false) chips.push([t("setup"), t("notInstalled")]);
+        if (result.exit_code !== undefined && result.exit_code !== null) chips.push([t("exit"), result.exit_code]);
+        if (result.line_count !== undefined && result.line_count !== null) chips.push([t("lines"), result.line_count]);
+        if (result.pages_scanned !== undefined) chips.push([t("page"), result.pages_scanned]);
         if (!chips.length) return "";
         return `<div class="ot-chips">${chips.map(([k, v]) => `<span class="ot-chip"><b>${esc(k)}</b> ${esc(String(v))}</span>`).join("")}</div>`;
     }
@@ -474,8 +511,8 @@
         const scriptResult = output.result;
         const guidance = output.ai_guidance || {};
         const aiNative = Boolean(currentOp && currentOp.ai_native);
-        const statusLabel = state.status === "finished" ? "Tamamlandı" : (state.status === "cancelled" ? "İptal edildi" : "Hata");
-        logLine(`Durum: ${statusLabel}`);
+        const statusLabel = state.status === "finished" ? t("done") : (state.status === "cancelled" ? t("cancelled") : t("error"));
+        logLine(`${t("status")}: ${statusLabel}`);
         let html = `<div class="ot-status ot-status-${esc(state.status)}">${esc(statusLabel)}</div>`;
         // Fully AI-driven operations (e.g. AI OSINT): the AI was given the data and
         // wrote a report — show it prominently. Tool ops get no AI evaluation.
@@ -497,7 +534,7 @@
         const hidden = wrap && wrap.querySelector("input[type=hidden]");
         const nameSpan = wrap && wrap.querySelector(".upload-param-name");
         const file = input.files[0];
-        if (nameSpan) nameSpan.textContent = "Yükleniyor…";
+        if (nameSpan) nameSpan.textContent = t("loading");
         try {
             const fd = new FormData();
             fd.append("file", file);
@@ -506,7 +543,7 @@
             if (hidden) hidden.value = savedName;
             if (nameSpan) nameSpan.textContent = savedName;
         } catch (e) {
-            if (nameSpan) nameSpan.textContent = "Yüklenemedi: " + (e.message || "hata");
+            if (nameSpan) nameSpan.textContent = t("loadFail") + (e.message || "hata");
             if (hidden) hidden.value = "";
         }
     });
@@ -537,7 +574,7 @@
                     <td>${esc(it.name)}</td>
                     <td>${esc(it.size_h || "")}</td>
                     <td>${esc(date)}</td>
-                    <td><a href="${esc(dl)}" target="_blank" rel="noopener">İndir</a> · <button type="button" class="otf-del" data-name="${esc(it.name)}">Sil</button></td>
+                    <td><a href="${esc(dl)}" target="_blank" rel="noopener">${t("download")}</a> · <button type="button" class="otf-del" data-name="${esc(it.name)}">${t("del")}</button></td>
                 </tr>`;
             }).join("");
         }
@@ -547,7 +584,7 @@
                 const d = await api("/validation/osint-list", { cache: "no-store" });
                 renderFiles(Array.isArray(d.items) ? d.items : []);
             } catch (e) {
-                setOtfNote(e.message || "Dosya listesi alınamadı.", true);
+                setOtfNote(e.message || t("fileListFail"), true);
             }
         }
 
@@ -571,7 +608,7 @@
         });
         otfDeleteSelected && otfDeleteSelected.addEventListener("click", () => {
             const names = Array.from(otfTbody.querySelectorAll(".otf-check:checked")).map((c) => c.value);
-            if (!names.length) { setOtfNote("Silmek için dosya seçin.", true); return; }
+            if (!names.length) { setOtfNote(t("pickToDelete"), true); return; }
             deleteNames(names);
         });
         otfSelectAll && otfSelectAll.addEventListener("change", () => {

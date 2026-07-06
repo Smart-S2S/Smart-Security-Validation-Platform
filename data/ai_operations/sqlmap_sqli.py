@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "sqlmap"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "url", "label": "Hedef URL", "kind": "opt", "flag": "-u", "setting": "URL", "default": "", "required": true, "pattern": "url", "choices": [], "must_exist": false}, {"key": "batch", "label": "Otomatik (--batch)", "kind": "flag", "flag": "--batch", "setting": "BATCH", "default": "on", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "level", "label": "Seviye", "kind": "opt", "flag": "--level", "setting": "LEVEL", "default": "1", "required": false, "pattern": "safe", "choices": ["1", "2", "3", "4", "5"], "must_exist": false}, {"key": "risk", "label": "Risk", "kind": "opt", "flag": "--risk", "setting": "RISK", "default": "1", "required": false, "pattern": "safe", "choices": ["1", "2", "3"], "must_exist": false}, {"key": "data", "label": "POST verisi", "kind": "opt", "flag": "--data", "setting": "DATA", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "param", "label": "Test parametresi", "kind": "opt", "flag": "-p", "setting": "PARAM", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "cookie", "label": "Cookie", "kind": "opt", "flag": "--cookie", "setting": "COOKIE", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "dbms", "label": "DBMS", "kind": "opt", "flag": "--dbms", "setting": "DBMS", "default": "", "required": false, "pattern": "word", "choices": ["MySQL", "PostgreSQL", "Microsoft SQL Server", "Oracle", "SQLite"], "must_exist": false}, {"key": "technique", "label": "Teknikler", "kind": "opt", "flag": "--technique", "setting": "TECHNIQUE", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "enumerate", "label": "Numaralandırma", "kind": "token", "flag": "", "setting": "ENUMERATE", "default": "--dbs", "required": false, "pattern": "safe", "choices": ["--dbs", "--tables", "--dump", "--current-user", "--is-dba"], "must_exist": false}, {"key": "threads", "label": "Thread sayısı", "kind": "opt", "flag": "--threads", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "random_agent", "label": "Rastgele User-Agent", "kind": "flag", "flag": "--random-agent", "setting": "RANDOM_AGENT", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "tamper", "label": "Tamper script", "kind": "opt", "flag": "--tamper", "setting": "TAMPER", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "proxy", "label": "Proxy", "kind": "opt", "flag": "--proxy", "setting": "PROXY", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "forms", "label": "Formları test et", "kind": "flag", "flag": "--forms", "setting": "FORMS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "crawl", "label": "Crawl derinliği", "kind": "opt", "flag": "--crawl", "setting": "CRAWL", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "url", "label": "Target URL", "kind": "opt", "flag": "-u", "setting": "URL", "default": "", "required": true, "pattern": "url", "choices": [], "must_exist": false}, {"key": "batch", "label": "Automatic (--batch)", "kind": "flag", "flag": "--batch", "setting": "BATCH", "default": "on", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "level", "label": "Level", "kind": "opt", "flag": "--level", "setting": "LEVEL", "default": "1", "required": false, "pattern": "safe", "choices": ["1", "2", "3", "4", "5"], "must_exist": false}, {"key": "risk", "label": "Risk", "kind": "opt", "flag": "--risk", "setting": "RISK", "default": "1", "required": false, "pattern": "safe", "choices": ["1", "2", "3"], "must_exist": false}, {"key": "data", "label": "POST data", "kind": "opt", "flag": "--data", "setting": "DATA", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "param", "label": "Test parameter", "kind": "opt", "flag": "-p", "setting": "PARAM", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "cookie", "label": "Cookie", "kind": "opt", "flag": "--cookie", "setting": "COOKIE", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "dbms", "label": "DBMS", "kind": "opt", "flag": "--dbms", "setting": "DBMS", "default": "", "required": false, "pattern": "word", "choices": ["MySQL", "PostgreSQL", "Microsoft SQL Server", "Oracle", "SQLite"], "must_exist": false}, {"key": "technique", "label": "Techniques", "kind": "opt", "flag": "--technique", "setting": "TECHNIQUE", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "enumerate", "label": "Enumeration", "kind": "token", "flag": "", "setting": "ENUMERATE", "default": "--dbs", "required": false, "pattern": "safe", "choices": ["--dbs", "--tables", "--dump", "--current-user", "--is-dba"], "must_exist": false}, {"key": "threads", "label": "Thread count", "kind": "opt", "flag": "--threads", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "random_agent", "label": "Random User-Agent", "kind": "flag", "flag": "--random-agent", "setting": "RANDOM_AGENT", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "tamper", "label": "Tamper script", "kind": "opt", "flag": "--tamper", "setting": "TAMPER", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "proxy", "label": "Proxy", "kind": "opt", "flag": "--proxy", "setting": "PROXY", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "forms", "label": "Test forms", "kind": "flag", "flag": "--forms", "setting": "FORMS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "crawl", "label": "Crawl depth", "kind": "opt", "flag": "--crawl", "setting": "CRAWL", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "dnsenum"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "domain", "label": "Alan adı", "kind": "positional", "flag": "", "setting": "DOMAIN", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "dnsserver", "label": "DNS sunucusu", "kind": "opt", "flag": "--dnsserver", "setting": "DNSSERVER", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "wordlist", "label": "Subdomain sözlüğü", "kind": "opt", "flag": "-f", "setting": "WORDLIST", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "threads", "label": "Thread sayısı", "kind": "opt", "flag": "--threads", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "noreverse", "label": "Ters DNS'i atla", "kind": "flag", "flag": "--noreverse", "setting": "NOREVERSE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "pages", "label": "Google sayfa sayısı", "kind": "opt", "flag": "-p", "setting": "PAGES", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "scrap", "label": "Kazınacak sonuç", "kind": "opt", "flag": "-s", "setting": "SCRAP", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "whois", "label": "Whois sorgusu (-w)", "kind": "flag", "flag": "-w", "setting": "WHOIS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "domain", "label": "Domain", "kind": "positional", "flag": "", "setting": "DOMAIN", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "dnsserver", "label": "DNS server", "kind": "opt", "flag": "--dnsserver", "setting": "DNSSERVER", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "wordlist", "label": "Subdomain wordlist", "kind": "opt", "flag": "-f", "setting": "WORDLIST", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "threads", "label": "Thread count", "kind": "opt", "flag": "--threads", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "noreverse", "label": "Skip reverse DNS", "kind": "flag", "flag": "--noreverse", "setting": "NOREVERSE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "pages", "label": "Google page count", "kind": "opt", "flag": "-p", "setting": "PAGES", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "scrap", "label": "Result to scrape", "kind": "opt", "flag": "-s", "setting": "SCRAP", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "whois", "label": "Whois query (-w)", "kind": "flag", "flag": "-w", "setting": "WHOIS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

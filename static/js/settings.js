@@ -318,6 +318,17 @@ const I18N = {
         "settings.toolsmgmt.clearLog": "Temizle",
         "settings.tab.wordlists": "Sözlük Yönetimi",
         "settings.tab.database": "Veritabanı ve Yedekleme",
+        "breadcrumb.root": "ana",
+        "breadcrumb.settings": "ayarlar",
+        "breadcrumb.appearance": "görünüm",
+        "breadcrumb.ai": "ai model",
+        "breadcrumb.system": "sistem",
+        "breadcrumb.scan": "tarama",
+        "breadcrumb.toolsmgmt": "pentest araçları",
+        "breadcrumb.wordlists": "sözlükler",
+        "breadcrumb.database": "veritabanı",
+        "breadcrumb.steps": "adım listesi",
+        "breadcrumb.progress-categories": "kategoriler",
         "settings.database.title": "Veritabanı ve Yedekleme",
         "settings.database.refresh": "Yenile",
         "settings.database.note": "Veritabanı bağlantı durumu, parola değişimi ve yedekleme. Parola değişimi hizmeti kesmeden uygulanır: değişiklik hem veritabanında hem yapılandırma dosyasında doğrulanamazsa eski parola korunur.",
@@ -557,6 +568,17 @@ const I18N = {
         "settings.toolsmgmt.clearLog": "Clear",
         "settings.tab.wordlists": "Wordlists",
         "settings.tab.database": "Database & Backup",
+        "breadcrumb.root": "home",
+        "breadcrumb.settings": "settings",
+        "breadcrumb.appearance": "appearance",
+        "breadcrumb.ai": "ai model",
+        "breadcrumb.system": "system",
+        "breadcrumb.scan": "scan",
+        "breadcrumb.toolsmgmt": "pentest tools",
+        "breadcrumb.wordlists": "wordlists",
+        "breadcrumb.database": "database",
+        "breadcrumb.steps": "steps",
+        "breadcrumb.progress-categories": "categories",
         "settings.database.title": "Database & Backup",
         "settings.database.refresh": "Refresh",
         "settings.database.note": "Database connection status, password change and backups. A password change is applied without downtime: if the change cannot be verified in BOTH the database and the config file, the old password is kept.",
@@ -1020,6 +1042,12 @@ function resolveStepItemContextSegment() {
 }
 
 
+function crumbLabel(key) {
+    const k = String(key || "").trim().toLowerCase();
+    const val = t("breadcrumb." + k);
+    return val && val !== "breadcrumb." + k ? val : k.replace(/[-_]+/g, " ");
+}
+
 function renderPathNavigation(activeTab = "system", segments = []) {
     const safeTab = String(activeTab || "system").trim() || "system";
     const hashTab = tabToHashSegment(safeTab) || "system";
@@ -1045,9 +1073,9 @@ function renderPathNavigation(activeTab = "system", segments = []) {
 
     let hashPath = hashTab;
     const crumbs = [
-        { label: "root", href: "/" },
-        { label: "settings", href: "/settings" },
-        { label: hashTab, href: `/settings#${hashTab}` },
+        { label: crumbLabel("root"), href: "/" },
+        { label: crumbLabel("settings"), href: "/settings" },
+        { label: crumbLabel(hashTab), href: `/settings#${hashTab}` },
     ];
     safeSegments.forEach((entry) => {
         hashPath = `${hashPath}/${entry.segment}`;
@@ -2780,7 +2808,9 @@ function hydrateAdminSettingsForms() {
         updateAiProviderVisibility();
     }
 
-    if (settingsConfig.scan) {
+    // Scan settings are admin-only, so their inputs don't exist for other users;
+    // guard against that (non-admins receive an empty scan object).
+    if (settingsConfig.scan && nmapTimeout && masscanTimeout && netdiscoverTimeout) {
         nmapTimeout.value = settingsConfig.scan.nmap_timeout_sec || 600;
         masscanTimeout.value = settingsConfig.scan.masscan_timeout_sec || 600;
         netdiscoverTimeout.value = settingsConfig.scan.netdiscover_timeout_sec || 180;
@@ -2790,6 +2820,48 @@ function hydrateAdminSettingsForms() {
     if (workflowModeSelect) {
         const mode = String(settingsConfig.workflow?.mode || "manual").toLowerCase();
         workflowModeSelect.value = mode === "ai" ? "ai" : "manual";
+    }
+}
+
+
+// Single source of truth for "load this tab's data". Called from BOTH the first
+// paint (initializeAccess) and tab clicks, so every tab loads identically no
+// matter how it is reached (refresh, deep link, or click). Previously this logic
+// was duplicated in two places and drifted — new tabs (toolsmgmt/wordlists/
+// database) were only wired into the click path, so on refresh their content
+// stayed empty until the user clicked away and back.
+async function loadTabData(tab, { force = false } = {}) {
+    if ((tab === "users" || tab === "roles") && hasTab("users")) {
+        await loadUsersAndRoles();
+    }
+    if ((tab === "ai" || tab === "scan") && hasTab("ai")) {
+        await loadSettingsConfig();
+        hydrateAdminSettingsForms();
+        if (tab === "ai") {
+            await loadAiModels();
+        }
+    }
+    if (tab === "system" && hasTab("system")) {
+        await loadSystemInfo(force);
+    }
+    if (tab === "tools" && hasTab("tools")) {
+        await Promise.all([loadProgressCategories(), loadSteps()]);
+    }
+    if (tab === "progress-categories" && hasTab("progress-categories")) {
+        await loadProgressCategories();
+    }
+    if (tab === "toolsmgmt" && hasTab("toolsmgmt")) {
+        await loadPentestTools();
+    }
+    if (tab === "wordlists" && hasTab("wordlists")) {
+        await loadWordlists();
+    }
+    if (tab === "database" && hasTab("database")) {
+        await loadDatabaseTab();
+    }
+    // Service controls are admin-only; only refresh their status when present.
+    if (tab === "ai" && hasTab("ai") && document.getElementById("ollamaServiceStatus")) {
+        refreshOllamaStatus("status");
     }
 }
 
@@ -2826,30 +2898,8 @@ async function initializeAccess() {
     const firstTab = accessTabs.includes(requestedTab) ? requestedTab : (accessTabs[0] || "system");
     activateTab(firstTab);
 
-    // Load only the active tab's data on first paint for faster initial response.
-    if ((firstTab === "users" || firstTab === "roles") && hasTab("users")) {
-        await loadUsersAndRoles();
-    }
-
-    if ((firstTab === "ai" || firstTab === "scan") && hasTab("ai")) {
-        await loadSettingsConfig();
-        hydrateAdminSettingsForms();
-        if (firstTab === "ai") {
-            await loadAiModels();
-        }
-    }
-
-    if (firstTab === "tools" && hasTab("tools")) {
-        await Promise.all([loadProgressCategories(), loadSteps()]);
-    }
-
-    if (firstTab === "progress-categories" && hasTab("progress-categories")) {
-        await loadProgressCategories();
-    }
-
-    if (firstTab === "system" && hasTab("system")) {
-        await loadSystemInfo();
-    }
+    // Load the active tab's data on first paint (covers EVERY tab, same as clicks).
+    await loadTabData(firstTab);
 
     if (requested) {
         await navigateToPath(`/settings#${requested}`);
@@ -2866,48 +2916,9 @@ tabButtons.forEach((button) => {
         }
         const tab = button.dataset.tab;
         activateTab(tab);
-
-        if ((tab === "users" || tab === "roles") && hasTab("users")) {
-            await loadUsersAndRoles();
-            if (tab === "users") {
-                resetEditForm();
-            }
-        }
-
-        if ((tab === "ai" || tab === "scan") && hasTab("ai")) {
-            await loadSettingsConfig();
-            hydrateAdminSettingsForms();
-            if (tab === "ai") {
-                await loadAiModels();
-            }
-        }
-
-        if (tab === "system" && hasTab("system")) {
-            await loadSystemInfo(true);
-        }
-
-        if (tab === "tools" && hasTab("tools")) {
-            await Promise.all([loadProgressCategories(), loadSteps()]);
-        }
-
-        if (tab === "progress-categories" && hasTab("progress-categories")) {
-            await loadProgressCategories();
-        }
-
-        if (tab === "toolsmgmt" && hasTab("toolsmgmt")) {
-            await loadPentestTools();
-        }
-
-        if (tab === "wordlists" && hasTab("wordlists")) {
-            await loadWordlists();
-        }
-
-        if (tab === "database" && hasTab("database")) {
-            await loadDatabaseTab();
-        }
-
-        if (tab === "ai" && hasTab("ai")) {
-            refreshOllamaStatus("status");
+        await loadTabData(tab, { force: true });
+        if (tab === "users") {
+            resetEditForm();
         }
     });
 });
@@ -3392,10 +3403,31 @@ if (aiSettingsForm) {
             }
             hydrateAdminSettingsForms();
             setFeedback(t("aiSaved"));
+            // "Bağlantıyı Doğrula" only makes sense against SAVED settings, so it
+            // is revealed only after a successful save.
+            const testBtn = document.getElementById("aiTestBtn");
+            if (testBtn) {
+                testBtn.hidden = false;
+            }
         } catch (error) {
             setFeedback(error.message || t("settings.error.aiSave"), true);
         }
     });
+
+    // Any edit to the AI form invalidates the last save, so hide the test button
+    // again until the user saves the new values.
+    const hideAiTestBtn = () => {
+        const testBtn = document.getElementById("aiTestBtn");
+        if (testBtn) {
+            testBtn.hidden = true;
+        }
+        const testResult = document.getElementById("aiTestResult");
+        if (testResult) {
+            testResult.innerText = "";
+        }
+    };
+    aiSettingsForm.addEventListener("input", hideAiTestBtn);
+    aiSettingsForm.addEventListener("change", hideAiTestBtn);
 }
 
 

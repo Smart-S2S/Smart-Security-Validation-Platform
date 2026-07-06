@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "theHarvester"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "domain", "label": "Alan adı", "kind": "opt", "flag": "-d", "setting": "DOMAIN", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "source", "label": "Kaynak", "kind": "opt", "flag": "-b", "setting": "SOURCE", "default": "bing", "required": false, "pattern": "safe", "choices": ["bing", "google", "duckduckgo", "yahoo", "crtsh", "dnsdumpster", "anubis", "otx"], "must_exist": false}, {"key": "limit", "label": "Sonuç limiti", "kind": "opt", "flag": "-l", "setting": "LIMIT", "default": "100", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "start", "label": "Başlangıç ofseti", "kind": "opt", "flag": "-s", "setting": "START", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "dns_brute", "label": "DNS brute (-c)", "kind": "flag", "flag": "-c", "setting": "DNS_BRUTE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "takeover", "label": "Takeover kontrolü (-t)", "kind": "flag", "flag": "-t", "setting": "TAKEOVER", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "screenshot", "label": "Ekran görüntüsü dizini", "kind": "opt", "flag": "--screenshot", "setting": "SCREENSHOT", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "domain", "label": "Domain", "kind": "opt", "flag": "-d", "setting": "DOMAIN", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "source", "label": "Source", "kind": "opt", "flag": "-b", "setting": "SOURCE", "default": "bing", "required": false, "pattern": "safe", "choices": ["bing", "google", "duckduckgo", "yahoo", "crtsh", "dnsdumpster", "anubis", "otx"], "must_exist": false}, {"key": "limit", "label": "Result limit", "kind": "opt", "flag": "-l", "setting": "LIMIT", "default": "100", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "start", "label": "Start offset", "kind": "opt", "flag": "-s", "setting": "START", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "dns_brute", "label": "DNS brute (-c)", "kind": "flag", "flag": "-c", "setting": "DNS_BRUTE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "takeover", "label": "Takeover check (-t)", "kind": "flag", "flag": "-t", "setting": "TAKEOVER", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "screenshot", "label": "Screenshot directory", "kind": "opt", "flag": "--screenshot", "setting": "SCREENSHOT", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

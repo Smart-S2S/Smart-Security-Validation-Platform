@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "masscan"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "target", "label": "Hedef aralık", "kind": "positional", "flag": "", "setting": "TARGET", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "ports", "label": "Portlar", "kind": "opt", "flag": "-p", "setting": "PORTS", "default": "1-1000", "required": true, "pattern": "ports", "choices": [], "must_exist": false}, {"key": "rate", "label": "Paket hızı (pps)", "kind": "opt", "flag": "--rate", "setting": "RATE", "default": "1000", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "interface", "label": "Ağ arayüzü", "kind": "opt", "flag": "-e", "setting": "INTERFACE", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "banners", "label": "Banner yakala", "kind": "flag", "flag": "--banners", "setting": "BANNERS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "wait", "label": "Bekleme (sn)", "kind": "opt", "flag": "--wait", "setting": "WAIT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "exclude", "label": "Hariç tutulan aralık", "kind": "opt", "flag": "--exclude", "setting": "EXCLUDE", "default": "", "required": false, "pattern": "range", "choices": [], "must_exist": false}, {"key": "source_port", "label": "Kaynak port", "kind": "opt", "flag": "--source-port", "setting": "SOURCE_PORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "retries", "label": "Yeniden deneme", "kind": "opt", "flag": "--retries", "setting": "RETRIES", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ping_scan", "label": "Ping taraması (--ping)", "kind": "flag", "flag": "--ping", "setting": "PING_SCAN", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "target", "label": "Target range", "kind": "positional", "flag": "", "setting": "TARGET", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "ports", "label": "Ports", "kind": "opt", "flag": "-p", "setting": "PORTS", "default": "1-1000", "required": true, "pattern": "ports", "choices": [], "must_exist": false}, {"key": "rate", "label": "Packet rate (pps)", "kind": "opt", "flag": "--rate", "setting": "RATE", "default": "1000", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "interface", "label": "Network interface", "kind": "opt", "flag": "-e", "setting": "INTERFACE", "default": "", "required": false, "pattern": "word", "choices": [], "must_exist": false}, {"key": "banners", "label": "Grab banner", "kind": "flag", "flag": "--banners", "setting": "BANNERS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "wait", "label": "Wait (s)", "kind": "opt", "flag": "--wait", "setting": "WAIT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "exclude", "label": "Excluded range", "kind": "opt", "flag": "--exclude", "setting": "EXCLUDE", "default": "", "required": false, "pattern": "range", "choices": [], "must_exist": false}, {"key": "source_port", "label": "Source port", "kind": "opt", "flag": "--source-port", "setting": "SOURCE_PORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "retries", "label": "Retry", "kind": "opt", "flag": "--retries", "setting": "RETRIES", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ping_scan", "label": "Ping scan (--ping)", "kind": "flag", "flag": "--ping", "setting": "PING_SCAN", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

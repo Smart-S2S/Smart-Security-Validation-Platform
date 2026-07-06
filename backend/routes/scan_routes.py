@@ -187,7 +187,12 @@ def scan(
     language: str = Form("tr"),
     current_user: dict = Depends(require_roles(ROLE_TEST)),
 ):
-    del current_user
+    from backend.services.user_settings import resolve_user_ai, resolve_user_workflow_mode
+
+    scan_ai_settings = resolve_user_ai(current_user)
+    # Only interpret the scan with AI when the user is in AI (YZO) mode; in manual
+    # (3YM) mode the scan table is returned parsed, without any AI call.
+    scan_use_ai = resolve_user_workflow_mode(current_user) == "ai"
     allowed_tools = {"nmap", "masscan", "netdiscover"}
     selected_tool = scan_tool.strip().lower()
     selected_language = normalize_lang(language)
@@ -221,7 +226,7 @@ def scan(
         scan_ports=selected_ports,
         language=selected_language,
     )
-    background_tasks.add_task(run_scan_job, job_id, target, selected_tool, selected_params, selected_ports, selected_language)
+    background_tasks.add_task(run_scan_job, job_id, target, selected_tool, selected_params, selected_ports, selected_language, scan_ai_settings, scan_use_ai)
 
     return JSONResponse({
         "job_id": job_id,

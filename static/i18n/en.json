@@ -233,5 +233,11 @@
   "users.prompt.newPasswordConfirm": "Re-enter the new password:",
   "users.confirm.delete": "Do you want to delete user {username}?",
   "theme.toDark": "Switch to Dark Theme",
-  "theme.toLight": "Switch to Light Theme"
+  "theme.toLight": "Switch to Light Theme",
+  "breadcrumb.root": "home",
+  "breadcrumb.app": "pentest",
+  "breadcrumb.scan": "scan",
+  "breadcrumb.attack": "attack",
+  "breadcrumb.remediation": "remediation",
+  "breadcrumb.legal": "legal notice"
 }

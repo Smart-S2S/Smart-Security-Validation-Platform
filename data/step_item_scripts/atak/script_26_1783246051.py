@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "hashcat"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "hash_mode", "label": "Hash modu (-m)", "kind": "opt", "flag": "-m", "setting": "HASH_MODE", "default": "0", "required": true, "pattern": "int", "choices": [], "must_exist": false}, {"key": "attack_mode", "label": "Saldırı modu (-a)", "kind": "opt", "flag": "-a", "setting": "ATTACK_MODE", "default": "0", "required": false, "pattern": "safe", "choices": ["0", "1", "3", "6", "7"], "must_exist": false}, {"key": "hashfile", "label": "Hash dosyası", "kind": "positional", "flag": "", "setting": "HASHFILE", "default": "", "required": true, "pattern": "path", "choices": [], "must_exist": true}, {"key": "wordlist", "label": "Sözlük/mask", "kind": "positional", "flag": "", "setting": "WORDLIST", "default": "/usr/share/wordlists/rockyou.txt", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "force", "label": "Zorla (--force)", "kind": "flag", "flag": "--force", "setting": "FORCE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "potfile_disable", "label": "Potfile kapat", "kind": "flag", "flag": "--potfile-disable", "setting": "POTFILE_DISABLE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "workload", "label": "İş yükü profili (-w)", "kind": "opt", "flag": "-w", "setting": "WORKLOAD", "default": "2", "required": false, "pattern": "safe", "choices": ["1", "2", "3", "4"], "must_exist": false}, {"key": "optimized", "label": "Optimize (-O)", "kind": "flag", "flag": "-O", "setting": "OPTIMIZED", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "rules_file", "label": "Kural dosyası", "kind": "opt", "flag": "-r", "setting": "RULES_FILE", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "increment", "label": "Artımlı (--increment)", "kind": "flag", "flag": "--increment", "setting": "INCREMENT", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "hash_mode", "label": "Hash mode (-m)", "kind": "opt", "flag": "-m", "setting": "HASH_MODE", "default": "0", "required": true, "pattern": "int", "choices": [], "must_exist": false}, {"key": "attack_mode", "label": "Attack mode (-a)", "kind": "opt", "flag": "-a", "setting": "ATTACK_MODE", "default": "0", "required": false, "pattern": "safe", "choices": ["0", "1", "3", "6", "7"], "must_exist": false}, {"key": "hashfile", "label": "Hash file", "kind": "positional", "flag": "", "setting": "HASHFILE", "default": "", "required": true, "pattern": "path", "choices": [], "must_exist": true}, {"key": "wordlist", "label": "Wordlist/mask", "kind": "positional", "flag": "", "setting": "WORDLIST", "default": "/usr/share/wordlists/rockyou.txt", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "force", "label": "Force (--force)", "kind": "flag", "flag": "--force", "setting": "FORCE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "potfile_disable", "label": "Disable potfile", "kind": "flag", "flag": "--potfile-disable", "setting": "POTFILE_DISABLE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "workload", "label": "Workload profile (-w)", "kind": "opt", "flag": "-w", "setting": "WORKLOAD", "default": "2", "required": false, "pattern": "safe", "choices": ["1", "2", "3", "4"], "must_exist": false}, {"key": "optimized", "label": "Optimize (-O)", "kind": "flag", "flag": "-O", "setting": "OPTIMIZED", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "rules_file", "label": "Rule file", "kind": "opt", "flag": "-r", "setting": "RULES_FILE", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": true}, {"key": "increment", "label": "Incremental (--increment)", "kind": "flag", "flag": "--increment", "setting": "INCREMENT", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

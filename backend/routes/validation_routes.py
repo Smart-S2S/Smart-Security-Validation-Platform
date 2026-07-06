@@ -16,11 +16,13 @@ from backend.ai.ollama_client import (
     analyze_evidence_with_ai,
     evaluate_script_result,
     orchestrate_next_operation,
+    set_ai_settings_override,
     suggest_action_intents,
 )
 from backend.auth import require_roles
 from backend.i18n import request_lang, t
 from backend.services.auth_store import ROLE_ATTACK, ROLE_REMEDIATION, ROLE_TEST
+from backend.services.user_settings import resolve_user_ai
 from backend.services.param_inference import infer_parameter_schema
 from backend.services.orchestrator_store import (
     create_validation_action,
@@ -651,6 +653,8 @@ def _run_script_execution_job(
 ) -> None:
     set_status(execution_id, "running", "script starting")
     append_log(execution_id, f"script start: {script_item.get('display_name') or action_key}")
+    # Use the requesting user's own AI settings for any evaluation this job runs.
+    set_ai_settings_override(resolve_user_ai(current_user))
 
     process_logs: list[str] = []
     script_result = None
@@ -1168,6 +1172,7 @@ def validation_step_intents(
     language = request_lang(request)
     step = _require_step(payload.step_key, language)
     _ensure_step_access(step, current_user, language)
+    set_ai_settings_override(resolve_user_ai(current_user))
 
     scan_result = dict(payload.scan_result or {})
     scan_result["target"] = payload.target
@@ -1492,6 +1497,8 @@ def _run_ai_osint_job(
     """In-process runner for the AI-native OSINT operation: crawl + LLM extract."""
     from backend.services.ai_osint import run_osint
 
+    # The LLM extraction inside run_osint uses the requesting user's AI settings.
+    set_ai_settings_override(resolve_user_ai(current_user))
     set_status(execution_id, "running", "AI OSINT started")
     append_log(execution_id, "AI OSINT: hedef taranıyor...")
     process_logs: list[str] = []
@@ -1600,6 +1607,7 @@ def validation_ai_orchestrate(
     editable inputs for the user to approve, tweak, or redirect.
     """
     language = request_lang(request)
+    set_ai_settings_override(resolve_user_ai(current_user))
 
     # The AI Orchestrator uses its OWN catalog (ai_operations), fully independent
     # of the manual 3-way step_items flow.
@@ -1894,14 +1902,19 @@ def validation_pentest_report(
     target: str,
     format: str = "pdf",
     autoprint: int = 0,
+    lang: str = "",
     current_user: dict = Depends(require_roles(ROLE_TEST, ROLE_REMEDIATION, ROLE_ATTACK)),
 ):
     """Pentest report as printable HTML, PDF (xhtml2pdf) or Word (python-docx).
 
     ``format`` = html|pdf|docx. ``autoprint=1`` (html only) auto-opens the print
-    dialog. Ownership-scoped like the other pentest endpoints.
+    dialog. ``lang`` (tr|en) overrides Accept-Language for the report so the report
+    matches the user's chosen UI language even when opened via window.open.
+    Ownership-scoped like the other pentest endpoints.
     """
-    language = request_lang(request)
+    # Explicit ?lang= wins (report is often opened in a new tab, where the app's
+    # Accept-Language header isn't sent); otherwise fall back to request language.
+    language = "en" if str(lang or "").lower() == "en" else ("tr" if str(lang or "").lower() == "tr" else request_lang(request))
     from datetime import datetime, timezone
     from backend.services.pentest_artifacts import artifacts_for_actions
     from backend.services.pentest_report import build_report_html, build_report_pdf, build_report_docx
@@ -1919,19 +1932,19 @@ def validation_pentest_report(
     fmt = str(format or "pdf").strip().lower()
 
     if fmt == "pdf":
-        pdf_bytes = build_report_pdf(clean, actions, files, generated_at)
+        pdf_bytes = build_report_pdf(clean, actions, files, generated_at, lang=language)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{stem}.pdf"'},
         )
     if fmt in ("docx", "word"):
-        docx_bytes = build_report_docx(clean, actions, files, generated_at)
+        docx_bytes = build_report_docx(clean, actions, files, generated_at, lang=language)
         return Response(
             content=docx_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             headers={"Content-Disposition": f'attachment; filename="{stem}.docx"'},
         )
 
-    html_str = build_report_html(clean, actions, files, generated_at, autoprint=bool(autoprint))
+    html_str = build_report_html(clean, actions, files, generated_at, autoprint=bool(autoprint), lang=language)
     return HTMLResponse(content=html_str)

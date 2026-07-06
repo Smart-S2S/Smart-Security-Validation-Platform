@@ -181,40 +181,40 @@ AI_NATIVE_OPERATIONS = [
         "tool_key": "ai-osint",
         "operation_key": "ai_osint_recon",
         "stage": "scan",
-        "display_name": "AI OSINT — Web İstihbarat Toplama",
+        "display_name": "AI OSINT — Web Intelligence Gathering",
         "description": (
-            "Yapay zeka tabanlı OSINT: hedef web sitesini (ve alt sayfalarını) tarayıp "
-            "isim, kullanıcı adı, e-posta, telefon, ev/iş adresi, çalışan bilgileri, "
-            "sosyal medya, görünür parola/anahtar gibi sızma ve istihbarat için değerli "
-            "verileri çıkarır. Yalnızca yetkili hedeflerde kullanılır."
+            "AI-driven OSINT: crawls the target website (and its sub-pages) and extracts "
+            "data valuable for intrusion and intelligence such as names, usernames, emails, phones, home/work addresses, employee info, "
+            "social media and exposed passwords/keys. "
+            "Use only on authorized targets."
         ),
         "when_to_use": (
-            "Hedef bir web sitesi/kurum olduğunda saldırı yüzeyi ve istihbarat için "
-            "kişisel/kurumsal veri toplamak için. Önce dirb/ffuf/gobuster ile içerik keşfi "
-            "yapıldıysa, bulunan alt yolları otomatik dahil ederek daha derin tarar."
+            "When the target is a website/organization, to gather personal/corporate data "
+            "for the attack surface and intelligence. If content discovery was already done "
+            "with dirb/ffuf/gobuster, it auto-includes the found sub-paths and scans deeper."
         ),
         "sentinel": AI_NATIVE_SCHEME + "osint_recon",
         "params": [
-            {"key": "target_url", "label": "Hedef URL", "type": "url", "default": "",
-             "required": False, "description": "OSINT yapılacak site (ör. https://kurum.com). Boşsa hedeften otomatik dolar. 'Taranacak sayfa listesi' verilirse zorunlu değildir.",
+            {"key": "target_url", "label": "Target URL", "type": "url", "default": "",
+             "required": False, "description": "Site to run OSINT on (e.g. https://org.com). Auto-fills from target if empty. Not required if a 'Pages to scan list' is provided.",
              "options_json": [], "sort_order": 10},
-            {"key": "include_subpages", "label": "Alt sayfaları tara", "type": "boolean", "default": "on",
-             "required": False, "description": "Sayfadaki bağlantıları ve önceki dirb/ffuf/gobuster bulgularını da tarar.",
+            {"key": "include_subpages", "label": "Scan sub-pages", "type": "boolean", "default": "on",
+             "required": False, "description": "Also scans the page's links and previous dirb/ffuf/gobuster findings.",
              "options_json": [], "sort_order": 20},
-            {"key": "max_pages", "label": "Azami sayfa sayısı", "type": "number", "default": "1000",
-             "required": False, "description": "Taranacak en fazla sayfa sayısı (1-2000). Hariç tutulanlar bu sayıya dahil değildir.",
+            {"key": "max_pages", "label": "Max page count", "type": "number", "default": "1000",
+             "required": False, "description": "Maximum number of pages to scan (1-2000). Excluded ones do not count toward this.",
              "options_json": [], "sort_order": 30},
-            {"key": "extra_paths", "label": "Ek yollar", "type": "string", "default": "",
-             "required": False, "description": "Elle eklenecek yollar (virgülle): /admin, /about, /team …",
+            {"key": "extra_paths", "label": "Extra paths", "type": "string", "default": "",
+             "required": False, "description": "Paths to add manually (comma-separated): /admin, /about, /team …",
              "options_json": [], "sort_order": 500},
-            {"key": "focus", "label": "Odak", "type": "string", "default": "",
-             "required": False, "description": "İsteğe bağlı: neye öncelik verilsin (ör. 'e-posta ve telefon, çalışanlar').",
+            {"key": "focus", "label": "Focus", "type": "string", "default": "",
+             "required": False, "description": "Optional: what to prioritize (e.g. 'emails and phones, employees').",
              "options_json": [], "sort_order": 510},
-            {"key": "scan_list", "label": "Taranacak sayfa listesi (XML/TXT dosyası)", "type": "upload", "default": "",
-             "required": False, "description": "Dosya yükleyin (.xml/.txt). Verilirse SADECE bu URL'ler taranır (hedef zorunlu değildir, diğer tarama parametreleri yok sayılır).",
+            {"key": "scan_list", "label": "Pages to scan list (XML/TXT file)", "type": "upload", "default": "",
+             "required": False, "description": "Upload a file (.xml/.txt). If provided, ONLY these URLs are scanned (target not required, other scan parameters are ignored).",
              "options_json": [], "sort_order": 900},
-            {"key": "exclude_list", "label": "Hariç tutulacak sayfalar (XML/TXT dosyası)", "type": "upload", "default": "",
-             "required": False, "description": "Dosya yükleyin (.xml/.txt). Bu URL/yollar taranmaz ve azami sayfa sayısından düşülmez.",
+            {"key": "exclude_list", "label": "Pages to exclude (XML/TXT file)", "type": "upload", "default": "",
+             "required": False, "description": "Upload a file (.xml/.txt). These URLs/paths are not scanned and are not deducted from the max page count.",
              "options_json": [], "sort_order": 910},
         ],
     },

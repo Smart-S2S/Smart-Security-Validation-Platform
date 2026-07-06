@@ -9,15 +9,15 @@
 </head>
 <body>
 <header class="settings-header">
-    <h1>Yönetim Paneli</h1>
+    <h1 data-i18n="panel.header.title">Yönetim Paneli</h1>
     <div class="header-menu-wrap" id="panelMenuWrap">
         <button id="panelMenuToggle" type="button" class="avatar-btn" aria-label="Menu" title="Menu">U</button>
         <div id="panelMenuPopover" class="header-popover menu-popover" hidden>
-            <button type="button" class="menu-item" id="panelMenuProfile">Profil</button>
-            <button type="button" class="menu-item" id="panelMenuSettings">Ayarlar</button>
-            <button type="button" class="menu-item" id="panelMenuPanel">Panel</button>
-            <button type="button" class="menu-item" id="panelMenuApp">Pentest</button>
-            <button id="panelLogoutBtn" type="button" class="menu-item">Çıkış Yap</button>
+            <button type="button" class="menu-item" id="panelMenuProfile" data-i18n="panel.menu.profile">Profil</button>
+            <button type="button" class="menu-item" id="panelMenuSettings" data-i18n="panel.menu.settings">Ayarlar</button>
+            <button type="button" class="menu-item" id="panelMenuPanel" data-i18n="panel.menu.panel">Panel</button>
+            <button type="button" class="menu-item" id="panelMenuApp" data-i18n="panel.menu.app">Pentest</button>
+            <button id="panelLogoutBtn" type="button" class="menu-item" data-i18n="panel.menu.logout">Çıkış Yap</button>
         </div>
     </div>
 </header>
@@ -28,47 +28,47 @@
 
 <main class="settings-shell">
     <aside class="settings-tabs">
-        <button class="tab-btn" data-tab="profile" active>Profil</button>
+        <button class="tab-btn" data-tab="profile" data-i18n="panel.tab.profile" active>Profil</button>
         {% set _roles = current_user.roles or [] %}
         {% set can_pentest = current_user.is_admin or 'test' in _roles or 'attack' in _roles or 'remediation' in _roles %}
         {% if can_pentest %}
-        <button class="tab-btn" data-tab="pentest-records">Pentest Kayıtları</button>
+        <button class="tab-btn" data-tab="pentest-records" data-i18n="panel.tab.pentest-records">Pentest Kayıtları</button>
         {% endif %}
         {% if current_user.is_admin %}
-        <button class="tab-btn" data-tab="users">Kullanıcı Yönetimi</button>
-        <button class="tab-btn" data-tab="roles">Rol Yönetimi</button>
-        <button class="tab-btn" data-tab="progress-categories">İlerleme Kategorileri</button>
-        <button class="tab-btn" data-tab="tools">Adım Listesi</button>
-        <button class="tab-btn" data-tab="op-tester">Operasyon Test</button>
-        <button class="tab-btn" data-tab="osint-files">Ön Bellek</button>
-        <button class="tab-btn" data-tab="offers">Teklifler</button>
+        <button class="tab-btn" data-tab="users" data-i18n="panel.tab.users">Kullanıcı Yönetimi</button>
+        <button class="tab-btn" data-tab="roles" data-i18n="panel.tab.roles">Rol Yönetimi</button>
+        <button class="tab-btn" data-tab="progress-categories" data-i18n="panel.tab.progress-categories">İlerleme Kategorileri</button>
+        <button class="tab-btn" data-tab="tools" data-i18n="panel.tab.tools">Adım Listesi</button>
+        <button class="tab-btn" data-tab="op-tester" data-i18n="panel.tab.op-tester">Operasyon Test</button>
+        <button class="tab-btn" data-tab="osint-files" data-i18n="panel.tab.osint-files">Ön Bellek</button>
+        <button class="tab-btn" data-tab="offers" data-i18n="panel.tab.offers">Teklifler</button>
         {% endif %}
     </aside>
 
     <section class="settings-content">
         <section class="panel" data-panel="profile">
-            <h2>Profil Düzenle</h2>
+            <h2 data-i18n="panel.profile.title">Profil Düzenle</h2>
             <div class="profile-two-col">
                 <form id="profileForm" class="form-grid">
-                    <label for="profileUsername">Kullanıcı Adı</label>
+                    <label for="profileUsername" data-i18n="panel.field.username">Kullanıcı Adı</label>
                     <input id="profileUsername" type="text" minlength="3" maxlength="64" required>
-                    <label for="profileFullName">Ad Soyad</label>
+                    <label for="profileFullName" data-i18n="panel.field.fullName">Ad Soyad</label>
                     <input id="profileFullName" type="text" maxlength="120">
-                    <label for="profileJobTitle">İş / Ünvan</label>
+                    <label for="profileJobTitle" data-i18n="panel.field.jobTitle">İş / Ünvan</label>
                     <input id="profileJobTitle" type="text" maxlength="120">
-                    <label for="profilePhone">Telefon</label>
+                    <label for="profilePhone" data-i18n="panel.field.phone">Telefon</label>
                     <input id="profilePhone" type="text" maxlength="40">
-                    <button class="btn" type="submit">Profili Kaydet</button>
+                    <button class="btn" type="submit" data-i18n="panel.profile.save">Profili Kaydet</button>
                 </form>
 
                 <form id="profilePasswordForm" class="form-grid">
-                    <label for="profileCurrentPassword">Mevcut Şifre</label>
+                    <label for="profileCurrentPassword" data-i18n="panel.field.currentPassword">Mevcut Şifre</label>
                     <input id="profileCurrentPassword" type="password" required>
-                    <label for="profileNewPassword">Yeni Şifre</label>
+                    <label for="profileNewPassword" data-i18n="panel.field.newPassword">Yeni Şifre</label>
                     <input id="profileNewPassword" type="password" minlength="8" required>
-                    <label for="profileNewPasswordConfirm">Yeni Şifre (Doğrula)</label>
+                    <label for="profileNewPasswordConfirm" data-i18n="panel.field.newPasswordConfirm">Yeni Şifre (Doğrula)</label>
                     <input id="profileNewPasswordConfirm" type="password" minlength="8" required>
-                    <button class="btn" type="submit">Şifreyi Güncelle</button>
+                    <button class="btn" type="submit" data-i18n="panel.profile.changePassword">Şifreyi Güncelle</button>
                 </form>
             </div>
         </section>
@@ -76,23 +76,23 @@
         {% if current_user.is_admin %}
         <section class="panel" data-panel="offers" hidden>
             <div class="card-header">
-                <h2>Teklif Başvuruları</h2>
-                <button id="refreshOffersBtn" type="button" class="btn">Yenile</button>
+                <h2 data-i18n="panel.offers.title">Teklif Başvuruları</h2>
+                <button id="refreshOffersBtn" type="button" class="btn" data-i18n="panel.common.refresh">Yenile</button>
             </div>
             <p id="panelFeedback" class="muted"></p>
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Tarih</th>
-                            <th>Ad Soyad</th>
-                            <th>E-posta</th>
-                            <th>Şirket</th>
-                            <th>Telefon</th>
-                            <th>Mesaj</th>
-                            <th>Durum</th>
-                            <th>Kaydet</th>
+                            <th data-i18n="panel.col.id">ID</th>
+                            <th data-i18n="panel.col.date">Tarih</th>
+                            <th data-i18n="panel.field.fullName">Ad Soyad</th>
+                            <th data-i18n="panel.col.email">E-posta</th>
+                            <th data-i18n="panel.col.company">Şirket</th>
+                            <th data-i18n="panel.field.phone">Telefon</th>
+                            <th data-i18n="panel.col.message">Mesaj</th>
+                            <th data-i18n="panel.col.status">Durum</th>
+                            <th data-i18n="panel.common.save">Kaydet</th>
                         </tr>
                     </thead>
                     <tbody id="offersTbody"></tbody>
@@ -101,73 +101,73 @@
         </section>
 
         <section class="panel" data-panel="users" hidden>
-            <h2>Kullanıcı Yönetimi</h2>
+            <h2 data-i18n="panel.users.title">Kullanıcı Yönetimi</h2>
             <div class="two-col">
                 <div class="user-left-stack">
                     <form id="createUserForm" class="form-grid">
-                        <label for="newUsername">Kullanıcı Adı</label>
+                        <label for="newUsername" data-i18n="panel.field.username">Kullanıcı Adı</label>
                         <input id="newUsername" type="text" minlength="3" maxlength="64" required>
-                        <label for="newFullName">Ad Soyad</label>
+                        <label for="newFullName" data-i18n="panel.field.fullName">Ad Soyad</label>
                         <input id="newFullName" type="text" maxlength="120">
-                        <label for="newJobTitle">İş / Ünvan</label>
+                        <label for="newJobTitle" data-i18n="panel.field.jobTitle">İş / Ünvan</label>
                         <input id="newJobTitle" type="text" maxlength="120">
-                        <label for="newPhone">Telefon</label>
+                        <label for="newPhone" data-i18n="panel.field.phone">Telefon</label>
                         <input id="newPhone" type="text" maxlength="40">
-                        <label for="newPassword">Şifre</label>
+                        <label for="newPassword" data-i18n="panel.field.password">Şifre</label>
                         <input id="newPassword" type="password" minlength="8" required>
-                        <label for="newPasswordConfirm">Şifre (Doğrula)</label>
+                        <label for="newPasswordConfirm" data-i18n="panel.field.passwordConfirm">Şifre (Doğrula)</label>
                         <input id="newPasswordConfirm" type="password" minlength="8" required>
-                        <label><input id="newIsAdmin" type="checkbox"> Yönetici</label>
+                        <label><input id="newIsAdmin" type="checkbox"> <span data-i18n="panel.field.admin">Yönetici</span></label>
                         <div>
-                            <p class="muted">Roller</p>
+                            <p class="muted" data-i18n="panel.field.roles">Roller</p>
                             <div id="newUserRoles" class="roles-grid"></div>
                         </div>
-                        <button class="btn" type="submit">Kullanıcı Ekle</button>
+                        <button class="btn" type="submit" data-i18n="panel.users.add">Kullanıcı Ekle</button>
                     </form>
 
                     <form id="editUserForm" class="form-grid" hidden>
-                        <h3>Kullanıcı Düzenle</h3>
+                        <h3 data-i18n="panel.users.edit">Kullanıcı Düzenle</h3>
                         <input id="editUserId" type="hidden">
-                        <label for="editUsername">Kullanıcı Adı</label>
+                        <label for="editUsername" data-i18n="panel.field.username">Kullanıcı Adı</label>
                         <input id="editUsername" type="text" minlength="3" maxlength="64" required>
-                        <label for="editFullName">Ad Soyad</label>
+                        <label for="editFullName" data-i18n="panel.field.fullName">Ad Soyad</label>
                         <input id="editFullName" type="text" maxlength="120">
-                        <label for="editJobTitle">İş / Ünvan</label>
+                        <label for="editJobTitle" data-i18n="panel.field.jobTitle">İş / Ünvan</label>
                         <input id="editJobTitle" type="text" maxlength="120">
-                        <label for="editPhone">Telefon</label>
+                        <label for="editPhone" data-i18n="panel.field.phone">Telefon</label>
                         <input id="editPhone" type="text" maxlength="40">
-                        <label><input id="editIsAdmin" type="checkbox"> Yönetici</label>
-                        <label><input id="editIsActive" type="checkbox"> Aktif</label>
+                        <label><input id="editIsAdmin" type="checkbox"> <span data-i18n="panel.field.admin">Yönetici</span></label>
+                        <label><input id="editIsActive" type="checkbox"> <span data-i18n="panel.field.active">Aktif</span></label>
                         <div>
-                            <p class="muted">Roller</p>
+                            <p class="muted" data-i18n="panel.field.roles">Roller</p>
                             <div id="editUserRoles" class="roles-grid"></div>
                         </div>
-                        <label for="editNewPassword">Yeni Şifre (opsiyonel)</label>
+                        <label for="editNewPassword" data-i18n="panel.field.newPasswordOptional">Yeni Şifre (opsiyonel)</label>
                         <input id="editNewPassword" type="password" minlength="8">
-                        <label for="editNewPasswordConfirm">Yeni Şifre (Doğrula)</label>
+                        <label for="editNewPasswordConfirm" data-i18n="panel.field.newPasswordConfirm">Yeni Şifre (Doğrula)</label>
                         <input id="editNewPasswordConfirm" type="password" minlength="8">
                         <div class="actions">
-                            <button class="btn" type="submit">Değişiklikleri Kaydet</button>
-                            <button id="cancelEditUserBtn" class="btn ghost" type="button">İptal</button>
+                            <button class="btn" type="submit" data-i18n="panel.common.saveChanges">Değişiklikleri Kaydet</button>
+                            <button id="cancelEditUserBtn" class="btn ghost" type="button" data-i18n="panel.common.cancel">İptal</button>
                         </div>
                     </form>
                 </div>
 
                 <div>
                     <div class="card-header">
-                        <h3>Kullanıcılar</h3>
-                        <button id="refreshUsersBtn" type="button" class="btn">Yenile</button>
+                        <h3 data-i18n="panel.users.listTitle">Kullanıcılar</h3>
+                        <button id="refreshUsersBtn" type="button" class="btn" data-i18n="panel.common.refresh">Yenile</button>
                     </div>
                     <div class="table-wrap">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Kullanıcı</th>
-                                    <th>Ad Soyad</th>
-                                    <th>Yönetici</th>
-                                    <th>Durum</th>
-                                    <th>Roller</th>
-                                    <th>İşlemler</th>
+                                    <th data-i18n="panel.col.user">Kullanıcı</th>
+                                    <th data-i18n="panel.field.fullName">Ad Soyad</th>
+                                    <th data-i18n="panel.field.admin">Yönetici</th>
+                                    <th data-i18n="panel.col.status">Durum</th>
+                                    <th data-i18n="panel.field.roles">Roller</th>
+                                    <th data-i18n="panel.col.actions">İşlemler</th>
                                 </tr>
                             </thead>
                             <tbody id="usersTbody"></tbody>
@@ -178,16 +178,16 @@
         </section>
 
         <section class="panel" data-panel="roles" hidden>
-            <h2>Rol Yönetimi</h2>
-            <p class="muted">Yönetici, bu sekmede kullanıcı rollerini toplu olarak düzenleyebilir.</p>
+            <h2 data-i18n="panel.roles.title">Rol Yönetimi</h2>
+            <p class="muted" data-i18n="panel.roles.note">Yönetici, bu sekmede kullanıcı rollerini toplu olarak düzenleyebilir.</p>
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
-                            <th>Kullanıcı</th>
-                            <th>Yönetici</th>
-                            <th>Roller</th>
-                            <th>Kaydet</th>
+                            <th data-i18n="panel.col.user">Kullanıcı</th>
+                            <th data-i18n="panel.field.admin">Yönetici</th>
+                            <th data-i18n="panel.field.roles">Roller</th>
+                            <th data-i18n="panel.common.save">Kaydet</th>
                         </tr>
                     </thead>
                     <tbody id="rolesTbody"></tbody>
@@ -197,10 +197,10 @@
 
         <section class="panel" data-panel="tools" hidden>
             <div class="step-list-header-row">
-                <h2 class="step-list-title">Adim Listesi</h2>
+                <h2 class="step-list-title" data-i18n="panel.steps.title">Adim Listesi</h2>
                 <div class="user-edit-actions" style="justify-content:flex-end;">
-                    <button id="showCreateStepBtn" type="button">Yeni Adim</button>
-                    <button id="refreshStepsBtn" type="button">Yenile</button>
+                    <button id="showCreateStepBtn" type="button" data-i18n="panel.steps.new">Yeni Adim</button>
+                    <button id="refreshStepsBtn" type="button" data-i18n="panel.common.refresh">Yenile</button>
                 </div>
             </div>
             <div id="stepsListArea" style="overflow:auto;">
@@ -423,10 +423,10 @@
 
         <section class="panel" data-panel="progress-categories" hidden>
             <div class="step-list-header-row">
-                <h2>Ilerleme Kategorileri</h2>
+                <h2 data-i18n="panel.categories.title">Ilerleme Kategorileri</h2>
                 <div class="user-edit-actions" style="justify-content:flex-end;">
-                    <button id="showCreateProgressCategoryBtn" type="button">Yeni</button>
-                    <button id="refreshProgressCategoriesBtn" type="button">Yenile</button>
+                    <button id="showCreateProgressCategoryBtn" type="button" data-i18n="panel.common.new">Yeni</button>
+                    <button id="refreshProgressCategoriesBtn" type="button" data-i18n="panel.common.refresh">Yenile</button>
                 </div>
             </div>
             <div id="progressCategoriesListArea" style="overflow:auto;">
@@ -474,71 +474,71 @@
         </section>
 
         <section class="panel" data-panel="op-tester" hidden>
-            <h2>Operasyon Test</h2>
-            <p class="muted">YZA ve 3YM operasyonlarını tek başına seçip, parametreleriyle çalıştırıp test edin. İlerleme ve sonuç sağda görünür.</p>
+            <h2 data-i18n="panel.optest.title">Operasyon Test</h2>
+            <p class="muted" data-i18n="panel.optest.note">YZO ve 3YM operasyonlarını tek başına seçip, parametreleriyle çalıştırıp test edin. İlerleme ve sonuç sağda görünür.</p>
             <div class="op-tester-grid">
                 <div class="op-tester-controls card">
-                    <label for="otFlow">1. Akış</label>
+                    <label for="otFlow" data-i18n="panel.optest.flow">1. Akış</label>
                     <select id="otFlow" class="ot-select">
-                        <option value="">Seçiniz…</option>
-                        <option value="yzo">YZA — Yapay Zeka Orkestratörü</option>
-                        <option value="3ym">3YM — Manuel</option>
+                        <option value="" data-i18n="panel.optest.select">Seçiniz…</option>
+                        <option value="yzo" data-i18n="panel.optest.flowYzo">YZO — Yapay Zeka Orkestratörü</option>
+                        <option value="3ym" data-i18n="panel.optest.flow3ym">3YM — Manuel</option>
                     </select>
 
-                    <label for="otStage" id="otStageLabel" hidden>2. İlerleme Yönü</label>
+                    <label for="otStage" id="otStageLabel" data-i18n="panel.optest.stage" hidden>2. İlerleme Yönü</label>
                     <select id="otStage" class="ot-select" hidden></select>
 
-                    <label for="otCategory" id="otCategoryLabel" hidden>3. Kategori</label>
+                    <label for="otCategory" id="otCategoryLabel" data-i18n="panel.optest.category" hidden>3. Kategori</label>
                     <select id="otCategory" class="ot-select" hidden></select>
 
-                    <label for="otStep" id="otStepLabel" hidden>4. Adım</label>
+                    <label for="otStep" id="otStepLabel" data-i18n="panel.optest.step" hidden>4. Adım</label>
                     <select id="otStep" class="ot-select" hidden></select>
 
-                    <label for="otOperation" id="otOperationLabel" hidden>Operasyon</label>
+                    <label for="otOperation" id="otOperationLabel" data-i18n="panel.optest.operation" hidden>Operasyon</label>
                     <select id="otOperation" class="ot-select" hidden></select>
 
                     <p id="otOperationDesc" class="muted" hidden></p>
 
                     <div id="otOperationForm" hidden>
                         <div id="otListSource" hidden></div>
-                        <label for="otTarget">Hedef</label>
+                        <label for="otTarget" data-i18n="panel.optest.target">Hedef</label>
                         <input id="otTarget" type="text" placeholder="ör. 192.168.1.10 veya https://hedef" autocomplete="off">
                         <div id="otParamForm" class="ot-param-grid"></div>
                         <div class="op-tester-actions">
-                            <button id="otRunBtn" type="button">Operasyonu Başlat</button>
+                            <button id="otRunBtn" type="button" data-i18n="panel.optest.run">Operasyonu Başlat</button>
                         </div>
                     </div>
                     <p id="otNote" class="muted"></p>
                 </div>
 
                 <div class="op-tester-output card">
-                    <h3 style="margin-top:0;">İşlem Takibi</h3>
+                    <h3 style="margin-top:0;" data-i18n="panel.optest.progress">İşlem Takibi</h3>
                     <div id="otLog" class="ot-log"></div>
-                    <h3>Sonuç</h3>
-                    <div id="otResult" class="ot-result"><p class="muted" style="margin:0;">Operasyon çalıştırıldığında sonuç burada görünür.</p></div>
+                    <h3 data-i18n="panel.optest.result">Sonuç</h3>
+                    <div id="otResult" class="ot-result"><p class="muted" style="margin:0;" data-i18n="panel.optest.resultHint">Operasyon çalıştırıldığında sonuç burada görünür.</p></div>
                 </div>
             </div>
         </section>
 
         <section class="panel" data-panel="osint-files" hidden>
             <div class="step-list-header-row">
-                <h2 class="step-list-title">Ön Bellek</h2>
+                <h2 class="step-list-title" data-i18n="panel.cache.title">Ön Bellek</h2>
                 <div class="user-edit-actions" style="justify-content:flex-end; gap:8px;">
-                    <button id="otfRefresh" type="button">Yenile</button>
-                    <button id="otfDeleteSelected" type="button">Seçilenleri Sil</button>
+                    <button id="otfRefresh" type="button" data-i18n="panel.common.refresh">Yenile</button>
+                    <button id="otfDeleteSelected" type="button" data-i18n="panel.cache.deleteSelected">Seçilenleri Sil</button>
                 </div>
             </div>
-            <p class="muted">AI OSINT operasyonlarında kullanılan "taranacak" ve "hariç tutulacak" sayfa listeleri (.xml/.txt) burada önbelleğe alınır. Dosyalar yalnızca operasyon formundaki dosya alanından yüklenir; buradan indirebilir veya silebilirsiniz.</p>
+            <p class="muted" data-i18n="panel.cache.note">AI OSINT operasyonlarında kullanılan "taranacak" ve "hariç tutulacak" sayfa listeleri (.xml/.txt) burada önbelleğe alınır. Dosyalar yalnızca operasyon formundaki dosya alanından yüklenir; buradan indirebilir veya silebilirsiniz.</p>
 
             <div style="overflow:auto; margin-top:12px;">
                 <table id="otfTable">
                     <thead>
                         <tr>
                             <th style="width:34px;"><input type="checkbox" id="otfSelectAll"></th>
-                            <th>Ad</th>
-                            <th>Boyut</th>
-                            <th>Tarih</th>
-                            <th>İşlem</th>
+                            <th data-i18n="panel.col.name">Ad</th>
+                            <th data-i18n="panel.col.size">Boyut</th>
+                            <th data-i18n="panel.col.date">Tarih</th>
+                            <th data-i18n="panel.col.op">İşlem</th>
                         </tr>
                     </thead>
                     <tbody id="otfTbody"></tbody>
@@ -553,25 +553,25 @@
             <!-- List view: one row per target (a "pentest"). -->
             <div id="prListView">
                 <div class="step-list-header-row">
-                    <h2 class="step-list-title">Pentest Kayıtları</h2>
+                    <h2 class="step-list-title" data-i18n="panel.records.title">Pentest Kayıtları</h2>
                     <div class="user-edit-actions" style="justify-content:flex-end; gap:8px;">
-                        <button id="prRefresh" type="button">Yenile</button>
+                        <button id="prRefresh" type="button" data-i18n="panel.common.refresh">Yenile</button>
                     </div>
                 </div>
-                <p class="muted">Yapılan pentestler hedefe göre listelenir. Bir kayda tıklayınca o hedefte çalıştırılan tüm operasyonların raporu, sonuçları ve üretilen dosyaları görünür. Bir kaydı silmek, o hedefe ait tüm operasyon kayıtlarını ve üretilen dosyaları birlikte siler.</p>
+                <p class="muted" data-i18n="panel.records.note">Yapılan pentestler hedefe göre listelenir. Bir kayda tıklayınca o hedefte çalıştırılan tüm operasyonların raporu, sonuçları ve üretilen dosyaları görünür. Bir kaydı silmek, o hedefe ait tüm operasyon kayıtlarını ve üretilen dosyaları birlikte siler.</p>
 
                 <div style="overflow:auto; margin-top:12px;">
                     <table id="prTable">
                         <thead>
                             <tr>
-                                <th>Hedef</th>
-                                <th>Aşamalar</th>
-                                <th>Operasyon</th>
-                                <th>Durum</th>
-                                <th>Risk</th>
-                                <th>Çalıştıran(lar)</th>
-                                <th>Son Çalıştırma</th>
-                                <th>İşlem</th>
+                                <th data-i18n="panel.col.target">Hedef</th>
+                                <th data-i18n="panel.col.stages">Aşamalar</th>
+                                <th data-i18n="panel.col.operation">Operasyon</th>
+                                <th data-i18n="panel.col.status">Durum</th>
+                                <th data-i18n="panel.col.risk">Risk</th>
+                                <th data-i18n="panel.col.runBy">Çalıştıran(lar)</th>
+                                <th data-i18n="panel.col.lastRun">Son Çalıştırma</th>
+                                <th data-i18n="panel.col.op">İşlem</th>
                             </tr>
                         </thead>
                         <tbody id="prTbody"></tbody>
@@ -584,34 +584,34 @@
             <div id="prDetailView" hidden>
                 <div class="step-list-header-row">
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <button id="prBack" type="button">← Geri</button>
-                        <h2 class="step-list-title" style="margin:0;">Pentest: <span id="prDetailTarget"></span></h2>
+                        <button id="prBack" type="button" data-i18n="panel.common.backArrow">← Geri</button>
+                        <h2 class="step-list-title" style="margin:0;"><span data-i18n="panel.records.detailPrefix">Pentest</span>: <span id="prDetailTarget"></span></h2>
                     </div>
                     <div class="user-edit-actions" style="justify-content:flex-end; gap:8px; flex-wrap:wrap;">
-                        <button id="prPdf" type="button">PDF İndir</button>
-                        <button id="prPrint" type="button">Yazdır</button>
-                        <button id="prWord" type="button">Word İndir</button>
-                        <button id="prDeleteAll" type="button" class="pr-danger">Bu Pentest Kaydını Sil</button>
+                        <button id="prPdf" type="button" data-i18n="panel.records.pdf">PDF İndir</button>
+                        <button id="prPrint" type="button" data-i18n="panel.records.print">Yazdır</button>
+                        <button id="prWord" type="button" data-i18n="panel.records.word">Word İndir</button>
+                        <button id="prDeleteAll" type="button" class="pr-danger" data-i18n="panel.records.deleteAll">Bu Pentest Kaydını Sil</button>
                     </div>
                 </div>
 
-                <h3 class="pr-section-title">Üretilen Dosyalar</h3>
-                <p class="muted" id="prFilesEmpty" hidden>Bu pentest sırasında indirilebilir dosya üretilmedi.</p>
+                <h3 class="pr-section-title" data-i18n="panel.records.producedFiles">Üretilen Dosyalar</h3>
+                <p class="muted" id="prFilesEmpty" data-i18n="panel.records.noFiles" hidden>Bu pentest sırasında indirilebilir dosya üretilmedi.</p>
                 <div id="prFilesWrap" style="overflow:auto;">
                     <table id="prFilesTable">
                         <thead>
                             <tr>
-                                <th>Dosya</th>
-                                <th>Boyut</th>
-                                <th>Tarih</th>
-                                <th>İşlem</th>
+                                <th data-i18n="panel.col.file">Dosya</th>
+                                <th data-i18n="panel.col.size">Boyut</th>
+                                <th data-i18n="panel.col.date">Tarih</th>
+                                <th data-i18n="panel.col.op">İşlem</th>
                             </tr>
                         </thead>
                         <tbody id="prFilesTbody"></tbody>
                     </table>
                 </div>
 
-                <h3 class="pr-section-title">Operasyonlar &amp; Rapor</h3>
+                <h3 class="pr-section-title" data-i18n="panel.records.opsAndReport">Operasyonlar &amp; Rapor</h3>
                 <div id="prActions"></div>
             </div>
         </section>
@@ -620,14 +620,14 @@
 </main>
 
 <script src="/static/js/notify.js?v=20260706b"></script>
-<script src="/static/js/panel.js?v=20260705c"></script>
+<script src="/static/js/panel.js?v=20260706k"></script>
 <!-- Ace editor: the step-item script editor lives on this page, so the library
      must be loaded here (settings.js's ensureStepItemScriptCodeEditor needs window.ace). -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- Catalog (steps/items/scripts/params + progress categories) editors; settings.js
      detects the Panel page and only wires those tabs here. -->
-<script src="/static/js/settings.js?v=20260706a"></script>
-<script src="/static/js/op_tester.js?v=20260705f"></script>
-<script src="/static/js/pentest_records.js?v=20260705b"></script>
+<script src="/static/js/settings.js?v=20260706f"></script>
+<script src="/static/js/op_tester.js?v=20260706c"></script>
+<script src="/static/js/pentest_records.js?v=20260706b"></script>
 </body>
 </html>

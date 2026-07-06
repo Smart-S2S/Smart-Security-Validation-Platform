@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "wfuzz"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "wordlist", "label": "Sözlük dosyası", "kind": "opt", "flag": "-w", "setting": "WORDLIST", "default": "/usr/share/wordlists/dirb/common.txt", "required": true, "pattern": "path", "choices": [], "must_exist": true}, {"key": "url", "label": "Hedef URL (FUZZ)", "kind": "opt", "flag": "-u", "setting": "URL", "default": "", "required": true, "pattern": "url", "choices": [], "must_exist": false}, {"key": "hide_codes", "label": "Gizlenen kodlar", "kind": "opt", "flag": "--hc", "setting": "HIDE_CODES", "default": "404", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "method", "label": "HTTP metodu", "kind": "opt", "flag": "-X", "setting": "METHOD", "default": "GET", "required": false, "pattern": "safe", "choices": ["GET", "POST", "PUT", "HEAD"], "must_exist": false}, {"key": "threads", "label": "Thread sayısı", "kind": "opt", "flag": "-t", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "header", "label": "Ek başlık", "kind": "opt", "flag": "-H", "setting": "HEADER", "default": "", "required": false, "pattern": "text", "choices": [], "must_exist": false}, {"key": "postdata", "label": "POST verisi", "kind": "opt", "flag": "-d", "setting": "POSTDATA", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "cookie", "label": "Cookie", "kind": "opt", "flag": "-b", "setting": "COOKIE", "default": "", "required": false, "pattern": "text", "choices": [], "must_exist": false}, {"key": "hide_words", "label": "Gizlenen kelime sayısı", "kind": "opt", "flag": "--hw", "setting": "HIDE_WORDS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "hide_lines", "label": "Gizlenen satır sayısı", "kind": "opt", "flag": "--hl", "setting": "HIDE_LINES", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "follow", "label": "Yönlendirmeyi izle (-L)", "kind": "flag", "flag": "-L", "setting": "FOLLOW", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "wordlist", "label": "Wordlist file", "kind": "opt", "flag": "-w", "setting": "WORDLIST", "default": "/usr/share/wordlists/dirb/common.txt", "required": true, "pattern": "path", "choices": [], "must_exist": true}, {"key": "url", "label": "Target URL (FUZZ)", "kind": "opt", "flag": "-u", "setting": "URL", "default": "", "required": true, "pattern": "url", "choices": [], "must_exist": false}, {"key": "hide_codes", "label": "Hidden codes", "kind": "opt", "flag": "--hc", "setting": "HIDE_CODES", "default": "404", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "method", "label": "HTTP method", "kind": "opt", "flag": "-X", "setting": "METHOD", "default": "GET", "required": false, "pattern": "safe", "choices": ["GET", "POST", "PUT", "HEAD"], "must_exist": false}, {"key": "threads", "label": "Thread count", "kind": "opt", "flag": "-t", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "header", "label": "Extra header", "kind": "opt", "flag": "-H", "setting": "HEADER", "default": "", "required": false, "pattern": "text", "choices": [], "must_exist": false}, {"key": "postdata", "label": "POST data", "kind": "opt", "flag": "-d", "setting": "POSTDATA", "default": "", "required": false, "pattern": "url", "choices": [], "must_exist": false}, {"key": "cookie", "label": "Cookie", "kind": "opt", "flag": "-b", "setting": "COOKIE", "default": "", "required": false, "pattern": "text", "choices": [], "must_exist": false}, {"key": "hide_words", "label": "Hidden word count", "kind": "opt", "flag": "--hw", "setting": "HIDE_WORDS", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "hide_lines", "label": "Hidden line count", "kind": "opt", "flag": "--hl", "setting": "HIDE_LINES", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "follow", "label": "Follow redirect (-L)", "kind": "flag", "flag": "-L", "setting": "FOLLOW", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -107,7 +107,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -117,17 +117,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -151,10 +151,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -170,7 +170,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

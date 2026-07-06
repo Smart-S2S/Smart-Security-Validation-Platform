@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 TOOL = "msfconsole"
-SPEC = json.loads(r'''{"mode": "msf", "fixed_pre": [], "positionals_first": false, "params": [{"key": "module", "label": "Modül", "kind": "msf_module", "flag": "", "setting": "MODULE", "default": "", "required": true, "pattern": "module", "choices": [], "must_exist": false}, {"key": "action", "label": "Eylem", "kind": "none", "flag": "", "setting": "ACTION", "default": "run", "required": false, "pattern": "safe", "choices": ["run", "exploit", "check"], "must_exist": false}, {"key": "rhosts", "label": "RHOSTS", "kind": "msf_set", "flag": "", "setting": "RHOSTS", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "rport", "label": "RPORT", "kind": "msf_set", "flag": "", "setting": "RPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "targeturi", "label": "TARGETURI", "kind": "msf_set", "flag": "", "setting": "TARGETURI", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "username", "label": "USERNAME", "kind": "msf_set", "flag": "", "setting": "USERNAME", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "password", "label": "PASSWORD", "kind": "msf_set", "flag": "", "setting": "PASSWORD", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "payload", "label": "PAYLOAD", "kind": "msf_set", "flag": "", "setting": "PAYLOAD", "default": "", "required": false, "pattern": "module", "choices": [], "must_exist": false}, {"key": "lhost", "label": "LHOST", "kind": "msf_set", "flag": "", "setting": "LHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "lport", "label": "LPORT", "kind": "msf_set", "flag": "", "setting": "LPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ssl", "label": "SSL", "kind": "msf_set", "flag": "", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "verbose", "label": "VERBOSE", "kind": "msf_set", "flag": "", "setting": "VERBOSE", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "srvhost", "label": "SRVHOST", "kind": "msf_set", "flag": "", "setting": "SRVHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "srvport", "label": "SRVPORT", "kind": "msf_set", "flag": "", "setting": "SRVPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "uripath", "label": "URIPATH", "kind": "msf_set", "flag": "", "setting": "URIPATH", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "threads", "label": "THREADS", "kind": "msf_set", "flag": "", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "extra_options", "label": "Ek datastore seçenekleri", "kind": "none", "flag": "", "setting": "EXTRA_OPTIONS", "default": {}, "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Zaman aşımı (sn)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "msf", "fixed_pre": [], "positionals_first": false, "params": [{"key": "module", "label": "Module", "kind": "msf_module", "flag": "", "setting": "MODULE", "default": "", "required": true, "pattern": "module", "choices": [], "must_exist": false}, {"key": "action", "label": "Action", "kind": "none", "flag": "", "setting": "ACTION", "default": "run", "required": false, "pattern": "safe", "choices": ["run", "exploit", "check"], "must_exist": false}, {"key": "rhosts", "label": "RHOSTS", "kind": "msf_set", "flag": "", "setting": "RHOSTS", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "rport", "label": "RPORT", "kind": "msf_set", "flag": "", "setting": "RPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "targeturi", "label": "TARGETURI", "kind": "msf_set", "flag": "", "setting": "TARGETURI", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "username", "label": "USERNAME", "kind": "msf_set", "flag": "", "setting": "USERNAME", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "password", "label": "PASSWORD", "kind": "msf_set", "flag": "", "setting": "PASSWORD", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "payload", "label": "PAYLOAD", "kind": "msf_set", "flag": "", "setting": "PAYLOAD", "default": "", "required": false, "pattern": "module", "choices": [], "must_exist": false}, {"key": "lhost", "label": "LHOST", "kind": "msf_set", "flag": "", "setting": "LHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "lport", "label": "LPORT", "kind": "msf_set", "flag": "", "setting": "LPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ssl", "label": "SSL", "kind": "msf_set", "flag": "", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "verbose", "label": "VERBOSE", "kind": "msf_set", "flag": "", "setting": "VERBOSE", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "srvhost", "label": "SRVHOST", "kind": "msf_set", "flag": "", "setting": "SRVHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "srvport", "label": "SRVPORT", "kind": "msf_set", "flag": "", "setting": "SRVPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "uripath", "label": "URIPATH", "kind": "msf_set", "flag": "", "setting": "URIPATH", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "threads", "label": "THREADS", "kind": "msf_set", "flag": "", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "extra_options", "label": "Extra datastore options", "kind": "none", "flag": "", "setting": "EXTRA_OPTIONS", "default": {}, "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -70,12 +70,12 @@ def _resolve(name):
 def _validate(value, pattern, label):
     token = str(value or "").strip()
     if not token:
-        raise ValueError(label + " zorunlu.")
+        raise ValueError(label + " is required.")
     pat = _PATTERNS.get(pattern or "safe", _PATTERNS["safe"])
     if not pat.match(token):
-        raise ValueError(label + " gecersiz karakter iceriyor.")
+        raise ValueError(label + " contains invalid characters.")
     if token.startswith("-"):
-        raise ValueError(label + " '-' ile baslayamaz.")
+        raise ValueError(label + " must not start with '-'.")
     return token
 
 
@@ -88,7 +88,7 @@ def _is_truthy(value):
 def _build_msf(binary, params):
     module = str(params.get("module", "") or "").strip()
     if not _PATTERNS["module"].match(module):
-        raise ValueError("module zorunlu ve sadece harf/rakam/_/ icermeli (or: auxiliary/scanner/http/http_version).")
+        raise ValueError("module is required and must contain only letters/digits/_/ (e.g. auxiliary/scanner/http/http_version).")
     parts = ["use " + module]
 
     for entry in SPEC["params"]:
@@ -98,7 +98,7 @@ def _build_msf(binary, params):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
         _validate(val, entry.get("pattern", "ident"), entry.get("label", entry["key"]))
         parts.append("set " + entry["setting"] + " " + val)
@@ -108,7 +108,7 @@ def _build_msf(binary, params):
         try:
             extra = json.loads(extra)
         except Exception:
-            raise ValueError("extra_options gecerli JSON olmali.")
+            raise ValueError("extra_options must be valid JSON.")
     if isinstance(extra, dict):
         for raw_key, raw_val in extra.items():
             name = str(raw_key or "").strip()
@@ -116,7 +116,7 @@ def _build_msf(binary, params):
             if not name or not val:
                 continue
             if not _PATTERNS["setting"].match(name):
-                raise ValueError("extra_options anahtari gecersiz: " + name)
+                raise ValueError("extra_options key is invalid: " + name)
             _validate(val, "ident", "extra_options[" + name + "]")
             parts.append("set " + name + " " + val)
 
@@ -148,7 +148,7 @@ def build_argv(binary, params, target):
         val = str(raw if raw is not None else "").strip()
         if not val:
             if entry.get("required"):
-                raise ValueError(entry.get("label", entry["key"]) + " zorunlu.")
+                raise ValueError(entry.get("label", entry["key"]) + " is required.")
             continue
 
         choices = entry.get("choices") or []
@@ -158,17 +158,17 @@ def build_argv(binary, params, target):
             # like a single flag.
             if choices:
                 if val not in choices:
-                    raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+                    raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
             elif not _PATTERNS["flag"].match(val):
-                raise ValueError(entry.get("label", entry["key"]) + " gecersiz bayrak.")
+                raise ValueError(entry.get("label", entry["key"]) + " invalid flag.")
             opts.append(val)
             continue
 
         if choices and val not in choices:
-            raise ValueError(entry.get("label", entry["key"]) + " gecersiz secim.")
+            raise ValueError(entry.get("label", entry["key"]) + " invalid choice.")
         _validate(val, entry.get("pattern", "safe"), entry.get("label", entry["key"]))
         if entry.get("must_exist") and not os.path.isfile(val):
-            raise ValueError(entry.get("label", entry["key"]) + " dosyasi bulunamadi: " + val)
+            raise ValueError(entry.get("label", entry["key"]) + " file not found: " + val)
 
         if kind == "positional":
             positionals.append(val)
@@ -192,10 +192,10 @@ def main():
 
     binary = _resolve(TOOL)
     if not binary:
-        _log(TOOL + " bu sunucuda kurulu degil.")
+        _log(TOOL + " is not installed on this server.")
         _emit({
             "ok": False, "tool": TOOL, "tool_installed": False,
-            "error": TOOL + " kurulu degil. Ayarlar > Pentest Araclari'ndan kurabilirsiniz.",
+            "error": TOOL + " is not installed. You can install it from Settings > Pentest Tools.",
         })
         return
 
@@ -211,7 +211,7 @@ def main():
         timeout = 180
     timeout = max(10, min(timeout, 3600))
 
-    _log("calistiriliyor: " + " ".join(argv))
+    _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
