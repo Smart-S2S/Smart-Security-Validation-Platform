@@ -334,6 +334,17 @@ const I18N = {
         "settings.database.refresh": "Yenile",
         "settings.database.note": "Veritabanı bağlantı durumu, parola değişimi ve yedekleme. Parola değişimi hizmeti kesmeden uygulanır: değişiklik hem veritabanında hem yapılandırma dosyasında doğrulanamazsa eski parola korunur.",
         "settings.database.statusTitle": "Bağlantı Durumu",
+        "settings.network.title": "Ağ Erişimi",
+        "settings.network.note": "Servisleri yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Güvenlik için varsayılan yereldir; sadece ihtiyaç durumunda genele açın. Genel erişim için ayrıca bulut güvenlik grubunda ilgili portu açmanız gerekir.",
+        "settings.network.aiTitle": "Ağ Erişimi",
+        "settings.network.aiNote": "Ollama'yı yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Varsayılan yereldir.",
+        "settings.network.local": "Yalnızca yerel",
+        "settings.network.public": "Genel (internete açık)",
+        "settings.network.makeLocal": "Yerele al",
+        "settings.network.makePublic": "Genele aç",
+        "settings.network.confirmPublic": "Bu servis internete açılacak. Emin misiniz? (Bulut güvenlik grubunda da portu açmanız gerekir.)",
+        "settings.network.done": "Ağ erişimi güncellendi.",
+        "settings.network.fail": "Ağ ayarı değiştirilemedi.",
         "settings.database.host": "Host",
         "settings.database.port": "Port",
         "settings.database.user": "Kullanıcı",
@@ -594,6 +605,17 @@ const I18N = {
         "settings.database.refresh": "Refresh",
         "settings.database.note": "Database connection status, password change and backups. A password change is applied without downtime: if the change cannot be verified in BOTH the database and the config file, the old password is kept.",
         "settings.database.statusTitle": "Connection Status",
+        "settings.network.title": "Network Access",
+        "settings.network.note": "Run services local-only (127.0.0.1) or exposed to the internet. Default is local for security; open to public only when needed. Public access also requires opening the port in the cloud security group.",
+        "settings.network.aiTitle": "Network Access",
+        "settings.network.aiNote": "Run Ollama local-only (127.0.0.1) or exposed to the internet. Default is local.",
+        "settings.network.local": "Local only",
+        "settings.network.public": "Public (internet-exposed)",
+        "settings.network.makeLocal": "Make local",
+        "settings.network.makePublic": "Make public",
+        "settings.network.confirmPublic": "This service will be exposed to the internet. Are you sure? (You must also open the port in the cloud security group.)",
+        "settings.network.done": "Network access updated.",
+        "settings.network.fail": "Could not change network setting.",
         "settings.database.host": "Host",
         "settings.database.port": "Port",
         "settings.database.user": "User",
@@ -2880,10 +2902,12 @@ async function loadTabData(tab, { force = false } = {}) {
     }
     if (tab === "database" && hasTab("database")) {
         await loadDatabaseTab();
+        loadNetworkStatus();
     }
     // Service controls are admin-only; only refresh their status when present.
     if (tab === "ai" && hasTab("ai") && document.getElementById("ollamaServiceStatus")) {
         refreshOllamaStatus("status");
+        loadNetworkStatus();
     }
 }
 
@@ -3376,6 +3400,82 @@ function bindServiceButtons(service, startId, stopId) {
 
 bindServiceButtons("ollama", "ollamaStartBtn", "ollamaStopBtn");
 bindServiceButtons("open-webui", "openwebuiStartBtn", "openwebuiStopBtn");
+
+// --- Network exposure (local-only vs public) toggles ---------------------
+const NETWORK_SERVICES = [
+    { key: "mysql", label: "MySQL", where: "db" },
+    { key: "phpmyadmin", label: "phpMyAdmin", where: "db" },
+    { key: "ollama", label: "Ollama", where: "ai" },
+];
+
+function netExposeRowHtml(svc, mode) {
+    const isPublic = mode === "public";
+    const badgeText = isPublic
+        ? (t("settings.network.public") || "Genel (internete açık)")
+        : (t("settings.network.local") || "Yalnızca yerel");
+    const badgeColor = isPublic ? "#c62828" : "#1a7f37";
+    const nextMode = isPublic ? "local" : "public";
+    const btnText = isPublic
+        ? (t("settings.network.makeLocal") || "Yerele al")
+        : (t("settings.network.makePublic") || "Genele aç");
+    return `<div class="net-expose-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:6px 0;">
+        <span style="min-width:120px; font-weight:600;">${escPentest(svc.label)}</span>
+        <span style="color:${badgeColor}; font-weight:600; min-width:150px;">${escPentest(badgeText)}</span>
+        <button type="button" class="net-expose-btn" data-service="${escPentest(svc.key)}" data-mode="${nextMode}">${escPentest(btnText)}</button>
+    </div>`;
+}
+
+function renderNetworkExposure(services) {
+    const byWhere = { db: [], ai: [] };
+    NETWORK_SERVICES.forEach((svc) => {
+        const mode = (services && services[svc.key]) || "local";
+        byWhere[svc.where].push(netExposeRowHtml(svc, mode));
+    });
+    const dbEl = document.getElementById("networkExposureDb");
+    const aiEl = document.getElementById("networkExposureAi");
+    if (dbEl) dbEl.innerHTML = byWhere.db.join("");
+    if (aiEl) aiEl.innerHTML = byWhere.ai.join("");
+}
+
+async function loadNetworkStatus() {
+    if (!document.getElementById("networkExposureDb") && !document.getElementById("networkExposureAi")) {
+        return;
+    }
+    try {
+        const data = await apiRequest("/settings/network", { cache: "no-store" });
+        renderNetworkExposure(data.services || {});
+    } catch (_) {
+        renderNetworkExposure({});
+    }
+}
+
+document.addEventListener("click", async (event) => {
+    const btn = event.target.closest?.(".net-expose-btn");
+    if (!btn) return;
+    const service = btn.getAttribute("data-service");
+    const mode = btn.getAttribute("data-mode");
+    // Warn before opening a service to the internet.
+    if (mode === "public" && !window.confirm(t("settings.network.confirmPublic") || "Bu servis internete açılacak. Emin misiniz? (Bulut güvenlik grubunda da portu açmanız gerekir.)")) {
+        return;
+    }
+    btn.disabled = true;
+    try {
+        const res = await apiRequest("/settings/network", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ service, mode }),
+        });
+        if (res && res.ok === false) {
+            setFeedback(res.message || (t("settings.network.fail") || "Ağ ayarı değiştirilemedi."), true);
+        } else {
+            setFeedback(t("settings.network.done") || "Ağ erişimi güncellendi.");
+        }
+        renderNetworkExposure((res && res.services) || {});
+    } catch (error) {
+        btn.disabled = false;
+        setFeedback(error.message || (t("settings.network.fail") || "Ağ ayarı değiştirilemedi."), true);
+    }
+});
 
 if (aiSettingsForm) {
     aiSettingsForm.addEventListener("submit", async (event) => {

@@ -164,7 +164,11 @@
                             <button id="openwebuiStartBtn" type="button" data-i18n="settings.services.start">Başlat</button>
                             <button id="openwebuiStopBtn" type="button" data-i18n="settings.services.stop">Durdur</button>
                         </div>
-                        <p class="muted" style="margin:10px 0 0 0; font-size:12px;" data-i18n="settings.services.hint">Kullanmadığınız servisleri durdurarak RAM/CPU boşaltabilirsiniz.</p>
+                        <p class="muted" style="margin:10px 0 0 0; font-size:12px;" data-i18n="settings.services.hint">Kullanmadığınız servisleri durdurarak RAM/CPU boşaltabilirsiniz. Open WebUI durdurulunca 3000 portu da kapatılır.</p>
+
+                        <h3 data-i18n="settings.network.aiTitle" style="margin-top:24px;">Ağ Erişimi</h3>
+                        <p class="muted" data-i18n="settings.network.aiNote">Ollama'yı yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Varsayılan yereldir.</p>
+                        <div id="networkExposureAi" class="net-expose-list"></div>
                     </div>
                     {% endif %}
                 </div>
@@ -280,6 +284,12 @@
                 </section>
             </div>
 
+            <section class="card" style="margin:0 0 16px 0;">
+                <h3 data-i18n="settings.network.title">Ağ Erişimi</h3>
+                <p class="muted" data-i18n="settings.network.note">Servisleri yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Güvenlik için varsayılan yereldir; sadece ihtiyaç durumunda genele açın. Genel erişim için ayrıca bulut güvenlik grubunda ilgili portu açmanız gerekir.</p>
+                <div id="networkExposureDb" class="net-expose-list"></div>
+            </section>
+
             <section class="card">
                 <div class="step-list-header-row">
                     <h3 data-i18n="settings.database.backupTitle">Yedekler</h3>
@@ -311,6 +321,6 @@
 <script src="/static/js/notify.js?v=20260706c"></script>
 <script src="/static/js/table_tools.js?v=20260706b"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/static/js/settings.js?v=20260706m"></script>
+<script src="/static/js/settings.js?v=20260706n"></script>
 </body>
 </html>

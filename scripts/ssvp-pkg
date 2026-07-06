@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""SSVP privileged helper — the single root entry point for the app.
+
+The SSVP app runs as an unprivileged user. The ONLY thing that user may do as
+root is invoke this script (see /etc/sudoers.d/ssvp):
+
+    sudo -n /usr/local/sbin/ssvp-pkg <action> [arg]
+
+Every action is fixed and every argument is validated against a whitelist, so a
+compromised app user cannot pass arbitrary options (no `apt-get -o Pre-Invoke`,
+no `bash <attacker-file>`, no arbitrary package). This is what keeps the
+app-user -> root boundary real. The file must be owned by root and NOT writable
+by the app user.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+APT = ["apt-get", "-y", "-o", "Dpkg::Options::=--force-confdef"]
+APT_ENV = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
+
+# Debian package-name charset; the leading class forbids a leading '-', so no
+# argument can be smuggled in as an apt option.
+_PKG_RE = re.compile(r"^[a-z0-9][a-z0-9.+-]{0,99}$")
+
+# apt packages the app is allowed to install/upgrade/remove (the SSVP tool
+# registry + metasploit's apt package). Special, non-apt tools (theHarvester,
+# enum4linux) are handled by dedicated actions, never apt.
+APT_ALLOWED = {
+    "nmap", "masscan", "netdiscover", "dnsrecon", "dnsenum", "nikto", "dirb",
+    "gobuster", "ffuf", "wfuzz", "whatweb", "wafw00f", "sslscan", "smbclient",
+    "nbtscan", "hydra", "medusa", "john", "hashcat", "sqlmap",
+    "metasploit-framework",
+}
+
+# Rapid7's official metasploit installer (not in the Ubuntu apt repos).
+_MSF_URL = ("https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/"
+            "config/templates/metasploit-framework-wrappers/msfupdate.erb")
+_ENUM4LINUX_URL = ("https://raw.githubusercontent.com/CiscoCXSecurity/enum4linux/"
+                   "master/enum4linux.pl")
+
+_SETCAP = {
+    "nmap": "cap_net_raw,cap_net_admin,cap_net_bind_service+eip",
+    "masscan": "cap_net_raw,cap_net_admin+eip",
+    "netdiscover": "cap_net_raw,cap_net_admin+eip",
+}
+
+_ROCKYOU_URL = ("https://github.com/brannondorsey/naive-hashcat/releases/download/"
+                "data/rockyou.txt")
+_SECLISTS_URL = "https://github.com/danielmiessler/SecLists.git"
+
+
+def run(argv, env=None):
+    """Run argv, stream its output to our stdout, return the exit code."""
+    proc = subprocess.run(argv, capture_output=True, text=True, env=env or os.environ)
+    sys.stdout.write((proc.stdout or "") + (proc.stderr or ""))
+    sys.stdout.flush()
+    return proc.returncode
+
+
+def die(msg, code=2):
+    sys.stderr.write(msg.rstrip() + "\n")
+    sys.exit(code)
+
+
+def valid_pkg(name):
+    if not _PKG_RE.match(name or "") or name not in APT_ALLOWED:
+        die(f"package not allowed: {name!r}")
+    return name
+
+
+def apt_update():
+    return run(["apt-get", "-y", "update"], env=APT_ENV)
+
+
+def apt_install(pkg):
+    return run(APT + ["install", valid_pkg(pkg)], env=APT_ENV)
+
+
+def apt_upgrade(pkg):
+    valid_pkg(pkg)
+    apt_update()
+    return run(APT + ["install", "--only-upgrade", pkg], env=APT_ENV)
+
+
+def apt_remove(pkg):
+    return run(APT + ["remove", valid_pkg(pkg)], env=APT_ENV)
+
+
+def tool_install(tool):
+    if tool == "metasploit":
+        fd, path = tempfile.mkstemp(prefix="ssvp-msf-", suffix=".sh")
+        os.close(fd)
+        os.chmod(path, 0o700)  # root-only; app user cannot tamper before we run it
+        try:
+            if run(["curl", "-fsSL", "-o", path, _MSF_URL]) != 0:
+                die("could not download Rapid7 installer", 1)
+            return run(["bash", path], env=APT_ENV)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    if tool == "theharvester":
+        run(APT + ["install", "pipx", "git"], env=APT_ENV)
+        env = {**APT_ENV, "PIPX_HOME": "/opt/pipx", "PIPX_BIN_DIR": "/usr/local/bin"}
+        rc = run(["pipx", "install", "git+https://github.com/laramies/theHarvester.git"], env=env)
+        if rc != 0:
+            rc = run(["pipx", "upgrade", "theHarvester"], env=env)
+        return rc
+    if tool == "enum4linux":
+        run(APT + ["install", "smbclient", "samba-common-bin"], env=APT_ENV)
+        rc = run(["curl", "-fsSL", "-o", "/usr/local/bin/enum4linux", _ENUM4LINUX_URL])
+        if rc == 0:
+            os.chmod("/usr/local/bin/enum4linux", 0o755)
+        return rc
+    die(f"unknown tool: {tool!r}")
+
+
+def tool_remove(tool):
+    if tool == "theharvester":
+        env = {**APT_ENV, "PIPX_HOME": "/opt/pipx", "PIPX_BIN_DIR": "/usr/local/bin"}
+        run(["pipx", "uninstall", "theHarvester"], env=env)
+        return 0
+    if tool == "enum4linux":
+        try:
+            os.remove("/usr/local/bin/enum4linux")
+        except FileNotFoundError:
+            pass
+        return 0
+    die(f"unknown tool: {tool!r}")
+
+
+def wordlist_install(name):
+    if name == "rockyou":
+        os.makedirs("/usr/share/wordlists", exist_ok=True)
+        dest = "/usr/share/wordlists/rockyou.txt"
+        if not (os.path.exists(dest) and os.path.getsize(dest) > 0):
+            part = dest + ".part"
+            if run(["curl", "-fsSL", "--retry", "3", "-o", part, _ROCKYOU_URL]) != 0:
+                die("rockyou download failed", 1)
+            os.replace(part, dest)
+        os.chmod(dest, 0o644)
+        return 0
+    if name == "seclists":
+        run(APT + ["install", "git"], env=APT_ENV)
+        if os.path.isdir("/usr/share/seclists/.git"):
+            return run(["git", "-C", "/usr/share/seclists", "pull", "--ff-only"])
+        shutil.rmtree("/usr/share/seclists", ignore_errors=True)
+        return run(["git", "clone", "--depth", "1", _SECLISTS_URL, "/usr/share/seclists"])
+    die(f"unknown wordlist: {name!r}")
+
+
+def setcap_tool(tool):
+    cap = _SETCAP.get(tool)
+    if not cap:
+        die(f"unknown setcap target: {tool!r}")
+    path = shutil.which(tool)
+    if not path:
+        die(f"{tool} not installed", 1)
+    return run(["setcap", cap, os.path.realpath(path)])
+
+
+# Containers the app may control. Routed through the helper (as root) so the app
+# user does NOT need the `docker` group — which is root-equivalent and would
+# reopen the privilege boundary we just closed.
+_DOCKER_ALLOWED = {"open-webui"}
+
+
+def _valid_container(name):
+    if name not in _DOCKER_ALLOWED:
+        die(f"container not allowed: {name!r}")
+    return name
+
+
+def docker_start(name):
+    rc = run(["docker", "start", _valid_container(name)])
+    if name == "open-webui":  # reopen the port when the service comes up
+        _ufw_set(True, 3000)
+    return rc
+
+
+def docker_stop(name):
+    rc = run(["docker", "stop", _valid_container(name)])
+    if name == "open-webui":  # closing the service also closes the firewall port
+        _ufw_set(False, 3000)
+    return rc
+
+
+def docker_status(name):
+    return run(["docker", "inspect", "-f", "{{.State.Running}}", _valid_container(name)])
+
+
+# --------------------------------------------------------------------------- #
+# Network exposure (local-only vs public) per service — the security toggle.
+# --------------------------------------------------------------------------- #
+_MYSQLD_CNF = "/etc/mysql/mysql.conf.d/mysqld.cnf"
+_OLLAMA_DROPIN = "/etc/systemd/system/ollama.service.d/ssvp-host.conf"
+_EXPOSE_PORTS = {"mysql": 3306, "phpmyadmin": 8081, "ollama": 11434, "openwebui": 3000}
+
+
+def _ufw_set(public, port):
+    if not shutil.which("ufw"):
+        return
+    if public:
+        run(["ufw", "allow", f"{port}/tcp"])
+    else:
+        # Remove the allow rule; with ufw's default-deny incoming, external access
+        # is then blocked while loopback (localhost) keeps working.
+        run(["ufw", "delete", "allow", f"{port}/tcp"])
+        run(["ufw", "delete", "allow", f"{port}"])
+
+
+def _sub_line(text, pattern, repl):
+    new, n = re.subn(pattern, repl, text, flags=re.M)
+    return new if n else text
+
+
+def _mysql_bind(public):
+    addr = "0.0.0.0" if public else "127.0.0.1"
+    try:
+        text = open(_MYSQLD_CNF, encoding="utf-8").read()
+    except FileNotFoundError:
+        return
+    text = _sub_line(text, r"^(\s*bind-address\s*=).*$", r"\g<1> " + addr)
+    text = _sub_line(text, r"^(\s*mysqlx-bind-address\s*=).*$", r"\g<1> " + addr)
+    with open(_MYSQLD_CNF, "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+
+def _ollama_host(public):
+    host = "0.0.0.0:11434" if public else "127.0.0.1:11434"
+    os.makedirs(os.path.dirname(_OLLAMA_DROPIN), exist_ok=True)
+    with open(_OLLAMA_DROPIN, "w", encoding="utf-8") as fh:
+        fh.write(f"[Service]\nEnvironment=OLLAMA_HOST={host}\n")
+
+
+def expose(arg):
+    try:
+        service, mode = (arg or "").split(":", 1)
+    except ValueError:
+        die("expose needs <service>:<local|public>")
+    if service not in _EXPOSE_PORTS:
+        die(f"service not allowed: {service!r}")
+    if mode not in ("local", "public"):
+        die(f"mode not allowed: {mode!r}")
+    public = mode == "public"
+    port = _EXPOSE_PORTS[service]
+
+    if service == "mysql":
+        _mysql_bind(public)
+        _ufw_set(public, port)
+        return run(["systemctl", "restart", "mysql"])
+    if service == "phpmyadmin":
+        _ufw_set(public, port)  # Apache honours ufw (not a docker port)
+        return 0
+    if service == "ollama":
+        _ollama_host(public)
+        run(["systemctl", "daemon-reload"])
+        _ufw_set(public, port)
+        return run(["systemctl", "restart", "ollama"])
+    if service == "openwebui":
+        _ufw_set(public, port)
+        return 0
+    return 0
+
+
+def _ufw_allows(port):
+    try:
+        out = subprocess.run(["ufw", "status"], capture_output=True, text=True).stdout
+    except Exception:
+        return False
+    return bool(re.search(rf"(?m)^\s*{port}/tcp\s+ALLOW\b", out))
+
+
+def _listens_public(port):
+    try:
+        out = subprocess.run(["ss", "-tlnH"], capture_output=True, text=True).stdout
+    except Exception:
+        return False
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) < 4:
+            continue
+        laddr = cols[3]
+        if laddr.rsplit(":", 1)[-1] != str(port):
+            continue
+        host = laddr.rsplit(":", 1)[0]
+        if host not in ("127.0.0.1", "[::1]"):
+            return True
+    return False
+
+
+def _is_running(container):
+    try:
+        out = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", container],
+                             capture_output=True, text=True).stdout.strip()
+        return out == "true"
+    except Exception:
+        return False
+
+
+def net_status(_arg=""):
+    status = {}
+    # mysql: bind-address is authoritative
+    bind = "127.0.0.1"
+    try:
+        m = re.search(r"(?m)^\s*bind-address\s*=\s*(\S+)", open(_MYSQLD_CNF, encoding="utf-8").read())
+        if m:
+            bind = m.group(1)
+    except Exception:
+        pass
+    status["mysql"] = "public" if bind not in ("127.0.0.1", "localhost", "::1") else "local"
+    status["phpmyadmin"] = "public" if _ufw_allows(8081) else "local"
+    status["ollama"] = "public" if _listens_public(11434) else "local"
+    if not _is_running("open-webui"):
+        status["openwebui"] = "stopped"
+    else:
+        status["openwebui"] = "public" if (_ufw_allows(3000) and _listens_public(3000)) else "local"
+    sys.stdout.write(json.dumps(status))
+    return 0
+
+
+_ACTIONS = {
+    "apt-update": lambda a: apt_update(),
+    "apt-install": apt_install,
+    "apt-upgrade": apt_upgrade,
+    "apt-remove": apt_remove,
+    "tool-install": tool_install,
+    "tool-remove": tool_remove,
+    "wordlist-install": wordlist_install,
+    "setcap": setcap_tool,
+    "docker-start": docker_start,
+    "docker-stop": docker_stop,
+    "docker-status": docker_status,
+    "expose": expose,
+    "net-status": net_status,
+}
+
+
+def main():
+    if os.geteuid() != 0:
+        die("ssvp-pkg must run as root (via sudo)", 3)
+    if len(sys.argv) < 2:
+        die("usage: ssvp-pkg <action> [arg]")
+    action = sys.argv[1]
+    arg = sys.argv[2] if len(sys.argv) > 2 else ""
+    fn = _ACTIONS.get(action)
+    if not fn:
+        die(f"unknown action: {action!r}")
+    if action == "apt-update":
+        sys.exit(fn(arg))
+    sys.exit(fn(arg))
+
+
+if __name__ == "__main__":
+    main()

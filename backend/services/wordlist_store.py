@@ -366,40 +366,19 @@ def migrate_wordlist_names() -> int:
 # --------------------------------------------------------------------------- #
 # Downloadable wordlist collections (admin, from the Sözlük Yönetimi panel)
 # --------------------------------------------------------------------------- #
-# Each installer is a root shell script run via `sudo -n bash /tmp/ssvp_*.sh`
-# (the same allowlisted mechanism the pentest-tool installers use). The download
+# The actual download commands live in the root helper (/usr/local/sbin/ssvp-pkg,
+# allowlisted in sudoers); here we only keep display metadata. The download
 # targets land under directories already covered by _SCAN_ROOTS, so the post-
 # download scan folds them straight into the catalog.
+SSVP_PKG = "/usr/local/sbin/ssvp-pkg"
 _WORDLIST_INSTALLERS = {
     "rockyou": {
         "label": "rockyou.txt",
         "note": "≈133 MB — /usr/share/wordlists/rockyou.txt",
-        "script": (
-            "set -e\n"
-            "mkdir -p /usr/share/wordlists\n"
-            "cd /usr/share/wordlists\n"
-            "if [ ! -s rockyou.txt ]; then\n"
-            "  curl -fsSL --retry 3 -o rockyou.txt.part "
-            "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt\n"
-            "  mv rockyou.txt.part rockyou.txt\n"
-            "fi\n"
-            "chmod 0644 rockyou.txt\n"
-        ),
     },
     "seclists": {
         "label": "SecLists",
         "note": "≈1 GB — /usr/share/seclists (git)",
-        "script": (
-            "set -e\n"
-            "export DEBIAN_FRONTEND=noninteractive\n"
-            "command -v git >/dev/null 2>&1 || apt-get install -y git\n"
-            "if [ -d /usr/share/seclists/.git ]; then\n"
-            "  git -C /usr/share/seclists pull --ff-only || true\n"
-            "else\n"
-            "  rm -rf /usr/share/seclists\n"
-            "  git clone --depth 1 https://github.com/danielmiessler/SecLists.git /usr/share/seclists\n"
-            "fi\n"
-        ),
     },
 }
 
@@ -408,16 +387,12 @@ _INSTALL_JOBS: dict[str, dict] = {}
 
 
 def _run_install_script(name: str) -> tuple[bool, str]:
-    cfg = _WORDLIST_INSTALLERS.get(name)
-    if not cfg:
+    if name not in _WORDLIST_INSTALLERS:
         return False, "Bilinmeyen sözlük paketi."
-    path = f"/tmp/ssvp_wordlist_{name}.sh"
     try:
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write("#!/bin/bash\n" + cfg["script"])
-        subprocess.run(["chmod", "0755", path], timeout=15, capture_output=True)
         proc = subprocess.run(
-            ["sudo", "-n", "bash", path], timeout=3600, capture_output=True, text=True
+            ["sudo", "-n", SSVP_PKG, "wordlist-install", name],
+            timeout=3600, capture_output=True, text=True,
         )
         out = (proc.stdout or "") + (proc.stderr or "")
         if proc.returncode != 0 and ("a password is required" in out or "sudo:" in out):

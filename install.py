@@ -13,7 +13,8 @@ her adımı idempotent (tekrar çalıştırılabilir) yapacak şekilde yazılmı
 Ne yapar:
   1. Sistem paketlerini kurar/günceller (python3-venv, git, curl, ufw,
      fonts-dejavu — Türkçe PDF raporu için).
-  2. MySQL kurar; `ssvp` veritabanı + `ssvp/ssvp123` kullanıcısını oluşturur.
+  2. MySQL kurar; `ssvp` veritabanı + `ssvp` kullanıcısını (güçlü, otomatik üretilen
+     parola — sonda bir kez gösterilir) oluşturur.
   3. phpMyAdmin kurar (Apache üzerinde, 8081 portu).
   4. Docker kurar/yapılandırır (Open WebUI vb. için) ve uygulama kullanıcısını
      docker grubuna ekler.
@@ -51,6 +52,13 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+
+# The systemd service runs as this dedicated, unprivileged user — NOT the human
+# admin (who typically has full cloud-init sudo). It owns nothing but gets ACL
+# access to the app's data/, and its ONLY root power is the ssvp-pkg helper (see
+# step_sudoers). So an app compromise cannot escalate to root.
+SERVICE_USER = "ssvp"
 
 
 def generate_password(length: int = 18) -> str:
@@ -252,6 +260,9 @@ def step_mysql(env: dict, args) -> None:
     run(["systemctl", "enable", "--now", "mysql"], check=False)
 
     db, usr, pwd_ = args.mysql_database, args.mysql_user, args.mysql_password
+    # Escape for a single-quoted MySQL string literal (robust if a custom
+    # --mysql-password contains a backslash or quote; generated ones never do).
+    pwd_ = pwd_.replace("\\", "\\\\").replace("'", "\\'")
     sql = f"""
 CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '{usr}'@'localhost' IDENTIFIED BY '{pwd_}';
@@ -409,6 +420,14 @@ def step_ollama(app_user: str, args) -> None:
         if res.returncode != 0:
             warn("Ollama kurulumu başarısız oldu (internet gerektirir). Yapay zekâ özellikleri bulut sağlayıcıyla kullanılabilir.")
             return
+    # Güvenlik: Ollama'yı varsayılan olarak yalnızca yerelde (127.0.0.1) dinlet.
+    # Gerekirse Ayarlar > AI Model > Ağ Erişimi'nden internete açılabilir.
+    dropin_dir = Path("/etc/systemd/system/ollama.service.d")
+    dropin_dir.mkdir(parents=True, exist_ok=True)
+    (dropin_dir / "ssvp-host.conf").write_text(
+        "[Service]\nEnvironment=OLLAMA_HOST=127.0.0.1:11434\n"
+    )
+    run(["systemctl", "daemon-reload"], check=False)
     run(["systemctl", "enable", "--now", "ollama"], check=False)
     if args.ollama_model:
         info(f"Model indiriliyor (büyük olabilir, sabırlı olun): {args.ollama_model}")
@@ -453,24 +472,71 @@ def step_directories(app_user: str, app_dir: Path) -> None:
     ok("logs/ , scans/ , data/ hazır ve uygulama kullanıcısına ait")
 
 
+def step_service_user(app_user: str, app_dir: Path) -> None:
+    """Create the dedicated unprivileged service user and grant it JUST enough
+    access (via ACLs, so the code stays owned by the human admin and git keeps
+    working): traverse into the admin's home to reach the code, and read/write
+    the app's data/ tree. The service user gets no login shell and no groups."""
+    step(f"Ayrı servis kullanıcısı hazırlanıyor ({SERVICE_USER}) — düşük yetkili")
+    if not user_exists(SERVICE_USER):
+        nologin = shutil.which("nologin") or "/usr/sbin/nologin"
+        run(["useradd", "--system", "--create-home", "--home-dir", f"/home/{SERVICE_USER}",
+             "--shell", nologin, SERVICE_USER], check=False)
+    if not user_exists(SERVICE_USER):
+        warn(f"{SERVICE_USER} kullanıcısı oluşturulamadı — servis {app_user} olarak çalışacak.")
+        return
+
+    if not shutil.which("setfacl"):
+        run(["apt-get", "-y", "install", "acl"], check=False, quiet=True, env={"DEBIAN_FRONTEND": "noninteractive"})
+
+    # Traverse-only into the code owner's home (does NOT allow listing it), then
+    # read the code (world-readable from checkout) and read/write the runtime
+    # dirs the app produces files in (scan XML, logs, uploads, backups, db config).
+    home = app_dir.parent
+    run(["setfacl", "-m", f"u:{SERVICE_USER}:x", str(home)], check=False, quiet=True)
+    for sub in ("data", "scans", "logs"):
+        d = app_dir / sub
+        d.mkdir(parents=True, exist_ok=True)
+        run(["setfacl", "-R", "-m", f"u:{SERVICE_USER}:rwX", str(d)], check=False, quiet=True)
+        run(["setfacl", "-R", "-d", "-m", f"u:{SERVICE_USER}:rwX", str(d)], check=False, quiet=True)
+
+    # theHarvester keeps its API keys under the runtime user's home.
+    thd = Path(f"/home/{SERVICE_USER}/.theHarvester")
+    thd.mkdir(parents=True, exist_ok=True)
+    run(["chown", "-R", f"{SERVICE_USER}:{SERVICE_USER}", str(thd)], check=False, quiet=True)
+    ok(f"{SERVICE_USER} hazır (kod {app_user}'a ait; data/ ACL ile erişilir; grup/kabuk yok)")
+
+
+def step_admin_helper(app_dir: Path) -> None:
+    """Install the root-owned privileged helper the app calls for every root
+    operation (tool/wordlist install, setcap). Owned by root, not writable by the
+    app user — this file IS the security boundary, so its permissions matter."""
+    step("Ayrıcalıklı yardımcı kuruluyor (/usr/local/sbin/ssvp-pkg)")
+    src = app_dir / "scripts" / "ssvp-pkg"
+    dest = Path("/usr/local/sbin/ssvp-pkg")
+    if not src.exists():
+        warn(f"{src} bulunamadı — yardımcı kurulamadı (tool/wordlist kurulumu çalışmaz).")
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dest)
+    os.chown(dest, 0, 0)          # root:root
+    os.chmod(dest, 0o755)         # world-readable/executable, root-only writable
+    ok(f"{dest} kuruldu (root:root 0755)")
+
+
 def step_sudoers(app_user: str) -> None:
-    step("Parolasız sudo yetkileri tanımlanıyor (tool + servis yönetimi için)")
-    setcap_paths = [p for p in ("/usr/sbin/setcap", "/sbin/setcap", "/usr/bin/setcap") if Path(p).exists()]
-    apt_get = shutil.which("apt-get") or "/usr/bin/apt-get"
-    apt_bin = shutil.which("apt") or "/usr/bin/apt"
+    step("Parolasız sudo (yalnızca ssvp-pkg yardımcısı + ollama başlat/durdur)")
     systemctl = shutil.which("systemctl") or "/usr/bin/systemctl"
-    bash_bin = shutil.which("bash") or "/usr/bin/bash"
+    helper = "/usr/local/sbin/ssvp-pkg"
     lines = [
-        "# SSVP — uygulamanın Ayarlar ekranından araç/servis yönetimi yapabilmesi için",
-        "# parolasız sudo. Uygulama kodu yalnızca aşağıdaki komutları 'sudo -n' ile çağırır.",
-        f"{app_user} ALL=(root) NOPASSWD: {apt_get} *",
-        f"{app_user} ALL=(root) NOPASSWD: {apt_bin} *",
-        f"{app_user} ALL=(root) NOPASSWD: {systemctl} *",
-        # SSVP-generated root install scripts (metasploit, theHarvester, enum4linux …).
-        f"{app_user} ALL=(root) NOPASSWD: {bash_bin} /tmp/ssvp_*.sh",
+        "# SSVP — uygulama kullanıcısının root olarak yapabileceği TEK şey, aşağıdaki",
+        "# ssvp-pkg yardımcısını çağırmaktır. Yardımcı her eylemi ve argümanı doğrular",
+        "# (paket allowlist'i, sabit apt seçenekleri), böylece 'apt-get -o Pre-Invoke'",
+        "# veya rastgele /tmp scripti ile root olma yolu KAPALIDIR. Ayrıca yalnızca",
+        "# yerel AI (ollama) servisini başlat/durdur — tam eşleşme, wildcard yok.",
+        f"{app_user} ALL=(root) NOPASSWD: {helper}",
+        f"{app_user} ALL=(root) NOPASSWD: {systemctl} start ollama, {systemctl} stop ollama",
     ]
-    for p in setcap_paths:
-        lines.append(f"{app_user} ALL=(root) NOPASSWD: {p} *")
     content = "\n".join(lines) + "\n"
 
     target = Path("/etc/sudoers.d/ssvp")
@@ -481,7 +547,7 @@ def step_sudoers(app_user: str) -> None:
     if run_ok(["visudo", "-cf", str(tmp)]):
         os.replace(tmp, target)
         os.chmod(target, 0o440)
-        ok(f"/etc/sudoers.d/ssvp yazıldı ({app_user}: apt-get, systemctl, setcap, /tmp/ssvp_*.sh)")
+        ok(f"/etc/sudoers.d/ssvp yazıldı ({app_user}: ssvp-pkg, systemctl start/stop ollama)")
     else:
         tmp.unlink(missing_ok=True)
         warn("sudoers doğrulaması başarısız — parolasız sudo atlandı. Tool kurulumu elle yapılabilir.")
@@ -519,15 +585,17 @@ def step_firewall(args) -> None:
     if not have("ufw"):
         warn("ufw bulunamadı, atlandı")
         return
+    # Güvenlik: yalnızca SSH ve uygulama portu internete açık gelir. phpMyAdmin,
+    # Open WebUI ve Ollama VARSAYILAN OLARAK yalnızca yerel (localhost) — ihtiyaç
+    # olduğunda Ayarlar'daki "Ağ Erişimi" bölümünden internete açılır.
     # SSH'ı KESİNLİKLE aç ki uzaktan erişim kopmasın.
-    ports = ["22/tcp", f"{args.port}/tcp", f"{args.phpmyadmin_port}/tcp"]
-    if not (args.skip_docker or args.skip_openwebui):
-        ports.append(f"{args.openwebui_port}/tcp")
+    ports = ["22/tcp", f"{args.port}/tcp"]
     for port in ports:
         run(["ufw", "allow", port], check=False, quiet=True)
     if args.mysql_remote:
         run(["ufw", "allow", "3306/tcp"], check=False, quiet=True)
     ok(f"Portlara izin verildi: {', '.join(ports)}")
+    info("phpMyAdmin / Open WebUI / Ollama varsayılan olarak yalnızca yerel. Gerekirse Ayarlar > Ağ Erişimi'nden açın.")
     info("UFW otomatik etkinleştirilmedi. İsterseniz: sudo ufw enable  (SSH zaten açık)")
 
 
@@ -640,8 +708,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User={app_user}
-Group={app_user}
+User={SERVICE_USER}
+Group={SERVICE_USER}
 WorkingDirectory={app_dir}
 # DB parolası kasıtlı olarak burada tutulmaz; kimlik dosyasından okunur, böylece
 # Ayarlar > Veritabanı sekmesinden döndürülen parola servisi düzenlemeden geçerli
@@ -709,6 +777,7 @@ def print_summary(app_user: str, app_dir: Path, args) -> None:
   {C.C}·{C.X} {default_admin_note}
   {C.B}phpMyAdmin:{C.X}   http://{ip}:{args.phpmyadmin_port}/phpmyadmin/
   {C.B}MySQL:{C.X}        {args.mysql_host}:{args.mysql_port}  db={args.mysql_database} user={args.mysql_user}
+                {(C.Y + 'Parola: ' + args.mysql_password + C.X + '  ' + C.R + '>>> şimdi kaydedin; tekrar gösterilmeyecek <<<' + C.X) if getattr(args, '_mysql_generated', False) else 'Parola: (kurulumda verdiğiniz)'}
                 Parolayı Ayarlar > Veritabanı ve Yedekleme'den değiştirebilirsiniz.
   {C.B}Kullanıcı:{C.X}    {app_user}   |   Dizin: {app_dir}
 
@@ -742,7 +811,7 @@ def parse_args(argv=None):
     p.add_argument("--mysql-host", default="127.0.0.1")
     p.add_argument("--mysql-port", type=int, default=3306)
     p.add_argument("--mysql-user", dest="mysql_user", default="ssvp")
-    p.add_argument("--mysql-password", dest="mysql_password", default="ssvp123")
+    p.add_argument("--mysql-password", dest="mysql_password", default="", help="MySQL 'ssvp' kullanıcı parolası ('' = güçlü parola otomatik üretilir)")
     p.add_argument("--mysql-database", dest="mysql_database", default="ssvp")
     p.add_argument("--mysql-remote", action="store_true", help="MySQL'i 0.0.0.0'a aç (uzak erişim)")
     p.add_argument("--admin-username", default="ssvpadmin", help="Oluşturulacak uygulama yöneticisi kullanıcı adı")
@@ -784,6 +853,12 @@ def main() -> None:
     if not args.admin_password:
         args.admin_password = generate_password()
 
+    # MySQL 'ssvp' kullanıcı parolası: verilmediyse güçlü bir tane üret (varsayılan
+    # 'ssvp123' gibi zayıf bir parola KULLANILMAZ). Özet ekranında bir kez gösterilir.
+    args._mysql_generated = not bool(args.mysql_password)
+    if not args.mysql_password:
+        args.mysql_password = generate_password()
+
     print(f"{C.B}SSVP kurulumu başlıyor{C.X}")
     info(f"Proje dizini : {app_dir}")
     info(f"Uygulama kul.: {app_user}")
@@ -801,7 +876,9 @@ def main() -> None:
     venv_py = step_venv(app_user, app_dir)
     step_directories(app_user, app_dir)
     step_db_config_file(app_user, app_dir, args)
-    step_sudoers(app_user)
+    step_service_user(app_user, app_dir)
+    step_admin_helper(app_dir)
+    step_sudoers(SERVICE_USER)
     step_scan_caps()
     step_firewall(args)
     step_seed_database(app_user, app_dir, venv_py, args)

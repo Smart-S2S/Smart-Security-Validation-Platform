@@ -761,12 +761,15 @@ def settings_service_control(
                     message = "Sunucuda parolasiz sudo yok." if ("a password is required" in combined or "sudo:" in combined) else (combined or "systemctl basarisiz").strip()[:300]
             state = subprocess.run(["systemctl", "is-active", svc["unit"]], capture_output=True, text=True, timeout=15)
             running = (state.stdout or "").strip() == "active"
-        else:  # docker container
+        else:  # docker container — via the root helper (app user isn't in the
+               # docker group, which would be root-equivalent).
+            helper = "/usr/local/sbin/ssvp-pkg"
             if action in {"start", "stop"}:
-                result = subprocess.run(["docker", action, svc["name"]], capture_output=True, text=True, timeout=120)
+                result = subprocess.run(["sudo", "-n", helper, f"docker-{action}", svc["name"]], capture_output=True, text=True, timeout=120)
                 if result.returncode != 0:
-                    message = ((result.stdout or "") + (result.stderr or "")).strip()[:300] or "docker islemi basarisiz"
-            state = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", svc["name"]], capture_output=True, text=True, timeout=15)
+                    combined = (result.stdout or "") + (result.stderr or "")
+                    message = "Sunucuda parolasiz sudo yok." if ("a password is required" in combined or "sudo:" in combined) else (combined.strip()[:300] or "docker islemi basarisiz")
+            state = subprocess.run(["sudo", "-n", helper, "docker-status", svc["name"]], capture_output=True, text=True, timeout=15)
             running = (state.stdout or "").strip() == "true"
         return {"ok": True, "service": payload.service, "running": running, "action": action, "message": message}
     except Exception as exc:
@@ -807,6 +810,64 @@ def settings_ollama_service(
         return {"ok": True, "running": running, "action": action, "message": message}
     except Exception as exc:
         return {"ok": False, "running": False, "action": action, "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+_HELPER = "/usr/local/sbin/ssvp-pkg"
+_EXPOSE_SERVICES = {"mysql", "phpmyadmin", "ollama"}
+
+
+class NetworkExposureRequest(BaseModel):
+    service: str = Field(min_length=2, max_length=20)
+    mode: str = Field(pattern="^(local|public)$")
+
+
+@router.get("/settings/network")
+def settings_network_status(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Current network exposure (local-only vs public) of the host services."""
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    try:
+        res = subprocess.run(["sudo", "-n", _HELPER, "net-status"], capture_output=True, text=True, timeout=20)
+        data = json.loads(res.stdout or "{}") if res.returncode == 0 else {}
+    except Exception:
+        data = {}
+    return {"services": data}
+
+
+@router.post("/settings/network")
+def settings_network_set(
+    request: Request,
+    payload: NetworkExposureRequest,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Switch a service between local-only and public. Public = reachable from
+    the internet (also requires the cloud security group to allow the port)."""
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    service = (payload.service or "").strip().lower()
+    if service not in _EXPOSE_SERVICES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid service")
+    try:
+        res = subprocess.run(
+            ["sudo", "-n", _HELPER, "expose", f"{service}:{payload.mode}"],
+            capture_output=True, text=True, timeout=120,
+        )
+        out = (res.stdout or "") + (res.stderr or "")
+        if res.returncode != 0:
+            msg = "Sunucuda parolasız sudo yok." if ("a password is required" in out or "sudo:" in out) else (out.strip()[:300] or "işlem başarısız")
+            return {"ok": False, "service": service, "mode": payload.mode, "message": msg}
+    except Exception as exc:
+        return {"ok": False, "service": service, "mode": payload.mode, "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+    status_res = subprocess.run(["sudo", "-n", _HELPER, "net-status"], capture_output=True, text=True, timeout=20)
+    try:
+        services = json.loads(status_res.stdout or "{}")
+    except Exception:
+        services = {}
+    return {"ok": True, "service": service, "mode": payload.mode, "services": services}
 
 
 @router.get("/settings/ai-models")
