@@ -393,7 +393,10 @@ button:disabled {
 .form-grid fieldset,
 .compact-settings-card input,
 .compact-settings-card select,
-.compact-settings-card textarea {
+.compact-settings-card textarea,
+.tool-config input,
+.tool-config select,
+.tool-config textarea {
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -404,13 +407,16 @@ button:disabled {
     margin-top: 10px;
 }
 
-.form-grid label {
+.form-grid label,
+.tool-config .tc-label {
     font-size: 14px;
     color: var(--muted);
 }
 
 .form-grid input,
-.form-grid select {
+.form-grid select,
+.tool-config input,
+.tool-config select {
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--bg-soft);
@@ -419,10 +425,49 @@ button:disabled {
 }
 
 .form-grid input:focus,
-.form-grid select:focus {
+.form-grid select:focus,
+.tool-config input:focus,
+.tool-config select:focus {
     outline: none;
     border-color: #78a4eb;
     box-shadow: 0 0 0 3px rgba(80, 133, 218, 0.2);
+}
+
+/* Searchable wordlist combobox (tool-config default params). */
+.wl-combo {
+    position: relative;
+}
+.wl-combo-list {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+}
+.wl-combo-item {
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.wl-combo-item:hover {
+    background: rgba(96, 165, 250, 0.18);
+}
+.wl-combo-empty {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    color: var(--muted);
 }
 
 /* Wordlist upload: theme the native file input + its "browse" button so it

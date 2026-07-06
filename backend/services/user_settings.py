@@ -94,6 +94,37 @@ def resolve_user_ai(user: dict) -> dict:
     return _deep_merge(base, user_ai)
 
 
+# Allowed "rows per page" defaults for data tables (0 = show all).
+_ALLOWED_PAGE_SIZES = {0, 10, 25, 50, 100}
+_DEFAULT_PAGE_SIZE = 10
+
+
+def resolve_user_table_page_size(user: dict) -> int:
+    """The user's default rows-per-page for data tables (Appearance setting)."""
+    us = get_user_settings(int(user["id"]))
+    try:
+        size = int((us.get("ui") or {}).get("table_page_size"))
+    except (TypeError, ValueError):
+        return _DEFAULT_PAGE_SIZE
+    return size if size in _ALLOWED_PAGE_SIZES else _DEFAULT_PAGE_SIZE
+
+
+def set_user_table_page_size(user_id: int, size) -> int:
+    try:
+        size = int(size)
+    except (TypeError, ValueError):
+        size = _DEFAULT_PAGE_SIZE
+    if size not in _ALLOWED_PAGE_SIZES:
+        size = _DEFAULT_PAGE_SIZE
+    with _LOCK:
+        settings = get_user_settings(user_id)
+        ui = dict(settings.get("ui") or {})
+        ui["table_page_size"] = size
+        settings["ui"] = ui
+        _save_user_settings(user_id, settings)
+    return size
+
+
 def resolve_user_workflow_mode(user: dict) -> str:
     us = get_user_settings(int(user["id"]))
     mode = str((us.get("workflow") or {}).get("mode") or "").strip().lower()

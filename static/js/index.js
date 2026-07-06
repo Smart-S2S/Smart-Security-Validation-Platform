@@ -937,100 +937,31 @@ function parseParametersFromManualInput() {
 // Parameter keys that take a wordlist/list file. On operation forms (YZO + 3YM)
 // these render as a selectbox populated from the DB wordlist catalog instead of
 // a free-text path input.
-const WORDLIST_PARAM_KEYS = new Set(["wordlist", "wordlists", "userlist", "passlist", "combo_file"]);
-let wordlistCatalog = [];
+// The searchable wordlist combobox now lives in the shared window.SSVPWl helper
+// (notify.js) so the same widget is used identically on every page. These thin
+// wrappers keep the existing call sites working.
+const WORDLIST_PARAM_KEYS = (window.SSVPWl && window.SSVPWl.WORDLIST_KEYS)
+    || new Set(["wordlist", "wordlists", "userlist", "passlist", "combo_file"]);
 
 async function loadWordlistCatalog() {
-    try {
-        const data = await apiRequest("/validation/wordlists", { cache: "no-store" });
-        wordlistCatalog = Array.isArray(data?.items) ? data.items : [];
-    } catch (_) {
-        // Non-fatal: fall back to a plain text input (default paths still work).
-        wordlistCatalog = [];
+    if (window.SSVPWl) {
+        await window.SSVPWl.load();
     }
 }
 
-// Wordlist param: a searchable combobox (live filter) instead of a plain select,
-// so one can find a wordlist quickly among many. A hidden input carries the real
-// value (the wordlist path) with the collector's data-attrs; a visible search box
-// filters the dropdown by name/path. Selection is via clicking a list row.
-function wordlistOptionLabel(w) {
-    return `${w.name || w.path}${w.size_h ? ` — ${w.size_h}` : ""}`;
-}
-
+// Wordlist param: a searchable combobox (live filter) instead of a plain path
+// input. A hidden input carries the real value with the collector's data-attrs.
 function wordlistSelectHtml(labelBlock, value, attrs) {
-    const selected = value == null ? "" : String(value);
-    const match = wordlistCatalog.find((w) => w.path === selected);
-    const shownText = match ? wordlistOptionLabel(match) : selected;
+    const combo = window.SSVPWl
+        ? window.SSVPWl.comboHtml(`${attrs} data-param-type="file"`, value)
+        : `<input type="text" ${attrs} data-param-type="file" value="${escapeHtml(value == null ? "" : String(value))}">`;
     return `
         <div class="dynamic-param-field">
             ${labelBlock}
-            <div class="wl-combo">
-                <input type="text" class="wl-combo-search" placeholder="Sözlük ara / seç…" value="${escapeHtml(shownText)}" autocomplete="off" spellcheck="false">
-                <input type="hidden" ${attrs} data-param-type="file" value="${escapeHtml(selected)}">
-                <div class="wl-combo-list" hidden></div>
-            </div>
+            ${combo}
         </div>
     `;
 }
-
-// Populate/filter one combo's dropdown from the wordlist catalog.
-function wlComboRenderList(combo, query) {
-    const list = combo?.querySelector(".wl-combo-list");
-    if (!list) {
-        return;
-    }
-    const q = String(query || "").trim().toLowerCase();
-    const items = wordlistCatalog.filter((w) => {
-        if (!w?.path) return false;
-        if (!q) return true;
-        return String(w.name || "").toLowerCase().includes(q) || String(w.path || "").toLowerCase().includes(q);
-    });
-    const shown = items.slice(0, 300);
-    if (!shown.length) {
-        list.innerHTML = `<div class="wl-combo-empty">${escapeHtml(wordlistCatalog.length ? "Eşleşen sözlük yok" : "Kayıtlı sözlük yok")}</div>`;
-    } else {
-        list.innerHTML = shown
-            .map((w) => `<div class="wl-combo-item" data-path="${escapeHtml(w.path)}" title="${escapeHtml(w.path)}">${escapeHtml(wordlistOptionLabel(w))}</div>`)
-            .join("");
-        if (items.length > shown.length) {
-            list.innerHTML += `<div class="wl-combo-empty">…${items.length - shown.length} sonuç daha, aramayı daraltın</div>`;
-        }
-    }
-    list.hidden = false;
-}
-
-// Delegated combobox behaviour — works for every operation form (YZO + 3YM),
-// since forms are re-rendered dynamically.
-document.addEventListener("focusin", (event) => {
-    const search = event.target.closest?.(".wl-combo-search");
-    if (search) {
-        wlComboRenderList(search.closest(".wl-combo"), "");
-    }
-});
-document.addEventListener("input", (event) => {
-    const search = event.target.closest?.(".wl-combo-search");
-    if (search) {
-        wlComboRenderList(search.closest(".wl-combo"), search.value);
-    }
-});
-document.addEventListener("click", (event) => {
-    const item = event.target.closest?.(".wl-combo-item");
-    if (item) {
-        const combo = item.closest(".wl-combo");
-        const hidden = combo?.querySelector("input[type=hidden]");
-        const search = combo?.querySelector(".wl-combo-search");
-        const list = combo?.querySelector(".wl-combo-list");
-        if (hidden) hidden.value = item.getAttribute("data-path") || "";
-        if (search) search.value = item.textContent || "";
-        if (list) list.hidden = true;
-        return;
-    }
-    // A click anywhere outside an open combo closes the dropdowns.
-    if (!event.target.closest?.(".wl-combo")) {
-        document.querySelectorAll(".wl-combo-list").forEach((el) => { el.hidden = true; });
-    }
-});
 
 
 // Upload-type params (OSINT scan/exclude lists): on file pick, upload the .xml/.txt

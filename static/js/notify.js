@@ -159,3 +159,135 @@
         info: (message, title = TITLES.info, duration = DEFAULT_DURATION) => show({ message, title, type: "info", duration }),
     };
 })();
+
+
+// ---------------------------------------------------------------------------
+// Shared searchable wordlist combobox (window.SSVPWl)
+// ---------------------------------------------------------------------------
+// A single implementation used by every page that asks for a wordlist path —
+// the Pentest operation forms (index.js), Operation Test (op_tester.js) and the
+// per-tool parameter defaults in Settings (settings.js). Living here (notify.js
+// loads first on every page) means the catalog is fetched once and the delegated
+// document handlers are installed exactly once, so pages where two of those
+// scripts co-exist (panel.html loads settings.js + op_tester.js) never double-
+// render or fight over the same `.wl-combo-list`.
+(function installWordlistCombo() {
+    if (window.SSVPWl) {
+        return;
+    }
+
+    const WORDLIST_KEYS = new Set(["wordlist", "wordlists", "userlist", "passlist", "combo_file"]);
+    let catalog = [];
+    let loadPromise = null;
+
+    function esc(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function optionLabel(w) {
+        return `${w.name || w.path}${w.size_h ? ` — ${w.size_h}` : ""}`;
+    }
+
+    async function load(force) {
+        if (loadPromise && !force) {
+            return loadPromise;
+        }
+        loadPromise = (async () => {
+            try {
+                const res = await fetch("/validation/wordlists", { cache: "no-store" });
+                const data = res.ok ? await res.json() : null;
+                catalog = Array.isArray(data?.items) ? data.items : [];
+            } catch (_) {
+                // Non-fatal: callers fall back to the raw path already in the box.
+                catalog = [];
+            }
+            return catalog;
+        })();
+        return loadPromise;
+    }
+
+    // Build one combobox. `hiddenAttrs` is a raw attribute string for the hidden
+    // input that carries the real value (each caller supplies its own collector
+    // data-attrs, e.g. data-param-key / data-key / data-tc-param).
+    function comboHtml(hiddenAttrs, value) {
+        const selected = value == null ? "" : String(value);
+        const match = catalog.find((w) => w.path === selected);
+        const shownText = match ? optionLabel(match) : selected;
+        return `
+            <div class="wl-combo">
+                <input type="text" class="wl-combo-search" placeholder="Sözlük ara / seç…" value="${esc(shownText)}" autocomplete="off" spellcheck="false">
+                <input type="hidden" ${hiddenAttrs || ""} value="${esc(selected)}">
+                <div class="wl-combo-list" hidden></div>
+            </div>
+        `;
+    }
+
+    function renderList(combo, query) {
+        const list = combo?.querySelector(".wl-combo-list");
+        if (!list) {
+            return;
+        }
+        const q = String(query || "").trim().toLowerCase();
+        const items = catalog.filter((w) => {
+            if (!w?.path) return false;
+            if (!q) return true;
+            return String(w.name || "").toLowerCase().includes(q) || String(w.path || "").toLowerCase().includes(q);
+        });
+        const shown = items.slice(0, 300);
+        if (!shown.length) {
+            list.innerHTML = `<div class="wl-combo-empty">${esc(catalog.length ? "Eşleşen sözlük yok" : "Kayıtlı sözlük yok")}</div>`;
+        } else {
+            list.innerHTML = shown
+                .map((w) => `<div class="wl-combo-item" data-path="${esc(w.path)}" title="${esc(w.path)}">${esc(optionLabel(w))}</div>`)
+                .join("");
+            if (items.length > shown.length) {
+                list.innerHTML += `<div class="wl-combo-empty">…${items.length - shown.length} sonuç daha, aramayı daraltın</div>`;
+            }
+        }
+        list.hidden = false;
+    }
+
+    // Delegated behaviour — installed once, works for every dynamically rendered
+    // form on the page.
+    document.addEventListener("focusin", (event) => {
+        const search = event.target.closest?.(".wl-combo-search");
+        if (search) {
+            renderList(search.closest(".wl-combo"), "");
+        }
+    });
+    document.addEventListener("input", (event) => {
+        const search = event.target.closest?.(".wl-combo-search");
+        if (search) {
+            renderList(search.closest(".wl-combo"), search.value);
+        }
+    });
+    document.addEventListener("click", (event) => {
+        const item = event.target.closest?.(".wl-combo-item");
+        if (item) {
+            const combo = item.closest(".wl-combo");
+            const hidden = combo?.querySelector("input[type=hidden]");
+            const search = combo?.querySelector(".wl-combo-search");
+            const list = combo?.querySelector(".wl-combo-list");
+            if (hidden) hidden.value = item.getAttribute("data-path") || "";
+            if (search) search.value = item.textContent || "";
+            if (list) list.hidden = true;
+            return;
+        }
+        if (!event.target.closest?.(".wl-combo")) {
+            document.querySelectorAll(".wl-combo-list").forEach((el) => { el.hidden = true; });
+        }
+    });
+
+    window.SSVPWl = {
+        WORDLIST_KEYS,
+        load,
+        catalog: () => catalog,
+        comboHtml,
+        optionLabel,
+    };
+})();

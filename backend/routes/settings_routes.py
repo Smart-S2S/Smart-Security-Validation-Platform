@@ -343,6 +343,7 @@ class ProfileUpdateRequest(BaseModel):
 class AppearanceUpdateRequest(BaseModel):
     ui_theme: str = Field(pattern="^(dark|light)$")
     ui_language: str = Field(pattern="^(tr|en)$")
+    table_page_size: int = Field(default=10)
 
 
 class AISettingsUpdateRequest(BaseModel):
@@ -410,12 +411,15 @@ def settings_access(current_user: dict = Depends(get_current_user)):
     # everyone. The admin-only tabs stay admin-only.
     tabs = ["appearance", "ai", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "ai", "scan", "toolsmgmt", "wordlists", "database", "tools", "progress-categories", "system"]
+        tabs = ["appearance", "ai", "toolsmgmt", "wordlists", "database", "tools", "progress-categories", "system"]
+
+    from backend.services.user_settings import resolve_user_table_page_size
 
     return {
         "user": _public_user(current_user),
         "tabs": tabs,
         "valid_roles": sorted(VALID_ROLES),
+        "table_page_size": resolve_user_table_page_size(current_user),
     }
 
 
@@ -468,7 +472,12 @@ def update_my_appearance(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "user.notFound", "Kullanıcı bulunamadı"))
 
-    return {"item": _public_user(updated)}
+    from backend.services.user_settings import set_user_table_page_size
+
+    size = set_user_table_page_size(int(current_user["id"]), payload.table_page_size)
+    item = _public_user(updated)
+    item["table_page_size"] = size
+    return {"item": item, "table_page_size": size}
 
 
 def _mask_ai_secrets(ai_settings: dict) -> dict:
@@ -653,6 +662,47 @@ def settings_pentest_tool_operations(
 
     operations = list_operations(tool_key=tool_key, active_only=True)
     return {"tool": tool_key, "operations": operations, "count": len(operations)}
+
+
+class ToolConfigSaveRequest(BaseModel):
+    param_defaults: dict | None = None
+    api_keys: dict | None = None
+
+
+@router.get("/settings/pentest-tools/{tool_key}/config")
+def settings_pentest_tool_config_get(
+    tool_key: str,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Per-tool config: parameter defaults + API-key field descriptors (admin)."""
+    _require_admin(current_user, request_lang(request))
+    from backend.services import tool_config
+    from backend.services.pentest_tools import _BY_KEY
+
+    if (tool_key or "").strip().lower() not in _BY_KEY:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bilinmeyen arac.")
+    return tool_config.get_tool_config(tool_key.strip().lower())
+
+
+@router.post("/settings/pentest-tools/{tool_key}/config")
+def settings_pentest_tool_config_save(
+    tool_key: str,
+    payload: ToolConfigSaveRequest,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Save parameter defaults (DB row JSON) and, for tools with a config file
+    (theHarvester → api-keys.yaml), write the API keys. Admin-only."""
+    _require_admin(current_user, request_lang(request))
+    from backend.services import tool_config
+    from backend.services.pentest_tools import _BY_KEY
+
+    key = (tool_key or "").strip().lower()
+    if key not in _BY_KEY:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bilinmeyen arac.")
+    result = tool_config.save_tool_config(key, param_defaults=payload.param_defaults, api_keys=payload.api_keys)
+    return {**result, "config": tool_config.get_tool_config(key)}
 
 
 @router.post("/settings/pentest-tools/action")
@@ -1230,6 +1280,35 @@ def settings_wordlists_scan(
 
     summary = scan_system_wordlists()
     return {"summary": summary, "items": list_wordlists()}
+
+
+@router.get("/settings/wordlists/install")
+def settings_wordlists_install_status(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    from backend.services.wordlist_store import wordlist_install_status
+
+    return wordlist_install_status()
+
+
+@router.post("/settings/wordlists/install/{name}")
+def settings_wordlists_install_start(
+    name: str,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    lang = request_lang(request)
+    _require_admin(current_user, lang)
+    from backend.services.wordlist_store import start_wordlist_install
+
+    try:
+        job = start_wordlist_install((name or "").strip().lower())
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"ok": True, "job": job}
 
 
 @router.post("/settings/wordlists/upload")

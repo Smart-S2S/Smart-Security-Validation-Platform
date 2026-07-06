@@ -466,7 +466,8 @@ def step_sudoers(app_user: str) -> None:
         f"{app_user} ALL=(root) NOPASSWD: {apt_get} *",
         f"{app_user} ALL=(root) NOPASSWD: {apt_bin} *",
         f"{app_user} ALL=(root) NOPASSWD: {systemctl} *",
-        f"{app_user} ALL=(root) NOPASSWD: {bash_bin} /tmp/ssvp_msfinstall.sh",
+        # SSVP-generated root install scripts (metasploit, theHarvester, enum4linux …).
+        f"{app_user} ALL=(root) NOPASSWD: {bash_bin} /tmp/ssvp_*.sh",
     ]
     for p in setcap_paths:
         lines.append(f"{app_user} ALL=(root) NOPASSWD: {p} *")
@@ -480,7 +481,7 @@ def step_sudoers(app_user: str) -> None:
     if run_ok(["visudo", "-cf", str(tmp)]):
         os.replace(tmp, target)
         os.chmod(target, 0o440)
-        ok(f"/etc/sudoers.d/ssvp yazıldı ({app_user}: apt-get, systemctl, setcap, msfinstall)")
+        ok(f"/etc/sudoers.d/ssvp yazıldı ({app_user}: apt-get, systemctl, setcap, /tmp/ssvp_*.sh)")
     else:
         tmp.unlink(missing_ok=True)
         warn("sudoers doğrulaması başarısız — parolasız sudo atlandı. Tool kurulumu elle yapılabilir.")

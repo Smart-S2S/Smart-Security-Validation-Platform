@@ -216,6 +216,7 @@
                 body: JSON.stringify({ flow: otFlow.value, operation_key: currentOp.operation_key, step_key: currentOp.step_key || "" }),
             });
             currentOp.schema = Array.isArray(resp.schema) ? resp.schema : [];
+            if (window.SSVPWl) await window.SSVPWl.load();
             renderParamForm(currentOp.schema);
             if (otOperationForm) otOperationForm.hidden = false;
             setNote("");
@@ -244,8 +245,13 @@
         const def = field.default;
         const attrs = `data-key="${esc(key)}" data-type="${esc(type)}"`;
         const labelHtml = `<div class="ot-param-label"><span>${esc(field.label || key)}</span>${required ? '<span class="ot-req">gerekli</span>' : ""}</div>${field.description ? `<p class="ot-help">${esc(field.description)}</p>` : ""}`;
+        const isWordlist = window.SSVPWl && window.SSVPWl.WORDLIST_KEYS.has(key);
         let control;
-        if (type === "boolean") {
+        if (isWordlist) {
+            // Searchable wordlist combobox (shared window.SSVPWl). The hidden input
+            // carries the value with data-key/data-type so collectParams reads it.
+            control = window.SSVPWl.comboHtml(`data-key="${esc(key)}" data-type="file"`, def ?? "");
+        } else if (type === "boolean") {
             const checked = (def === true || String(def).toLowerCase() === "on" || String(def).toLowerCase() === "true") ? " checked" : "";
             control = `<label class="ot-check"><input type="checkbox" ${attrs}${checked}><span>${esc(key)}</span></label>`;
         } else if (Array.isArray(field.options_json) && field.options_json.length) {

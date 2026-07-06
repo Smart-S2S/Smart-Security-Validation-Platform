@@ -547,6 +547,11 @@ async function initializePanelData() {
     const access = await apiRequest('/settings/access', { cache: 'no-store' });
     validRoles = access.valid_roles || [];
 
+    // Per-user default rows-per-page for all data tables (Appearance setting).
+    const tablePageSize = Number.isFinite(access.table_page_size) ? access.table_page_size : 10;
+    window.__ssvpTablePageSize = tablePageSize;
+    if (window.SSVPTable) window.SSVPTable.setDefaultPageSize(tablePageSize);
+
     const [rolesData, usersData] = await Promise.all([
         apiRequest('/roles', { cache: 'no-store' }),
         apiRequest('/users', { cache: 'no-store' }),

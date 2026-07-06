@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from backend.services.mysql_db import init_mysql_schema, mysql_conn
 
 
 _LOCK = threading.Lock()
+_STORE_READY = False
 
 # Where uploaded wordlists are stored (owned by the app, safe to write).
 _UPLOAD_DIR = Path(__file__).resolve().parents[2] / "data" / "wordlists"
@@ -59,9 +61,19 @@ def _ensure_upload_dir() -> Path:
 
 
 def init_wordlist_store() -> None:
+    # Schema init (CREATE TABLE IF NOT EXISTS for every table) is ~600ms and is a
+    # no-op after the first run, so guard it: run once per process. Without this,
+    # every /validation/wordlists call (the wordlist combobox on operation forms)
+    # would pay the full schema-init cost instead of just the ~60ms SELECT.
+    global _STORE_READY
+    if _STORE_READY:
+        return
     with _LOCK:
+        if _STORE_READY:
+            return
         init_mysql_schema()
         _ensure_upload_dir()
+        _STORE_READY = True
 
 
 def human_size(num_bytes: int) -> str:
@@ -172,8 +184,15 @@ def _upsert_wordlist(cur, *, name: str, path: str, size_bytes: int, source: str)
 
 
 def _iter_candidate_files():
-    """Yield (name, abspath, size_bytes) for wordlist-like files under known roots."""
+    """Yield (name, abspath, size_bytes) for wordlist-like files under known roots.
+
+    Symlinks are followed (``/usr/share/wordlists`` is mostly symlinks to the real
+    tool directories — dirb, dirbuster, seclists, metasploit, wfuzz…), with a
+    per-scan guard on already-visited real directories so a circular link cannot
+    make the walk loop forever.
+    """
     seen_paths: set[str] = set()
+    visited_dirs: set[str] = set()
     emitted = 0
     for root in _SCAN_ROOTS:
         if emitted >= _SCAN_FILE_LIMIT:
@@ -187,7 +206,7 @@ def _iter_candidate_files():
             walker = ()
         else:
             candidates = []
-            walker = os.walk(root, followlinks=False)
+            walker = os.walk(root, followlinks=True)
 
         for existing_file in candidates:
             item = _stat_candidate(existing_file, seen_paths, require_ext=False)
@@ -197,7 +216,21 @@ def _iter_candidate_files():
                 if emitted >= _SCAN_FILE_LIMIT:
                     return
 
-        for dirpath, _dirnames, filenames in walker:
+        for dirpath, dirnames, filenames in walker:
+            # Cycle guard: skip a directory whose real path we already walked, and
+            # prune already-visited subdirs so followlinks cannot spin on a loop.
+            try:
+                real_dir = os.path.realpath(dirpath)
+            except OSError:
+                real_dir = dirpath
+            if real_dir in visited_dirs:
+                dirnames[:] = []
+                continue
+            visited_dirs.add(real_dir)
+            dirnames[:] = [
+                d for d in dirnames
+                if os.path.realpath(os.path.join(dirpath, d)) not in visited_dirs
+            ]
             for filename in filenames:
                 if emitted >= _SCAN_FILE_LIMIT:
                     return
@@ -328,6 +361,140 @@ def migrate_wordlist_names() -> int:
                     updated += 1
         conn.commit()
     return updated
+
+
+# --------------------------------------------------------------------------- #
+# Downloadable wordlist collections (admin, from the Sözlük Yönetimi panel)
+# --------------------------------------------------------------------------- #
+# Each installer is a root shell script run via `sudo -n bash /tmp/ssvp_*.sh`
+# (the same allowlisted mechanism the pentest-tool installers use). The download
+# targets land under directories already covered by _SCAN_ROOTS, so the post-
+# download scan folds them straight into the catalog.
+_WORDLIST_INSTALLERS = {
+    "rockyou": {
+        "label": "rockyou.txt",
+        "note": "≈133 MB — /usr/share/wordlists/rockyou.txt",
+        "script": (
+            "set -e\n"
+            "mkdir -p /usr/share/wordlists\n"
+            "cd /usr/share/wordlists\n"
+            "if [ ! -s rockyou.txt ]; then\n"
+            "  curl -fsSL --retry 3 -o rockyou.txt.part "
+            "https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt\n"
+            "  mv rockyou.txt.part rockyou.txt\n"
+            "fi\n"
+            "chmod 0644 rockyou.txt\n"
+        ),
+    },
+    "seclists": {
+        "label": "SecLists",
+        "note": "≈1 GB — /usr/share/seclists (git)",
+        "script": (
+            "set -e\n"
+            "export DEBIAN_FRONTEND=noninteractive\n"
+            "command -v git >/dev/null 2>&1 || apt-get install -y git\n"
+            "if [ -d /usr/share/seclists/.git ]; then\n"
+            "  git -C /usr/share/seclists pull --ff-only || true\n"
+            "else\n"
+            "  rm -rf /usr/share/seclists\n"
+            "  git clone --depth 1 https://github.com/danielmiessler/SecLists.git /usr/share/seclists\n"
+            "fi\n"
+        ),
+    },
+}
+
+_INSTALL_LOCK = threading.Lock()
+_INSTALL_JOBS: dict[str, dict] = {}
+
+
+def _run_install_script(name: str) -> tuple[bool, str]:
+    cfg = _WORDLIST_INSTALLERS.get(name)
+    if not cfg:
+        return False, "Bilinmeyen sözlük paketi."
+    path = f"/tmp/ssvp_wordlist_{name}.sh"
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/bash\n" + cfg["script"])
+        subprocess.run(["chmod", "0755", path], timeout=15, capture_output=True)
+        proc = subprocess.run(
+            ["sudo", "-n", "bash", path], timeout=3600, capture_output=True, text=True
+        )
+        out = (proc.stdout or "") + (proc.stderr or "")
+        if proc.returncode != 0 and ("a password is required" in out or "sudo:" in out):
+            out += "\nSunucuda parolasız sudo yok (install.py'yi tekrar çalıştırın)."
+        return proc.returncode == 0, out
+    except subprocess.TimeoutExpired:
+        return False, "İndirme zaman aşımına uğradı."
+    except Exception as exc:
+        return False, f"Hata: {type(exc).__name__}: {exc}"
+
+
+def _install_worker(name: str) -> None:
+    ok, out = _run_install_script(name)
+    scan_summary = None
+    if ok:
+        try:
+            scan_summary = scan_system_wordlists()
+        except Exception as exc:  # pragma: no cover - defensive
+            ok = False
+            out += f"\nTarama hatası: {exc}"
+    with _INSTALL_LOCK:
+        job = _INSTALL_JOBS.get(name, {})
+        job.update({
+            "status": "done" if ok else "error",
+            "ok": ok,
+            "finished_at": _utc_now_iso(),
+            "message": (out or "").strip()[-2000:],
+            "scan": scan_summary,
+        })
+        _INSTALL_JOBS[name] = job
+
+
+def start_wordlist_install(name: str) -> dict:
+    """Kick off a background download+catalog of a known collection. Idempotent
+    while a job is already running for the same collection."""
+    if name not in _WORDLIST_INSTALLERS:
+        raise ValueError("Bilinmeyen sözlük paketi.")
+    with _INSTALL_LOCK:
+        current = _INSTALL_JOBS.get(name)
+        if current and current.get("status") == "running":
+            return dict(current)
+        job = {
+            "name": name,
+            "label": _WORDLIST_INSTALLERS[name]["label"],
+            "status": "running",
+            "started_at": _utc_now_iso(),
+        }
+        _INSTALL_JOBS[name] = job
+    threading.Thread(target=_install_worker, args=(name,), daemon=True).start()
+    return dict(job)
+
+
+# Marker paths that tell us a collection is already present on disk.
+_WORDLIST_INSTALLED_MARKERS = {
+    "rockyou": "/usr/share/wordlists/rockyou.txt",
+    "seclists": "/usr/share/seclists/.git",
+}
+
+
+def _is_installed(name: str) -> bool:
+    marker = _WORDLIST_INSTALLED_MARKERS.get(name)
+    return bool(marker) and os.path.exists(marker)
+
+
+def wordlist_install_catalog() -> list[dict]:
+    """The collections the panel can offer to download (with install state so the
+    UI can switch the button to an 'update' / diff-refresh action)."""
+    return [
+        {"name": k, "label": v["label"], "note": v.get("note", ""), "installed": _is_installed(k)}
+        for k, v in _WORDLIST_INSTALLERS.items()
+    ]
+
+
+def wordlist_install_status() -> dict:
+    with _INSTALL_LOCK:
+        jobs = {k: dict(v) for k, v in _INSTALL_JOBS.items()}
+    return {"available": wordlist_install_catalog(), "jobs": jobs}
 
 
 def delete_wordlist(wordlist_id: int) -> bool:

@@ -27,6 +27,7 @@ const settingsMenuApp = document.getElementById("settingsMenuApp");
 const appearanceForm = document.getElementById("appearanceForm");
 const appearanceTheme = document.getElementById("appearanceTheme");
 const appearanceLanguage = document.getElementById("appearanceLanguage");
+const appearanceTablePageSize = document.getElementById("appearanceTablePageSize");
 const projectInfoList = document.getElementById("projectInfoList");
 const hostInfoList = document.getElementById("hostInfoList");
 const resourceInfoList = document.getElementById("resourceInfoList");
@@ -387,6 +388,14 @@ const I18N = {
         "settings.wordlist.uploadFail": "Sözlük yüklenemedi.",
         "settings.wordlist.deleted": "Sözlük silindi.",
         "settings.wordlist.deleteFail": "Sözlük silinemedi.",
+        "settings.wordlist.install.title": "Hazır Sözlükler İndir",
+        "settings.wordlist.install.note": "Sunucuda standart sözlükleri (rockyou, SecLists) indirir ve otomatik olarak kataloğa ekler. İndirme arka planda çalışır.",
+        "settings.wordlist.install.download": "İndir",
+        "settings.wordlist.install.update": "Güncelle",
+        "settings.wordlist.install.running": "indiriliyor…",
+        "settings.wordlist.install.done": "indirildi ve kataloğa eklendi",
+        "settings.wordlist.install.error": "indirme başarısız",
+        "settings.wordlist.install.startFail": "İndirme başlatılamadı.",
         "passMismatch": "Şifreler eşleşmiyor.",
         "profileSaved": "Profil kaydedildi.",
         "passwordSaved": "Şifre güncellendi.",
@@ -413,6 +422,8 @@ const I18N = {
         "settings.appearance.language": "Dil",
         "settings.appearance.language.tr": "Türkçe",
         "settings.appearance.language.en": "English",
+        "settings.appearance.tablePageSize": "Tabloda sayfa başına satır",
+        "settings.appearance.tablePageSizeAll": "Hepsi",
         "settings.appearance.save": "Görünüm Ayarlarını Uygula",
         "settings.appearance.saved": "Görünüm ayarları güncellendi.",
         "settings.system.title": "Sistem ve Proje Bilgileri",
@@ -637,6 +648,14 @@ const I18N = {
         "settings.wordlist.uploadFail": "Could not upload wordlist.",
         "settings.wordlist.deleted": "Wordlist deleted.",
         "settings.wordlist.deleteFail": "Could not delete wordlist.",
+        "settings.wordlist.install.title": "Download Ready-Made Wordlists",
+        "settings.wordlist.install.note": "Downloads standard wordlists (rockyou, SecLists) onto the server and adds them to the catalog automatically. The download runs in the background.",
+        "settings.wordlist.install.download": "Download",
+        "settings.wordlist.install.update": "Update",
+        "settings.wordlist.install.running": "downloading…",
+        "settings.wordlist.install.done": "downloaded and added to the catalog",
+        "settings.wordlist.install.error": "download failed",
+        "settings.wordlist.install.startFail": "Could not start the download.",
         "passMismatch": "Passwords do not match.",
         "profileSaved": "Profile saved.",
         "passwordSaved": "Password updated.",
@@ -663,6 +682,8 @@ const I18N = {
         "settings.appearance.language": "Language",
         "settings.appearance.language.tr": "Türkçe",
         "settings.appearance.language.en": "English",
+        "settings.appearance.tablePageSize": "Rows per page in tables",
+        "settings.appearance.tablePageSizeAll": "All",
         "settings.appearance.save": "Apply Appearance Settings",
         "settings.appearance.saved": "Appearance settings updated.",
         "settings.system.title": "System and Project Information",
@@ -2855,6 +2876,7 @@ async function loadTabData(tab, { force = false } = {}) {
     }
     if (tab === "wordlists" && hasTab("wordlists")) {
         await loadWordlists();
+        refreshWordlistInstall();
     }
     if (tab === "database" && hasTab("database")) {
         await loadDatabaseTab();
@@ -2875,6 +2897,12 @@ async function initializeAccess() {
         accessTabs = ["system"];
     }
     validRoles = access.valid_roles || [];
+
+    // Per-user default rows-per-page for all data tables (Appearance setting).
+    const tablePageSize = Number.isFinite(access.table_page_size) ? access.table_page_size : 10;
+    window.__ssvpTablePageSize = tablePageSize;
+    if (appearanceTablePageSize) appearanceTablePageSize.value = String(tablePageSize);
+    if (window.SSVPTable) window.SSVPTable.setDefaultPageSize(tablePageSize);
 
     applyThemeAndLanguage(currentUser.ui_theme, currentUser.ui_language);
 
@@ -3669,11 +3697,19 @@ async function showToolOperations(toolKey, toolLabel) {
         backBtn.addEventListener("click", showToolList);
     }
     try {
-        const data = await apiRequest(`/settings/pentest-tools/${encodeURIComponent(toolKey)}/operations`);
+        const [data, cfg] = await Promise.all([
+            apiRequest(`/settings/pentest-tools/${encodeURIComponent(toolKey)}/operations`),
+            apiRequest(`/settings/pentest-tools/${encodeURIComponent(toolKey)}/config`).catch(() => null),
+            window.SSVPWl ? window.SSVPWl.load() : Promise.resolve(),
+        ]);
         const body = opsView.querySelector(".tool-op-loading");
         const cards = renderToolOperationsCards(data);
+        const configHtml = cfg ? renderToolConfig(cfg) : "";
         if (body) {
-            body.outerHTML = `<div class="tool-op-list">${cards}</div>`;
+            body.outerHTML = `${configHtml}<div class="tool-op-list">${cards}</div>`;
+        }
+        if (cfg) {
+            bindToolConfig(toolKey);
         }
     } catch (error) {
         const body = opsView.querySelector(".tool-op-loading");
@@ -3682,6 +3718,103 @@ async function showToolOperations(toolKey, toolLabel) {
             body.textContent = `Operasyonlar yüklenemedi: ${error.message || "hata"}`;
         }
     }
+}
+
+// Wordlist params render as a searchable combobox fed from the DB wordlist
+// catalog (Sözlük Yönetimi) via the shared window.SSVPWl helper (notify.js), so
+// the same widget/behaviour is used here, in Pentest and in Operation Test.
+const TC_WORDLIST_KEYS = (window.SSVPWl && window.SSVPWl.WORDLIST_KEYS)
+    || new Set(["wordlist", "wordlists", "userlist", "passlist", "combo_file"]);
+
+// Per-tool config editor (parameter defaults + API keys) shown above the
+// read-only operation cards in the "Operasyon Özellikleri" drill-in.
+function renderToolConfig(cfg) {
+    // 3-per-row grid; each item stacks the parameter name over its input.
+    const GRID = 'style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; align-items:end;"';
+    const ITEM = 'style="display:flex; flex-direction:column; gap:4px; min-width:0;"';
+    const params = Array.isArray(cfg?.params) ? cfg.params : [];
+    const paramItems = params.map((p) => {
+        const key = escPentest(p.key);
+        const label = escPentest(p.label || p.key);
+        let field;
+        if (TC_WORDLIST_KEYS.has(String(p.key).toLowerCase()) && window.SSVPWl) {
+            field = window.SSVPWl.comboHtml(`data-tc-param="${key}"`, p.default || "");
+        } else if (Array.isArray(p.choices) && p.choices.length) {
+            const opts = p.choices.map((c) =>
+                `<option value="${escPentest(c)}"${String(c) === String(p.default) ? " selected" : ""}>${escPentest(c)}</option>`).join("");
+            field = `<select data-tc-param="${key}">${opts}</select>`;
+        } else if (p.type === "boolean") {
+            const on = ["on", "true", "1", "yes"].includes(String(p.default || "").toLowerCase());
+            field = `<select data-tc-param="${key}"><option value="on"${on ? " selected" : ""}>on</option><option value="off"${!on ? " selected" : ""}>off</option></select>`;
+        } else {
+            field = `<input type="text" data-tc-param="${key}" value="${escPentest(p.default || "")}">`;
+        }
+        return `<div class="tc-item" ${ITEM}><label class="tc-label">${label} <span class="muted">(${key})</span></label>${field}</div>`;
+    }).join("");
+
+    let apiHtml = "";
+    const fields = Array.isArray(cfg?.api_key_fields) ? cfg.api_key_fields : [];
+    if (cfg?.has_api_file && fields.length) {
+        const items = fields.map((f) => (f.fields || []).map((fld) => {
+            const isSet = f.set && f.set[fld];
+            return `<div class="tc-item" ${ITEM}><label class="tc-label">${escPentest(f.source)} <span class="muted">${escPentest(fld)}</span></label>
+                <input type="password" autocomplete="off" data-tc-api-source="${escPentest(f.source)}" data-tc-api-field="${escPentest(fld)}" placeholder="${isSet ? "•••• (kayıtlı)" : ""}"></div>`;
+        }).join("")).join("");
+        apiHtml = `<details class="tc-api" style="margin-top:12px;"><summary>API Anahtarları — api-keys.yaml (${fields.length} kaynak)</summary>
+            <p class="muted">Boş bırakılan alanlar mevcut anahtarı korur.</p>
+            <div ${GRID}>${items}</div></details>`;
+    }
+
+    return `
+        <div class="card tool-config" style="margin-bottom:14px;">
+            <h4 style="margin-top:0;">Varsayılan Parametreler</h4>
+            <p class="muted">Bu araç için operasyon formlarında öntanımlı gelecek değerler.</p>
+            <div ${GRID}>${paramItems || '<span class="muted">Parametre bulunamadı.</span>'}</div>
+            ${apiHtml}
+            <div style="margin-top:12px;"><button type="button" class="btn" id="tcSaveBtn">Yapılandırmayı Kaydet</button></div>
+            <p id="tcFeedback" class="muted" style="margin-top:6px;"></p>
+        </div>`;
+}
+
+function bindToolConfig(toolKey) {
+    const btn = document.getElementById("tcSaveBtn");
+    if (!btn) {
+        return;
+    }
+    btn.addEventListener("click", async () => {
+        const param_defaults = {};
+        document.querySelectorAll("[data-tc-param]").forEach((el) => {
+            param_defaults[el.getAttribute("data-tc-param")] = el.value;
+        });
+        const api_keys = {};
+        document.querySelectorAll("[data-tc-api-source]").forEach((el) => {
+            if (el.value === "") {
+                return; // empty = keep the stored key
+            }
+            const s = el.getAttribute("data-tc-api-source");
+            const f = el.getAttribute("data-tc-api-field");
+            (api_keys[s] = api_keys[s] || {})[f] = el.value;
+        });
+        const fb = document.getElementById("tcFeedback");
+        btn.disabled = true;
+        try {
+            const res = await apiRequest(`/settings/pentest-tools/${encodeURIComponent(toolKey)}/config`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ param_defaults, api_keys }),
+            });
+            if (fb) {
+                fb.textContent = `Kaydedildi (${res.applied_params || 0} parametre uygulandı${res.wrote_file ? ", api-keys.yaml güncellendi" : ""}).`;
+            }
+            document.querySelectorAll("[data-tc-api-source]").forEach((el) => { el.value = ""; });
+        } catch (e) {
+            if (fb) {
+                fb.textContent = "Kaydedilemedi: " + (e.message || "hata");
+            }
+        } finally {
+            btn.disabled = false;
+        }
+    });
 }
 
 const PENTEST_ACTION_LABELS = { install: "Kurulum", update: "Güncelleme", remove: "Kaldırma", check: "Güncelleme kontrolü" };
@@ -3818,6 +3951,98 @@ if (wordlistRefreshBtn) {
     wordlistRefreshBtn.addEventListener("click", () => loadWordlists());
 }
 
+// Downloadable collections (rockyou / SecLists): a button per collection —
+// "İndir" when absent, "Güncelle" (diff refresh) when already installed. Starts
+// the background job, polls status, and reports completion with a transient
+// toast (no persistent "done" line).
+let wordlistInstallTimer = null;
+const wordlistInstallToasted = new Set();
+
+function renderWordlistInstall(data) {
+    const btns = document.getElementById("wordlistInstallBtns");
+    const statusEl = document.getElementById("wordlistInstallStatus");
+    if (!btns || !statusEl) {
+        return;
+    }
+    const available = Array.isArray(data?.available) ? data.available : [];
+    const jobs = data?.jobs || {};
+
+    btns.innerHTML = available.map((c) => {
+        const job = jobs[c.name];
+        const running = job && job.status === "running";
+        const label = c.installed
+            ? (t("settings.wordlist.install.update") || "Güncelle")
+            : (t("settings.wordlist.install.download") || "İndir");
+        const note = c.note ? ` <small class="muted">(${escPentest(c.note)})</small>` : "";
+        return `<button type="button" class="wordlist-install-btn" data-name="${escPentest(c.name)}"${running ? " disabled" : ""}>${escPentest(label)} ${escPentest(c.label)}</button>${note}`;
+    }).join("");
+
+    // Only running jobs get a persistent line; finished jobs are announced once
+    // via a toast and then leave no lingering status text.
+    const lines = available.map((c) => {
+        const job = jobs[c.name];
+        if (!job || job.status !== "running") return "";
+        const word = t("settings.wordlist.install.running") || "indiriliyor…";
+        return `<div style="color:var(--muted); margin-top:4px;">${escPentest(c.label)}: ${escPentest(word)}</div>`;
+    }).filter(Boolean).join("");
+    statusEl.innerHTML = lines;
+
+    // Announce freshly-finished jobs once.
+    available.forEach((c) => {
+        const job = jobs[c.name];
+        if (!job || job.status === "running") return;
+        const stamp = `${c.name}:${job.finished_at || ""}`;
+        if (wordlistInstallToasted.has(stamp)) return;
+        wordlistInstallToasted.add(stamp);
+        if (job.ok) {
+            window.SSVPNotify?.success?.(`${c.label}: ${t("settings.wordlist.install.done") || "indirildi ve kataloğa eklendi"}`);
+        } else {
+            const tail = job.message ? ` — ${job.message.split("\n").pop()}` : "";
+            window.SSVPNotify?.error?.(`${c.label}: ${(t("settings.wordlist.install.error") || "indirme başarısız")}${tail}`);
+        }
+    });
+
+    const anyRunning = available.some((c) => jobs[c.name] && jobs[c.name].status === "running");
+    if (anyRunning) {
+        if (!wordlistInstallTimer) {
+            wordlistInstallTimer = setInterval(refreshWordlistInstall, 4000);
+        }
+    } else if (wordlistInstallTimer) {
+        clearInterval(wordlistInstallTimer);
+        wordlistInstallTimer = null;
+        // A finished download may have added rows — refresh the table once.
+        loadWordlists();
+    }
+}
+
+async function refreshWordlistInstall() {
+    if (!document.getElementById("wordlistInstallBtns")) {
+        return;
+    }
+    try {
+        const data = await apiRequest("/settings/wordlists/install", { cache: "no-store" });
+        renderWordlistInstall(data);
+    } catch (_) {
+        // Non-fatal: leave whatever is on screen.
+    }
+}
+
+document.addEventListener("click", async (event) => {
+    const btn = event.target.closest?.(".wordlist-install-btn");
+    if (!btn) {
+        return;
+    }
+    const name = btn.getAttribute("data-name");
+    btn.disabled = true;
+    try {
+        await apiRequest(`/settings/wordlists/install/${encodeURIComponent(name)}`, { method: "POST" });
+        refreshWordlistInstall();
+    } catch (error) {
+        btn.disabled = false;
+        setFeedback(error.message || (t("settings.wordlist.install.startFail") || "İndirme başlatılamadı."), true);
+    }
+});
+
 const wordlistUploadForm = document.getElementById("wordlistUploadForm");
 const wordlistFileInput = document.getElementById("wordlistFile");
 const wordlistUploadBtn = document.getElementById("wordlistUploadBtn");
@@ -3945,6 +4170,8 @@ if (appearanceForm) {
 
         const nextTheme = appearanceTheme?.value === "light" ? "light" : "dark";
         const nextLang = appearanceLanguage?.value === "en" ? "en" : "tr";
+        const nextPageSize = parseInt(appearanceTablePageSize?.value, 10);
+        const pageSize = [0, 10, 25, 50, 100].includes(nextPageSize) ? nextPageSize : 10;
 
         try {
             const payload = await apiRequest("/settings/appearance", {
@@ -3953,10 +4180,14 @@ if (appearanceForm) {
                 body: JSON.stringify({
                     ui_theme: nextTheme,
                     ui_language: nextLang,
+                    table_page_size: pageSize,
                 }),
             });
 
             currentUser = payload.item || currentUser;
+            const savedSize = Number.isFinite(payload.table_page_size) ? payload.table_page_size : pageSize;
+            window.__ssvpTablePageSize = savedSize;
+            if (window.SSVPTable) window.SSVPTable.setDefaultPageSize(savedSize);
             applyThemeAndLanguage(currentUser?.ui_theme, currentUser?.ui_language);
             setFeedback(t("settings.appearance.saved"));
         } catch (error) {
@@ -5286,6 +5517,7 @@ if (dbBackupTbody) {
         try {
             const data = await apiRequest("/settings/database/backup/delete", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name }),
             });
             renderDbBackups(data.backups || []);
@@ -5318,6 +5550,7 @@ if (dbPasswordForm) {
         try {
             const data = await apiRequest("/settings/database/password", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ new_password: v1 }),
             });
             setFeedback(data.message || (t("settings.database.pwChanged") || "Veritabanı parolası güncellendi."));

@@ -58,3 +58,7 @@ def on_startup():
     # existing rows onto the prefixed naming scheme (tool./loaded.).
     init_wordlist_store()
     migrate_wordlist_names()
+    # Re-apply admin per-tool parameter defaults on top of the freshly seeded
+    # catalog (so they survive a re-seed).
+    from backend.services.tool_config import reapply_all as reapply_tool_config
+    reapply_tool_config()
