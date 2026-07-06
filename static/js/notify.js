@@ -1,3 +1,56 @@
+// Resilient fetch: transparently retries transient failures so a single hiccup
+// during page load (connection reset under the single-worker server, a brief 5xx)
+// does not leave a tab/card/page empty. Only idempotent GETs are retried, so
+// POST/PATCH/DELETE are never accidentally repeated. Installed here because
+// notify.js is the first script on every page, before any data fetching runs.
+(function installResilientFetch() {
+    if (window.__ssvpFetchPatched || typeof window.fetch !== "function") {
+        return;
+    }
+    window.__ssvpFetchPatched = true;
+
+    const nativeFetch = window.fetch.bind(window);
+    const RETRYABLE_STATUS = new Set([502, 503, 504]);
+    const MAX_RETRIES = 2;
+
+    function methodOf(init) {
+        return String((init && init.method) || "GET").toUpperCase();
+    }
+    function isRetryableMethod(init) {
+        return methodOf(init) === "GET";
+    }
+    function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    window.fetch = async function resilientFetch(input, init) {
+        let lastError;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const response = await nativeFetch(input, init);
+                if (
+                    RETRYABLE_STATUS.has(response.status) &&
+                    isRetryableMethod(init) &&
+                    attempt < MAX_RETRIES
+                ) {
+                    await delay(200 * (attempt + 1));
+                    continue;
+                }
+                return response;
+            } catch (error) {
+                // Network-level failure (connection reset / "Failed to fetch").
+                lastError = error;
+                if (isRetryableMethod(init) && attempt < MAX_RETRIES) {
+                    await delay(200 * (attempt + 1));
+                    continue;
+                }
+                throw error;
+            }
+        }
+        throw lastError;
+    };
+})();
+
 (function initSsvpNotify() {
     if (window.SSVPNotify) {
         return;

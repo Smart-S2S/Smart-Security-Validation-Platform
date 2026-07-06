@@ -1,25 +1,29 @@
-import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import pymysql
 from pymysql.cursors import DictCursor
 
-
-DEFAULT_MYSQL_HOST = "127.0.0.1"
-DEFAULT_MYSQL_PORT = 3306
-DEFAULT_MYSQL_USER = "ssvp"
-DEFAULT_MYSQL_PASSWORD = "ssvp123"
-DEFAULT_MYSQL_DATABASE = "ssvp"
+from backend.services.db_credentials import (
+    DEFAULT_MYSQL_DATABASE,
+    DEFAULT_MYSQL_HOST,
+    DEFAULT_MYSQL_PASSWORD,
+    DEFAULT_MYSQL_PORT,
+    DEFAULT_MYSQL_USER,
+    load_credentials,
+)
 
 
 def _mysql_config() -> dict:
+    # Credentials come from the file-based store (defaults < env < file) so the
+    # DB password can be rotated at runtime from the admin UI and persist.
+    creds = load_credentials()
     return {
-        "host": os.getenv("MYSQL_HOST", DEFAULT_MYSQL_HOST),
-        "port": int(os.getenv("MYSQL_PORT", str(DEFAULT_MYSQL_PORT))),
-        "user": os.getenv("MYSQL_USER", DEFAULT_MYSQL_USER),
-        "password": os.getenv("MYSQL_PASSWORD", DEFAULT_MYSQL_PASSWORD),
-        "database": os.getenv("MYSQL_DATABASE", DEFAULT_MYSQL_DATABASE),
+        "host": creds["host"],
+        "port": int(creds["port"]),
+        "user": creds["user"],
+        "password": creds["password"],
+        "database": creds["database"],
         "charset": "utf8mb4",
         "cursorclass": DictCursor,
         "autocommit": False,

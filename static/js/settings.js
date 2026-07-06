@@ -317,6 +317,43 @@ const I18N = {
         "settings.toolsmgmt.logTitle": "İşlem Kaydı",
         "settings.toolsmgmt.clearLog": "Temizle",
         "settings.tab.wordlists": "Sözlük Yönetimi",
+        "settings.tab.database": "Veritabanı ve Yedekleme",
+        "settings.database.title": "Veritabanı ve Yedekleme",
+        "settings.database.refresh": "Yenile",
+        "settings.database.note": "Veritabanı bağlantı durumu, parola değişimi ve yedekleme. Parola değişimi hizmeti kesmeden uygulanır: değişiklik hem veritabanında hem yapılandırma dosyasında doğrulanamazsa eski parola korunur.",
+        "settings.database.statusTitle": "Bağlantı Durumu",
+        "settings.database.host": "Host",
+        "settings.database.port": "Port",
+        "settings.database.user": "Kullanıcı",
+        "settings.database.name": "Veritabanı",
+        "settings.database.state": "Durum",
+        "settings.database.version": "Sürüm",
+        "settings.database.connected": "Bağlı",
+        "settings.database.disconnected": "Bağlantı yok",
+        "settings.database.pwTitle": "Parola Değiştir",
+        "settings.database.pwNote": "Yeni parola en az 8 karakter olmalıdır. Değişiklik anında geçerli olur; başarısız olursa eski parola korunur.",
+        "settings.database.newPw": "Yeni Parola",
+        "settings.database.newPw2": "Yeni Parola (Tekrar)",
+        "settings.database.changePw": "Parolayı Değiştir",
+        "settings.database.pwTooShort": "Parola en az 8 karakter olmalı.",
+        "settings.database.pwMismatch": "Parolalar eşleşmiyor.",
+        "settings.database.pwChanged": "Veritabanı parolası güncellendi.",
+        "settings.database.pwFail": "Parola değiştirilemedi; eski parola korundu.",
+        "settings.database.backupTitle": "Yedekler",
+        "settings.database.createBackup": "Yeni Yedek Al",
+        "settings.database.backupName": "Dosya",
+        "settings.database.backupSize": "Boyut",
+        "settings.database.backupDate": "Tarih",
+        "settings.database.actions": "İşlem",
+        "settings.database.download": "İndir",
+        "settings.database.delete": "Sil",
+        "settings.database.noBackup": "Henüz yedek yok.",
+        "settings.database.backupDone": "Yedek oluşturuldu",
+        "settings.database.backupFail": "Yedekleme başarısız.",
+        "settings.database.confirmDelete": "Bu yedek silinsin mi?",
+        "settings.database.deleteDone": "Yedek silindi.",
+        "settings.database.deleteFail": "Silinemedi.",
+        "settings.database.loadFail": "Veritabanı durumu alınamadı.",
         "settings.wordlist.title": "Sözlük Yönetimi",
         "settings.wordlist.scan": "Tara",
         "settings.wordlist.refresh": "Yenile",
@@ -519,6 +556,43 @@ const I18N = {
         "settings.toolsmgmt.logTitle": "Operation Log",
         "settings.toolsmgmt.clearLog": "Clear",
         "settings.tab.wordlists": "Wordlists",
+        "settings.tab.database": "Database & Backup",
+        "settings.database.title": "Database & Backup",
+        "settings.database.refresh": "Refresh",
+        "settings.database.note": "Database connection status, password change and backups. A password change is applied without downtime: if the change cannot be verified in BOTH the database and the config file, the old password is kept.",
+        "settings.database.statusTitle": "Connection Status",
+        "settings.database.host": "Host",
+        "settings.database.port": "Port",
+        "settings.database.user": "User",
+        "settings.database.name": "Database",
+        "settings.database.state": "State",
+        "settings.database.version": "Version",
+        "settings.database.connected": "Connected",
+        "settings.database.disconnected": "Not connected",
+        "settings.database.pwTitle": "Change Password",
+        "settings.database.pwNote": "New password must be at least 8 characters. The change takes effect immediately; if it fails, the old password is kept.",
+        "settings.database.newPw": "New Password",
+        "settings.database.newPw2": "New Password (again)",
+        "settings.database.changePw": "Change Password",
+        "settings.database.pwTooShort": "Password must be at least 8 characters.",
+        "settings.database.pwMismatch": "Passwords do not match.",
+        "settings.database.pwChanged": "Database password updated.",
+        "settings.database.pwFail": "Could not change password; old password kept.",
+        "settings.database.backupTitle": "Backups",
+        "settings.database.createBackup": "Create Backup",
+        "settings.database.backupName": "File",
+        "settings.database.backupSize": "Size",
+        "settings.database.backupDate": "Date",
+        "settings.database.actions": "Action",
+        "settings.database.download": "Download",
+        "settings.database.delete": "Delete",
+        "settings.database.noBackup": "No backups yet.",
+        "settings.database.backupDone": "Backup created",
+        "settings.database.backupFail": "Backup failed.",
+        "settings.database.confirmDelete": "Delete this backup?",
+        "settings.database.deleteDone": "Backup deleted.",
+        "settings.database.deleteFail": "Could not delete.",
+        "settings.database.loadFail": "Could not load database status.",
         "settings.wordlist.title": "Wordlist Management",
         "settings.wordlist.scan": "Scan",
         "settings.wordlist.refresh": "Refresh",
@@ -2828,6 +2902,10 @@ tabButtons.forEach((button) => {
             await loadWordlists();
         }
 
+        if (tab === "database" && hasTab("database")) {
+            await loadDatabaseTab();
+        }
+
         if (tab === "ai" && hasTab("ai")) {
             refreshOllamaStatus("status");
         }
@@ -5079,5 +5157,146 @@ if (stepForm) {
         }
     }
 })();
+
+// --------------------------------------------------------------------------- //
+// Veritabanı ve Yedekleme sekmesi
+// --------------------------------------------------------------------------- //
+function dbHumanSize(bytes) {
+    const n = Number(bytes || 0);
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function renderDbBackups(list) {
+    const tbody = document.getElementById("dbBackupTbody");
+    if (!tbody) return;
+    const items = Array.isArray(list) ? list : [];
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="4" class="muted">${escPentest(t("settings.database.noBackup") || "Henüz yedek yok.")}</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = items.map((b) => {
+        const name = escPentest(b.name || "");
+        const date = escPentest((b.created_at || "").replace("T", " ").slice(0, 19));
+        const dl = `/settings/database/backup/download?name=${encodeURIComponent(b.name || "")}`;
+        return `<tr>
+            <td>${name}</td>
+            <td>${escPentest(dbHumanSize(b.size))}</td>
+            <td>${date}</td>
+            <td>
+                <a href="${dl}" download>${escPentest(t("settings.database.download") || "İndir")}</a>
+                &nbsp;·&nbsp;
+                <button type="button" class="db-backup-delete-btn" data-name="${name}">${escPentest(t("settings.database.delete") || "Sil")}</button>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+function renderDbStatus(status) {
+    const s = status || {};
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set("dbHost", s.host || "—");
+    set("dbPort", s.port || "—");
+    set("dbUser", s.user || "—");
+    set("dbName", s.database || "—");
+    const stateEl = document.getElementById("dbState");
+    if (stateEl) {
+        const okText = t("settings.database.connected") || "Bağlı";
+        const failText = t("settings.database.disconnected") || "Bağlantı yok";
+        stateEl.textContent = s.connected ? okText : `${failText}${s.error ? " — " + s.error : ""}`;
+        stateEl.style.color = s.connected ? "var(--success, #2e7d32)" : "var(--danger, #c62828)";
+    }
+    set("dbVersion", s.server_version || "—");
+}
+
+async function loadDatabaseTab() {
+    try {
+        const data = await apiRequest("/settings/database", { cache: "no-store" });
+        renderDbStatus(data.status || {});
+        renderDbBackups(data.backups || []);
+    } catch (error) {
+        setFeedback(error.message || (t("settings.database.loadFail") || "Veritabanı durumu alınamadı."), true);
+    }
+}
+
+const dbRefreshBtn = document.getElementById("dbRefreshBtn");
+if (dbRefreshBtn) {
+    dbRefreshBtn.addEventListener("click", () => loadDatabaseTab());
+}
+
+const dbBackupBtn = document.getElementById("dbBackupBtn");
+if (dbBackupBtn) {
+    dbBackupBtn.addEventListener("click", async () => {
+        dbBackupBtn.disabled = true;
+        try {
+            const data = await apiRequest("/settings/database/backup", { method: "POST" });
+            renderDbBackups(data.backups || []);
+            setFeedback((t("settings.database.backupDone") || "Yedek oluşturuldu") + `: ${(data.backup || {}).name || ""}`);
+        } catch (error) {
+            setFeedback(error.message || (t("settings.database.backupFail") || "Yedekleme başarısız."), true);
+        } finally {
+            dbBackupBtn.disabled = false;
+        }
+    });
+}
+
+const dbBackupTbody = document.getElementById("dbBackupTbody");
+if (dbBackupTbody) {
+    dbBackupTbody.addEventListener("click", async (event) => {
+        const btn = event.target.closest(".db-backup-delete-btn");
+        if (!btn) return;
+        const name = btn.dataset.name;
+        if (!name) return;
+        if (!window.confirm((t("settings.database.confirmDelete") || "Bu yedek silinsin mi?") + `\n${name}`)) return;
+        btn.disabled = true;
+        try {
+            const data = await apiRequest("/settings/database/backup/delete", {
+                method: "POST",
+                body: JSON.stringify({ name }),
+            });
+            renderDbBackups(data.backups || []);
+            setFeedback(t("settings.database.deleteDone") || "Yedek silindi.");
+        } catch (error) {
+            setFeedback(error.message || (t("settings.database.deleteFail") || "Silinemedi."), true);
+            btn.disabled = false;
+        }
+    });
+}
+
+const dbPasswordForm = document.getElementById("dbPasswordForm");
+if (dbPasswordForm) {
+    dbPasswordForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const pw1 = document.getElementById("dbNewPassword");
+        const pw2 = document.getElementById("dbNewPassword2");
+        const v1 = (pw1?.value || "");
+        const v2 = (pw2?.value || "");
+        if (v1.length < 8) {
+            setFeedback(t("settings.database.pwTooShort") || "Parola en az 8 karakter olmalı.", true);
+            return;
+        }
+        if (v1 !== v2) {
+            setFeedback(t("settings.database.pwMismatch") || "Parolalar eşleşmiyor.", true);
+            return;
+        }
+        const btn = document.getElementById("dbPasswordBtn");
+        if (btn) btn.disabled = true;
+        try {
+            const data = await apiRequest("/settings/database/password", {
+                method: "POST",
+                body: JSON.stringify({ new_password: v1 }),
+            });
+            setFeedback(data.message || (t("settings.database.pwChanged") || "Veritabanı parolası güncellendi."));
+            dbPasswordForm.reset();
+            await loadDatabaseTab();
+        } catch (error) {
+            setFeedback(error.message || (t("settings.database.pwFail") || "Parola değiştirilemedi; eski parola korundu."), true);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+}
 
 })();

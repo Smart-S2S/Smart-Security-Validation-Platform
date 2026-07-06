@@ -12,3 +12,6 @@ README_LOCAL.md
 run.sh
 push.sh
 setup/
+# DB kimlik dosyası (parola içerir) ve yedekler — asla commit edilmemeli
+data/db_config.json
+data/backups/

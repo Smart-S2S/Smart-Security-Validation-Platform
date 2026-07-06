@@ -14,8 +14,10 @@ from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi import File, Form, UploadFile
+from fastapi.responses import FileResponse
 
 from backend.auth import get_current_user, require_roles
+from backend.services import db_admin
 from backend.i18n import request_lang, t
 from backend.models.orchestrator_models import (
     StepItemCreateRequest,
@@ -400,7 +402,7 @@ def _public_user(user: dict) -> dict:
 def settings_access(current_user: dict = Depends(get_current_user)):
     tabs = ["appearance", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "system", "ai", "scan", "toolsmgmt", "wordlists", "tools", "progress-categories"]
+        tabs = ["appearance", "system", "ai", "scan", "toolsmgmt", "wordlists", "database", "tools", "progress-categories"]
 
     return {
         "user": _public_user(current_user),
@@ -1280,3 +1282,80 @@ def settings_wordlists_delete(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=t(lang, "scan.route.jobNotFound", "Job bulunamadı"))
     return {"ok": True, "items": list_wordlists()}
+
+
+# --------------------------------------------------------------------------- #
+# Veritabanı ve Yedekleme (admin-only)
+# --------------------------------------------------------------------------- #
+class DbPasswordChangeRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class BackupNameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+@router.get("/settings/database")
+def settings_database_status(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """DB bağlantı durumu + yedek listesi (admin-only)."""
+    _require_admin(current_user, request_lang(request))
+    return {"status": db_admin.db_status(), "backups": db_admin.list_backups()}
+
+
+@router.post("/settings/database/password")
+def settings_database_change_password(
+    payload: DbPasswordChangeRequest,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """DB parolasını değiştirir: doğrula-sonra-kalıcılaştır, hata olursa geri al
+    (hizmet kesintisiz). Admin-only."""
+    _require_admin(current_user, request_lang(request))
+    result = db_admin.change_db_password(payload.new_password)
+    if not result.get("ok"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message", "Parola degistirilemedi."))
+    return result
+
+
+@router.post("/settings/database/backup")
+def settings_database_backup(
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Yeni bir mysqldump yedeği oluşturur (admin-only)."""
+    _require_admin(current_user, request_lang(request))
+    result = db_admin.create_backup()
+    if not result.get("ok"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message", "Yedekleme basarisiz."))
+    return {**result, "backups": db_admin.list_backups()}
+
+
+@router.get("/settings/database/backup/download")
+def settings_database_backup_download(
+    name: str,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Bir yedek dosyasını indirir (path-traversal-safe, admin-only)."""
+    _require_admin(current_user, request_lang(request))
+    path = db_admin.backup_path(name)
+    if not path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Yedek bulunamadi.")
+    return FileResponse(path=str(path), filename=path.name, media_type="application/sql")
+
+
+@router.post("/settings/database/backup/delete")
+def settings_database_backup_delete(
+    payload: BackupNameRequest,
+    request: Request,
+    current_user: dict = Depends(require_roles(allow_must_change_password=False)),
+):
+    """Bir yedeği siler (admin-only)."""
+    _require_admin(current_user, request_lang(request))
+    result = db_admin.delete_backup(payload.name)
+    if not result.get("ok"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message", "Silinemedi."))
+    return {**result, "backups": db_admin.list_backups()}

@@ -13,6 +13,12 @@
 - SSVP_RESULT_JSON evidence + (YZO) AI risk evaluation; `validation_actions` history.
 - **Pentest Kayıtları** page: history grouped by target (owner-scoped), detail with
   produced-file download/delete, cascade delete, and PDF / Word / print export.
+- **One-command install** (`install.py`) for a fresh server + a dedicated admin
+  account with a generated password (default `admin/admin` disabled).
+- **Database & Backup** settings tab: no-downtime DB password change (verify +
+  rollback) and on-demand mysqldump backups (download/delete).
+- Hardened input handling across tool install, operation parameters and scripts
+  (no shell, allowlisted install, strict parameter validation).
 
 ## Next
 - More tools (nuclei, httpx) as new specs in `pentest_tool_specs.py`.

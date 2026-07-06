@@ -9,6 +9,25 @@ retests security issues, driven either by an operator or by a local/cloud LLM.
 
 ---
 
+## Quick start (fresh server)
+
+One command sets up everything on a blank Ubuntu server — see [`INSTALL.md`](INSTALL.md):
+
+```bash
+git clone https://github.com/Smart-S2S/Smart-Security-Validation-Platform.git
+cd Smart-Security-Validation-Platform
+sudo python3 install.py
+```
+
+The installer prepares the whole platform (MySQL, phpMyAdmin, Docker, Ollama,
+Python venv, scan permissions, firewall, systemd service) and seeds the database
+with the default operation catalogs. It then **creates a dedicated admin account
+and prints its password at the end** — write it down, it is not shown again.
+Pentest tools themselves are **not** installed here; you install them from inside
+the app (Settings → Pentest Araçları).
+
+---
+
 ## Two independent validation flows
 
 SSVP has **two parallel, fully independent** ways to run tool operations. Both are
@@ -102,6 +121,41 @@ takes effect without a restart (browser just refreshes for new JS/CSS).
 
 ---
 
+## Accounts & access
+
+- **Roles:** `user_management`, `test`, `attack`, `remediation`. Admins can do
+  everything (including installing tools and managing the database); everyone else
+  is limited to their roles. Test/attack/remediation users only see **their own**
+  pentest records.
+- **Dedicated admin:** the installer creates a real admin with a strong random
+  password instead of shipping a well-known default. The built-in `admin/admin`
+  account is disabled during install (re-enable with `--keep-default-admin` if you
+  really want it).
+- Passwords are stored hashed (PBKDF2-SHA256); sessions are cookie-based.
+
+## Database & backup (Settings → Veritabanı ve Yedekleme, admin-only)
+
+- **Live status** of the MySQL connection (host, database, server version).
+- **Change the DB password with no downtime:** the new password is applied to
+  MySQL, verified with a fresh connection, and only then saved. If either the
+  database or the saved config can't confirm the change, the **old password is
+  kept** automatically — the service never breaks.
+- **Backups:** create on-demand `mysqldump` snapshots, then download or delete
+  them. Backup files stay on the server under `data/backups/` and are never
+  committed to git.
+
+## Security posture
+
+- **No shell command strings anywhere** — external tools are always run as an
+  argument list, so classic command injection is not possible.
+- **Tool install/update is fully parameter-free:** only an allowlisted set of
+  tool→package pairs can be installed, with no free-form input to inject into.
+- **Every operation parameter is validated** against a strict allowlist (character
+  patterns, fixed choices, no values that could be mistaken for extra flags) before
+  a tool runs.
+- **Script and catalog editing is admin-only**, and file downloads are
+  path-traversal-safe.
+
 ## AI provider
 
 - Local **Ollama** (`http://localhost:11434`, default model `freehuntx/qwen3-coder:8b`)
@@ -119,14 +173,20 @@ CLI tools · xhtml2pdf + python-docx (report export).
 
 ## Run
 
+After `install.py`, the app runs as a service and starts on boot:
 ```bash
-./run.sh        # activates venv/, serves uvicorn main:app on :80
+sudo systemctl status ssvp     # state
+sudo systemctl restart ssvp    # restart
+journalctl -u ssvp -f          # logs
 ```
-Environment (defaults shown):
-`MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_USER=ssvp MYSQL_PASSWORD=ssvp123 MYSQL_DATABASE=ssvp`
+For a manual/dev run, `./run.sh` serves `uvicorn main:app` on `:80`.
+
+DB credentials are read from `data/db_config.json` (written by the installer), so
+the password can be rotated from the UI without editing any files. Environment
+variables (`MYSQL_HOST/PORT/USER/PASSWORD/DATABASE`) still work as a fallback.
 
 On startup (`main.py`) the schema is created, and the AI + manual catalogs
-self-seed **if empty** (never auto-wiped). Default admin: `admin` / `admin`.
+self-seed **if empty** (never auto-wiped).
 
 ## Database (MySQL)
 
@@ -135,10 +195,12 @@ self-seed **if empty** (never auto-wiped). Default admin: `admin` / `admin`.
 - YZO catalog: `ai_operations`, `ai_operation_params`.
 - History: `validation_actions` (also powers the Panel "Pentest Kayıtları" page,
   grouped by target). Tool state cache: `pentest_tools`.
+- Credentials live in `data/db_config.json` (0600, git-ignored); on-demand dumps
+  in `data/backups/`. Both are managed from the Database & Backup settings tab.
 
 ## Docs
 
+- [`INSTALL.md`](INSTALL.md) — one-command setup for a fresh server.
 - [`AGENTS.md`](AGENTS.md) — contract + **current implementation state** (read first).
-- [`AI_RULES.md`](AI_RULES.md) — AI role, safety boundaries, coding rules.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — layered + data architecture.
 - [`ROADMAP.md`](ROADMAP.md).

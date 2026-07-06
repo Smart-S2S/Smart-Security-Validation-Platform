@@ -62,6 +62,29 @@ to real files under `scans/` (path-traversal-safe — never trust a raw name).
 text must pass through `_clean()` (python-docx rejects XML-illegal control chars).
 Deps: `xhtml2pdf`, `python-docx` (in `requirements.txt`).
 
+## Accounts, DB credentials & backups
+- **Roles:** `user_management`, `test`, `attack`, `remediation`; admins bypass role
+  checks. `require_roles()` with no role only requires *authenticated* — admin-only
+  endpoints must ALSO check `is_admin` in the body (see `_require_admin`); keep this
+  pattern when adding endpoints.
+- **Provisioning:** `install.py` creates a dedicated admin (`provision_admin_user`,
+  all roles, `must_change_password=False`) with a generated password and disables
+  the default `admin/admin` (`set_active_by_username('admin', False)`).
+- **DB credentials** come from `db_credentials.py` (defaults < env < `data/
+  db_config.json`; file wins so runtime rotation persists). `mysql_db._mysql_config`
+  reads it. The systemd unit sets `SSVP_DB_CONFIG` and does NOT bake in the password.
+- **`db_admin.py`** (Settings → Veritabanı ve Yedekleme, admin-only): rotates the
+  password verify-then-persist with rollback (no downtime), and makes/lists/deletes
+  `mysqldump` backups under `data/backups/` (password via `MYSQL_PWD`, never argv).
+  `data/db_config.json` + `data/backups/` are git-ignored.
+
+## Security invariants (do not regress)
+- Never build a shell command string; always an argv list, no `shell=True`.
+- Tool install/update stays parameter-free (allowlisted tool→package only).
+- Every operation parameter passes `_validate` (regex allowlist, reject leading `-`)
+  or a fixed `choices`/flag allowlist before reaching a binary.
+- Script/catalog editing and DB ops are admin-only; downloads path-traversal-safe.
+
 ## Architecture Constraints
 - Keep `main.py` minimal (bootstrap + startup seeds only).
 - Routes in `backend/routes/`, business logic in `backend/services/`, AI in

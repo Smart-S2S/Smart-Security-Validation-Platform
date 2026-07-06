@@ -34,6 +34,7 @@
         <button class="tab-btn" data-tab="scan" data-i18n="settings.tab.scan">Tarama Ayarları</button>
         <button class="tab-btn" data-tab="toolsmgmt" data-i18n="settings.tab.toolsmgmt">Pentest Araçları</button>
         <button class="tab-btn" data-tab="wordlists" data-i18n="settings.tab.wordlists">Sözlük Yönetimi</button>
+        <button class="tab-btn" data-tab="database" data-i18n="settings.tab.database">Veritabanı ve Yedekleme</button>
         {% endif %}
         <button class="tab-btn" data-tab="system" data-i18n="settings.tab.system">Sistem ve Proje</button>
     </aside>
@@ -238,6 +239,64 @@
             </div>
         </section>
 
+        <section class="panel" data-panel="database" hidden>
+            <div class="step-list-header-row">
+                <h2 class="step-list-title" data-i18n="settings.database.title">Veritabanı ve Yedekleme</h2>
+                <div class="user-edit-actions" style="justify-content:flex-end; gap:8px;">
+                    <button id="dbRefreshBtn" type="button" data-i18n="settings.database.refresh">Yenile</button>
+                </div>
+            </div>
+            <p class="muted" data-i18n="settings.database.note">Veritabanı bağlantı durumu, parola değişimi ve yedekleme. Parola değişimi hizmeti kesmeden uygulanır: değişiklik hem veritabanında hem yapılandırma dosyasında doğrulanamazsa eski parola korunur.</p>
+
+            <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:stretch; margin-bottom:16px;">
+                <section class="card" style="flex:1 1 320px; margin:0;">
+                    <h3 data-i18n="settings.database.statusTitle">Bağlantı Durumu</h3>
+                    <table style="width:100%; table-layout:auto;">
+                        <tbody>
+                            <tr><td class="muted" style="width:1%; white-space:nowrap; padding-right:24px;" data-i18n="settings.database.host">Host</td><td id="dbHost">—</td></tr>
+                            <tr><td class="muted" style="width:1%; white-space:nowrap; padding-right:24px;" data-i18n="settings.database.port">Port</td><td id="dbPort">—</td></tr>
+                            <tr><td class="muted" style="width:1%; white-space:nowrap; padding-right:24px;" data-i18n="settings.database.user">Kullanıcı</td><td id="dbUser">—</td></tr>
+                            <tr><td class="muted" style="width:1%; white-space:nowrap; padding-right:24px;" data-i18n="settings.database.name">Veritabanı</td><td id="dbName">—</td></tr>
+                            <tr><td class="muted" style="width:1%; white-space:nowrap; padding-right:24px;" data-i18n="settings.database.state">Durum</td><td id="dbState">—</td></tr>
+                            <tr><td class="muted" style="width:1%; white-space:nowrap; padding-right:24px;" data-i18n="settings.database.version">Sürüm</td><td id="dbVersion">—</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="card" style="flex:1 1 320px; margin:0;">
+                    <h3 data-i18n="settings.database.pwTitle">Parola Değiştir</h3>
+                    <p class="muted" data-i18n="settings.database.pwNote">Yeni parola en az 8 karakter olmalıdır. Değişiklik anında geçerli olur; başarısız olursa eski parola korunur.</p>
+                    <form id="dbPasswordForm" class="form-grid">
+                        <label for="dbNewPassword" data-i18n="settings.database.newPw">Yeni Parola</label>
+                        <input type="password" id="dbNewPassword" autocomplete="new-password" minlength="8" maxlength="128" required>
+                        <label for="dbNewPassword2" data-i18n="settings.database.newPw2">Yeni Parola (Tekrar)</label>
+                        <input type="password" id="dbNewPassword2" autocomplete="new-password" minlength="8" maxlength="128" required>
+                        <button id="dbPasswordBtn" type="submit" data-i18n="settings.database.changePw">Parolayı Değiştir</button>
+                    </form>
+                </section>
+            </div>
+
+            <section class="card">
+                <div class="step-list-header-row">
+                    <h3 data-i18n="settings.database.backupTitle">Yedekler</h3>
+                    <button id="dbBackupBtn" type="button" data-i18n="settings.database.createBackup">Yeni Yedek Al</button>
+                </div>
+                <div style="overflow:auto;">
+                    <table id="dbBackupTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="settings.database.backupName">Dosya</th>
+                                <th data-i18n="settings.database.backupSize">Boyut</th>
+                                <th data-i18n="settings.database.backupDate">Tarih</th>
+                                <th data-i18n="settings.database.actions">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dbBackupTbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+
 
         {% endif %}
 
@@ -245,8 +304,8 @@
     </section>
 </main>
 
-<script src="/static/js/notify.js?v=20260703b"></script>
+<script src="/static/js/notify.js?v=20260706b"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/static/js/settings.js?v=20260705h"></script>
+<script src="/static/js/settings.js?v=20260706a"></script>
 </body>
 </html>

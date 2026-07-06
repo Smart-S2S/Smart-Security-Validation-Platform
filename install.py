@@ -41,13 +41,27 @@ from __future__ import annotations
 
 import argparse
 import grp
+import json
 import os
 import pwd
+import secrets
 import shutil
+import string
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+
+def generate_password(length: int = 18) -> str:
+    """Readable but strong password (no ambiguous chars, guaranteed mixed set)."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    specials = "!@%_-+="
+    while True:
+        pw = "".join(secrets.choice(alphabet) for _ in range(length - 2))
+        pw += secrets.choice(specials) + secrets.choice(string.digits)
+        if any(c.islower() for c in pw) and any(c.isupper() for c in pw) and any(c.isdigit() for c in pw):
+            return pw
 
 
 # --------------------------------------------------------------------------- #
@@ -515,14 +529,46 @@ def step_firewall(args) -> None:
     info("UFW otomatik etkinleştirilmedi. İsterseniz: sudo ufw enable  (SSH zaten açık)")
 
 
+def step_db_config_file(app_user: str, app_dir: Path, args) -> Path:
+    """DB kimlik bilgilerini dosyaya yazar (uygulama artık buradan okur).
+
+    Bu sayede parola çalışma anında Ayarlar > Veritabanı sekmesinden döndürülüp
+    kalıcı olabilir. Dosya 0600 ve uygulama kullanıcısına aittir.
+    """
+    step("Veritabanı kimlik dosyası yazılıyor (data/db_config.json, 0600)")
+    cfg_path = app_dir / "data" / "db_config.json"
+    payload = {
+        "host": args.mysql_host,
+        "port": int(args.mysql_port),
+        "user": args.mysql_user,
+        "password": args.mysql_password,
+        "database": args.mysql_database,
+    }
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    os.chmod(cfg_path, 0o600)
+    try:
+        uid = pwd.getpwnam(app_user).pw_uid
+        gid = pwd.getpwnam(app_user).pw_gid
+        os.chown(cfg_path, uid, gid)
+    except KeyError:
+        pass
+    ok(f"{cfg_path} yazıldı (parola buradan yönetilir, Ayarlar'dan değiştirilebilir)")
+    return cfg_path
+
+
 def step_seed_database(app_user: str, app_dir: Path, venv_py: Path, args) -> None:
-    step("Veritabanı varsayılan verilerle dolduruluyor (YZO + 3YM, admin/admin)")
+    step("Veritabanı varsayılan verilerle dolduruluyor (YZO + 3YM katalogları)")
     db_env = {
         "MYSQL_HOST": args.mysql_host,
         "MYSQL_PORT": str(args.mysql_port),
         "MYSQL_USER": args.mysql_user,
         "MYSQL_PASSWORD": args.mysql_password,
         "MYSQL_DATABASE": args.mysql_database,
+        "SSVP_DB_CONFIG": str(app_dir / "data" / "db_config.json"),
+        "SSVP_ADMIN_USER": args.admin_username,
+        "SSVP_ADMIN_PASSWORD": args.admin_password,
+        "SSVP_DISABLE_DEFAULT_ADMIN": "0" if args.keep_default_admin else "1",
     }
 
     if args.reset_db:
@@ -530,13 +576,20 @@ def step_seed_database(app_user: str, app_dir: Path, venv_py: Path, args) -> Non
         drop = f"DROP DATABASE IF EXISTS `{args.mysql_database}`; CREATE DATABASE `{args.mysql_database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
         run(["mysql", "--protocol=socket"], input_text=drop, check=False, quiet=True)
 
-    # main.on_startup() tüm seed mantığını içerir: şema + admin/admin + YZO/3YM
-    # katalogları + scriptlerin bu kurulum konumuna yazılması. Uygulamayla birebir
-    # aynı yolu kullanmak için doğrudan onu çağırıyoruz.
+    # main.on_startup() tüm seed mantığını içerir: şema + YZO/3YM katalogları +
+    # scriptlerin bu kurulum konumuna yazılması. Ardından proje-özel yetkili yeni
+    # yönetici oluşturulur ve varsayılan admin/admin devre dışı bırakılır.
     seed_snippet = (
+        "import os\n"
         "import main\n"
         "main.on_startup()\n"
         "from backend.services.manual_catalog_store import count_manual_items\n"
+        "from backend.services.auth_store import provision_admin_user, set_active_by_username\n"
+        "res = provision_admin_user(os.environ['SSVP_ADMIN_USER'], os.environ['SSVP_ADMIN_PASSWORD'])\n"
+        "print('ADMIN_%s user=%s' % ('CREATED' if res.get('created') else 'EXISTS', res.get('username')))\n"
+        "if os.environ.get('SSVP_DISABLE_DEFAULT_ADMIN') == '1':\n"
+        "    changed = set_active_by_username('admin', False)\n"
+        "    print('DEFAULT_ADMIN_%s' % ('DISABLED' if changed else 'ABSENT'))\n"
         "print('SEED_OK manual_items=%d' % count_manual_items())\n"
     )
     res = as_user(
@@ -556,7 +609,15 @@ def step_seed_database(app_user: str, app_dir: Path, venv_py: Path, args) -> Non
     for line in out.splitlines():
         if "SEED_OK" in line:
             ok("Seed tamamlandı — " + line.replace("SEED_OK ", ""))
-    ok("Varsayılan yönetici: admin / admin  (ilk girişte parola değişimi istenir)")
+        elif line.startswith("ADMIN_CREATED"):
+            ok(f"Uygulama yöneticisi oluşturuldu: {args.admin_username} (tam yetki, pentest + tool kurulumu)")
+        elif line.startswith("ADMIN_EXISTS"):
+            warn(f"'{args.admin_username}' zaten mevcut — parolası değiştirilmedi.")
+            args._admin_existed = True
+        elif line.startswith("DEFAULT_ADMIN_DISABLED"):
+            ok("Varsayılan admin/admin hesabı devre dışı bırakıldı.")
+        elif line.startswith("DEFAULT_ADMIN_ABSENT"):
+            info("Varsayılan admin hesabı bulunamadı (zaten yok).")
     info("YZO ve 3YM katalogları, scriptler ve parametreler kurulum konumuna yazıldı.")
 
 
@@ -576,10 +637,13 @@ Type=simple
 User={app_user}
 Group={app_user}
 WorkingDirectory={app_dir}
+# DB parolası kasıtlı olarak burada tutulmaz; kimlik dosyasından okunur, böylece
+# Ayarlar > Veritabanı sekmesinden döndürülen parola servisi düzenlemeden geçerli
+# olur (dosya > env önceliği).
+Environment=SSVP_DB_CONFIG={app_dir}/data/db_config.json
 Environment=MYSQL_HOST={args.mysql_host}
 Environment=MYSQL_PORT={args.mysql_port}
 Environment=MYSQL_USER={args.mysql_user}
-Environment=MYSQL_PASSWORD={args.mysql_password}
 Environment=MYSQL_DATABASE={args.mysql_database}
 ExecStart={exec_start}
 Restart=on-failure
@@ -612,15 +676,34 @@ def print_summary(app_user: str, app_dir: Path, args) -> None:
     res = run(["bash", "-c", "hostname -I 2>/dev/null | awk '{print $1}'"], check=False, capture=True, quiet=True)
     if res.stdout and res.stdout.strip():
         ip = res.stdout.strip()
+
+    if getattr(args, "_admin_existed", False):
+        login_line = (
+            f"{C.B}Giriş:{C.X}        {args.admin_username} / (mevcut parola korundu — bu hesap zaten vardı)"
+        )
+    elif getattr(args, "_admin_generated", False):
+        login_line = (
+            f"{C.B}Giriş:{C.X}        {C.Y}{args.admin_username}{C.X} / {C.Y}{args.admin_password}{C.X}\n"
+            f"  {C.R}>>> Bu parolayı şimdi kaydedin; tekrar gösterilmeyecek. <<<{C.X}"
+        )
+    else:
+        login_line = f"{C.B}Giriş:{C.X}        {args.admin_username} / (kurulumda verdiğiniz parola)"
+
+    default_admin_note = (
+        "Varsayılan admin/admin devre dışı." if not args.keep_default_admin
+        else "Varsayılan admin/admin AÇIK (--keep-default-admin)."
+    )
     print(f"""
 {C.B}{C.G}══════════════════════════════════════════════════════════════════{C.X}
 {C.B}{C.G}  SSVP KURULUMU TAMAMLANDI{C.X}
 {C.B}{C.G}══════════════════════════════════════════════════════════════════{C.X}
 
   {C.B}Uygulama:{C.X}     http://{ip}:{args.port}/
-  {C.B}Giriş:{C.X}        admin / admin   (ilk girişte parola değişir)
+  {login_line}
+  {C.C}·{C.X} {default_admin_note}
   {C.B}phpMyAdmin:{C.X}   http://{ip}:{args.phpmyadmin_port}/phpmyadmin/
   {C.B}MySQL:{C.X}        {args.mysql_host}:{args.mysql_port}  db={args.mysql_database} user={args.mysql_user}
+                Parolayı Ayarlar > Veritabanı ve Yedekleme'den değiştirebilirsiniz.
   {C.B}Kullanıcı:{C.X}    {app_user}   |   Dizin: {app_dir}
 
   {C.B}Servis komutları:{C.X}
@@ -656,6 +739,9 @@ def parse_args(argv=None):
     p.add_argument("--mysql-password", dest="mysql_password", default="ssvp123")
     p.add_argument("--mysql-database", dest="mysql_database", default="ssvp")
     p.add_argument("--mysql-remote", action="store_true", help="MySQL'i 0.0.0.0'a aç (uzak erişim)")
+    p.add_argument("--admin-username", default="ssvpadmin", help="Oluşturulacak uygulama yöneticisi kullanıcı adı")
+    p.add_argument("--admin-password", default="", help="Yönetici parolası ('' = güçlü parola otomatik üretilir)")
+    p.add_argument("--keep-default-admin", action="store_true", help="Varsayılan admin/admin hesabını devre dışı bırakma")
     p.add_argument("--ollama-model", default="freehuntx/qwen3-coder:8b", help="Kurulumda indirilecek model ('' = indirme)")
     p.add_argument("--reset-db", action="store_true", help="Veritabanını sıfırla (anahtarlar 0'dan başlar)")
     p.add_argument("--openwebui-port", type=int, default=3000, help="Open WebUI portu")
@@ -686,10 +772,17 @@ def main() -> None:
     if not (app_dir / "main.py").exists() or not (app_dir / "requirements.txt").exists():
         die(f"Proje kökü doğrulanamadı ({app_dir}). install.py'yi projenin kök dizininde çalıştırın.")
 
+    # Yönetici parolası: verilmediyse güçlü bir tane üret (özet ekranında gösterilir).
+    args._admin_generated = not bool(args.admin_password)
+    args._admin_existed = False
+    if not args.admin_password:
+        args.admin_password = generate_password()
+
     print(f"{C.B}SSVP kurulumu başlıyor{C.X}")
     info(f"Proje dizini : {app_dir}")
     info(f"Uygulama kul.: {app_user}")
     info(f"Uygulama portu: {args.port}  |  phpMyAdmin: {args.phpmyadmin_port}")
+    info(f"Uygulama yöneticisi: {args.admin_username}")
 
     apt_env = {"DEBIAN_FRONTEND": "noninteractive"}
 
@@ -701,6 +794,7 @@ def main() -> None:
     step_ollama(app_user, args)
     venv_py = step_venv(app_user, app_dir)
     step_directories(app_user, app_dir)
+    step_db_config_file(app_user, app_dir, args)
     step_sudoers(app_user)
     step_scan_caps()
     step_firewall(args)

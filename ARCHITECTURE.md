@@ -26,7 +26,8 @@ services hold business logic, `ollama_client` wraps the local/cloud LLM,
   are gated in Jinja; "Pentest Kayıtları" also shows for test roles. Uses
   `static/js/settings.js` + `op_tester.js` + `pentest_records.js` + `static/css/settings.css`.
 - `settings.html` — AI/scan/appearance settings + "Pentest Araçları" (tool
-  install/update/remove + per-tool "Operasyon Özellikleri").
+  install/update/remove + per-tool "Operasyon Özellikleri") + "Veritabanı ve
+  Yedekleme" (DB status, no-downtime password change, mysqldump backups).
 
 ## Data model
 - **Auth/config:** `users`, `roles`, `sessions`, `app_settings`, `offers`.
@@ -35,6 +36,23 @@ services hold business logic, `ollama_client` wraps the local/cloud LLM,
 - **History:** `validation_actions` (shared by both flows; grouped by target for
   the Pentest Kayıtları page).
 - **Tool state cache:** `pentest_tools`.
+- **DB credentials:** `data/db_config.json` (file-based store, defaults < env <
+  file) so the DB password can be rotated at runtime and persist. Backups:
+  `data/backups/*.sql`.
+
+## Installation & operations
+`install.py` provisions a fresh Ubuntu server end-to-end (system packages, MySQL,
+phpMyAdmin, Docker, Ollama, venv, scan capabilities, firewall, systemd unit),
+seeds the catalogs, and creates a dedicated admin (random password, default
+`admin/admin` disabled). See `INSTALL.md`.
+
+## Security
+No external command ever runs through a shell — always an argv list. Tool
+install/update accepts no free-form input (allowlisted tool→package only). Every
+operation parameter is validated against strict patterns / fixed choices and can't
+be mistaken for an extra CLI flag. Script and catalog editing and DB operations are
+admin-only; file downloads are path-traversal-safe. `db_admin.py` rotates the DB
+password with verify-then-persist and automatic rollback (no downtime).
 
 ## Tool execution
 Tool operations are generated from `backend/services/pentest_tool_specs.py`

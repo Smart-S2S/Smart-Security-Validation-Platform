@@ -488,3 +488,33 @@ def set_user_password(
 
             conn.commit()
             return _get_user_by_id_conn(conn, user_id)
+
+
+def set_active_by_username(username: str, active: bool) -> bool:
+    """Enable/disable a user by username. Returns True if a row was changed."""
+    user = get_user_by_username(username)
+    if not user:
+        return False
+    update_user(int(user["id"]), is_active=bool(active))
+    return True
+
+
+def provision_admin_user(username: str, password: str) -> dict:
+    """Idempotently ensure a ready-to-use admin exists.
+
+    Creates the user as a full admin (all roles) with must_change_password=False
+    so it can run pentests and install tools immediately. If the username already
+    exists it is left untouched (returns created=False) — the installer will not
+    overwrite an operator's real account.
+    """
+    existing = get_user_by_username(username)
+    if existing:
+        return {"created": False, "user_id": int(existing["id"]), "username": username}
+    created = create_user(
+        username=username,
+        password=password,
+        is_admin=True,
+        roles=sorted(VALID_ROLES),
+        must_change_password=False,
+    )
+    return {"created": True, "user_id": int(created["id"]), "username": username}
