@@ -333,6 +333,54 @@ def step_docker(env: dict, app_user: str, args) -> None:
         warn("docker grubu bulunamadı")
 
 
+def step_openwebui(args) -> None:
+    """Open WebUI docker konteynerini bir kez oluşturur.
+
+    Uygulamanın 'Ayarlar > Servisler' ekranındaki başlat/durdur, konteyneri
+    yalnızca `docker start/stop open-webui` ile yönetir; konteyneri KURMAZ.
+    Bu yüzden konteyner önceden var olmalı — yoksa 'No such container' hatası
+    alınır. Burada idempotent şekilde (varsa dokunma) oluşturuyoruz.
+    """
+    if args.skip_docker or args.skip_openwebui:
+        info("Open WebUI atlandı")
+        return
+    if not have("docker"):
+        warn("docker bulunamadı, Open WebUI atlandı")
+        return
+    step(f"Open WebUI docker konteyneri hazırlanıyor (port {args.openwebui_port})")
+    # Zaten varsa (çalışıyor veya durmuş) yeniden oluşturma.
+    exists = run(
+        ["docker", "inspect", "-f", "{{.Name}}", "open-webui"],
+        check=False, capture=True, quiet=True,
+    ).returncode == 0
+    if exists:
+        ok("open-webui konteyneri zaten mevcut — Ayarlar'dan başlat/durdur çalışır")
+        return
+    info("Open WebUI imajı indiriliyor ve konteyner oluşturuluyor (büyük olabilir)...")
+    res = run(
+        [
+            "docker", "run", "-d",
+            "--name", "open-webui",
+            "--restart", "unless-stopped",
+            "-p", f"{args.openwebui_port}:8080",
+            # Host üzerindeki Ollama'ya (systemd, 11434) konteynerden erişim:
+            "--add-host=host.docker.internal:host-gateway",
+            "-e", "OLLAMA_BASE_URL=http://host.docker.internal:11434",
+            "-v", "open-webui:/app/backend/data",
+            "ghcr.io/open-webui/open-webui:main",
+        ],
+        check=False, capture=True,
+    )
+    if res.returncode == 0:
+        ok(f"open-webui oluşturuldu ve başlatıldı: http://SUNUCU_IP:{args.openwebui_port}/")
+    else:
+        warn("Open WebUI oluşturulamadı (internet/imaj gerektirir): " + (res.stderr or "").strip()[:200])
+        info("Sonra elle: docker run -d --name open-webui --restart unless-stopped "
+             f"-p {args.openwebui_port}:8080 --add-host=host.docker.internal:host-gateway "
+             "-e OLLAMA_BASE_URL=http://host.docker.internal:11434 "
+             "-v open-webui:/app/backend/data ghcr.io/open-webui/open-webui:main")
+
+
 def step_ollama(app_user: str, args) -> None:
     if args.skip_ollama:
         info("Ollama atlandı (--skip-ollama)")
@@ -456,11 +504,14 @@ def step_firewall(args) -> None:
         warn("ufw bulunamadı, atlandı")
         return
     # SSH'ı KESİNLİKLE aç ki uzaktan erişim kopmasın.
-    for port in ("22/tcp", f"{args.port}/tcp", f"{args.phpmyadmin_port}/tcp"):
+    ports = ["22/tcp", f"{args.port}/tcp", f"{args.phpmyadmin_port}/tcp"]
+    if not (args.skip_docker or args.skip_openwebui):
+        ports.append(f"{args.openwebui_port}/tcp")
+    for port in ports:
         run(["ufw", "allow", port], check=False, quiet=True)
     if args.mysql_remote:
         run(["ufw", "allow", "3306/tcp"], check=False, quiet=True)
-    ok(f"Portlara izin verildi: 22, {args.port} (uygulama), {args.phpmyadmin_port} (phpMyAdmin)")
+    ok(f"Portlara izin verildi: {', '.join(ports)}")
     info("UFW otomatik etkinleştirilmedi. İsterseniz: sudo ufw enable  (SSH zaten açık)")
 
 
@@ -607,8 +658,10 @@ def parse_args(argv=None):
     p.add_argument("--mysql-remote", action="store_true", help="MySQL'i 0.0.0.0'a aç (uzak erişim)")
     p.add_argument("--ollama-model", default="freehuntx/qwen3-coder:8b", help="Kurulumda indirilecek model ('' = indirme)")
     p.add_argument("--reset-db", action="store_true", help="Veritabanını sıfırla (anahtarlar 0'dan başlar)")
+    p.add_argument("--openwebui-port", type=int, default=3000, help="Open WebUI portu")
     p.add_argument("--skip-phpmyadmin", action="store_true")
     p.add_argument("--skip-docker", action="store_true")
+    p.add_argument("--skip-openwebui", action="store_true", help="Open WebUI konteynerini oluşturma")
     p.add_argument("--skip-ollama", action="store_true")
     p.add_argument("--skip-ufw", action="store_true")
     p.add_argument("--no-service", action="store_true", help="systemd servisi kurma (run.sh ile çalıştır)")
@@ -644,6 +697,7 @@ def main() -> None:
     step_mysql(apt_env, args)
     step_phpmyadmin(apt_env, args)
     step_docker(apt_env, app_user, args)
+    step_openwebui(args)
     step_ollama(app_user, args)
     venv_py = step_venv(app_user, app_dir)
     step_directories(app_user, app_dir)
