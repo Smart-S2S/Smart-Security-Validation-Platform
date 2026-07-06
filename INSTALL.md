@@ -5,7 +5,7 @@ Boş bir Ubuntu sunucusuna projeyi çekip **tek komutla** çalışır hale getir
 ## Hızlı kurulum
 
 ```bash
-git clone <REPO_URL> Smart-Security-Validation-Platform
+git clone https://github.com/Smart-S2S/Smart-Security-Validation-Platform.git
 cd Smart-Security-Validation-Platform
 sudo python3 install.py
 ```

@@ -1,8 +1,10 @@
 fastapi
 uvicorn
+jinja2
 pydantic
 requests
 python-multipart
 pymysql
+lxml
 xhtml2pdf
 python-docx
