@@ -37,6 +37,11 @@ from backend.services.orchestrator_store import (
     list_validation_actions,
     list_workflow_steps,
 )
+from backend.services.findings import (
+    extract_findings,
+    findings_summary,
+    seed_params_from_findings,
+)
 from backend.services.validation_execution_store import (
     append_log,
     clear_process,
@@ -58,7 +63,7 @@ from backend.services.ai_operations_store import (
 
 router = APIRouter()
 
-_SCRIPT_TEMPLATE_VERSION = "SSVP_SCRIPT_TEMPLATE_V1"
+_SCRIPT_TEMPLATE_VERSION = "SSVP_SCRIPT_TEMPLATE_V2"
 
 
 class _ExecutionCancelled(Exception):
@@ -401,6 +406,7 @@ def _intent_from_ai_operation(
     prior_sources: dict,
     ai_params: dict,
     reason_override: str = "",
+    findings: dict | None = None,
 ) -> dict:
     """Build an executable AI-orchestrator intent for one ai_operations row."""
     action_key = _normalize_action(operation.get("operation_key"))
@@ -414,6 +420,20 @@ def _intent_from_ai_operation(
     ai_filtered = {key: value for key, value in ai_params.items() if key in schema_keys}
     merged_params = {**defaults, **ai_filtered, **prefill}
     merged_params = _apply_smart_defaults(schema, merged_params, target)
+    # Semantic data-passing: write discovered facts (ports/creds/urls) into the
+    # still-empty params they actually belong to — even when key names differ
+    # (e.g. nmap's open port -> a Metasploit module's RPORT).
+    if findings:
+        before = dict(merged_params)
+        # msf modules carry their own RPORT default — don't override it from a scan.
+        skip_port = str(operation.get("tool_key") or "").strip().lower() == "msfconsole"
+        merged_params = seed_params_from_findings(schema, merged_params, findings, skip_port=skip_port)
+        for key, val in merged_params.items():
+            if val in (None, "", [], {}):
+                continue
+            if key not in prefill and before.get(key) in (None, "", [], {}):
+                prefill[key] = val
+                prefill_meta[key] = "finding"
 
     display_name = operation.get("display_name") or action_key
     return {
@@ -1626,6 +1646,10 @@ def validation_ai_orchestrate(
 
     stage_by_action = {entry["action"]: entry["stage"] for entry in catalog}
     history = _build_orchestration_history(payload.target, stage_by_action)
+    # Structured facts discovered so far (open ports, services, URLs, creds, CVEs,
+    # msf signals) — given to the AI to analyse and used to auto-fill the next
+    # operation's parameters.
+    findings = extract_findings(payload.target)
 
     # The catalog is already role-filtered, so the stages present in it are
     # exactly the ones this user is authorised for. A redirect to any other
@@ -1675,6 +1699,7 @@ def validation_ai_orchestrate(
             preferred_stage=requested_stage,
             allowed_stages=allowed_stages,
             language=language,
+            findings=findings_summary(findings),
         )
 
     prior_values, prior_sources = _collect_prefill_from_prior(payload.target)
@@ -1693,6 +1718,7 @@ def validation_ai_orchestrate(
                 prior_sources,
                 operation.get("parameters"),
                 reason_override=operation.get("reason") or "",
+                findings=findings,
             )
         )
 

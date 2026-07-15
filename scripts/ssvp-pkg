@@ -16,7 +16,9 @@ by the app user.
 import json
 import os
 import re
+import secrets
 import shutil
+import string
 import subprocess
 import sys
 import tempfile
@@ -100,7 +102,13 @@ def tool_install(tool):
         try:
             if run(["curl", "-fsSL", "-o", path, _MSF_URL]) != 0:
                 die("could not download Rapid7 installer", 1)
-            return run(["bash", path], env=APT_ENV)
+            rc = run(["bash", path], env=APT_ENV)
+            if rc == 0:
+                try:
+                    msf_db_init()  # best-effort: give msf its database on install
+                except Exception:
+                    pass
+            return rc
         finally:
             try:
                 os.unlink(path)
@@ -120,6 +128,60 @@ def tool_install(tool):
             os.chmod("/usr/local/bin/enum4linux", 0o755)
         return rc
     die(f"unknown tool: {tool!r}")
+
+
+_MSF_HOME = "/home/ssvp/.msf4"
+_MSF_DB_YML = _MSF_HOME + "/database.yml"
+
+
+def _pg_sql(sql, capture=False):
+    argv = ["runuser", "-u", "postgres", "--", "psql", "-tAc", sql]
+    if capture:
+        return subprocess.run(argv, capture_output=True, text=True)
+    return subprocess.run(argv)
+
+
+def msf_db_init(_arg=""):
+    """Give Metasploit a PostgreSQL database (workspace, module search cache,
+    creds/loot). Idempotent. The service user (ssvp) reads the generated
+    database.yml from its own ~/.msf4."""
+    if not shutil.which("msfconsole"):
+        die("metasploit not installed", 1)
+    run(["apt-get", "-y", "install", "postgresql"], env=APT_ENV)
+    run(["systemctl", "enable", "--now", "postgresql"])
+
+    role, db = "msf", "msf_database"
+    have_role = (_pg_sql(f"SELECT 1 FROM pg_roles WHERE rolname='{role}'", capture=True).stdout or "").strip() == "1"
+    if have_role and os.path.exists(_MSF_DB_YML):
+        sys.stdout.write("Metasploit DB zaten hazır.\n")
+        return 0
+
+    pw = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(28))
+    if have_role:
+        _pg_sql(f"ALTER ROLE {role} LOGIN PASSWORD '{pw}'")
+    else:
+        _pg_sql(f"CREATE ROLE {role} LOGIN PASSWORD '{pw}'")
+    have_db = (_pg_sql(f"SELECT 1 FROM pg_database WHERE datname='{db}'", capture=True).stdout or "").strip() == "1"
+    if not have_db:
+        _pg_sql(f"CREATE DATABASE {db} OWNER {role}")
+
+    os.makedirs(_MSF_HOME, exist_ok=True)
+    with open(_MSF_DB_YML, "w", encoding="utf-8") as fh:
+        fh.write(
+            "production:\n"
+            "  adapter: postgresql\n"
+            f"  database: {db}\n"
+            f"  username: {role}\n"
+            f"  password: {pw}\n"
+            "  host: 127.0.0.1\n"
+            "  port: 5432\n"
+            "  pool: 5\n"
+            "  timeout: 5\n"
+        )
+    run(["chown", "-R", "ssvp:ssvp", _MSF_HOME])
+    os.chmod(_MSF_DB_YML, 0o600)
+    sys.stdout.write("Metasploit DB kuruldu (PostgreSQL: msf_database).\n")
+    return 0
 
 
 def tool_remove(tool):
@@ -333,6 +395,7 @@ _ACTIONS = {
     "apt-remove": apt_remove,
     "tool-install": tool_install,
     "tool-remove": tool_remove,
+    "msf-db-init": msf_db_init,
     "wordlist-install": wordlist_install,
     "setcap": setcap_tool,
     "docker-start": docker_start,

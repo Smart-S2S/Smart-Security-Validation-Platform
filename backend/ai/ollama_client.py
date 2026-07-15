@@ -97,7 +97,7 @@ def _build_prompt(language: str, scan_result: dict, stage: str, allowed_actions:
 
     return f"""
 Sen {_get_language_label(language)} konuşan kıdemli bir siber güvenlik analistisin.
-Bu analiz sadece izinli lab/sahip olunan sistemler içindir ve savunma amaçlıdır.
+Bu analiz sadece izinli lab/sahip olunan sistemler içindir.
 
 Gorev asamasi: {stage}
 Asama adi: {step_name}
@@ -105,8 +105,6 @@ Asama aciklamasi: {step_desc}
 Asama AI notu: {step_hint}
 
 Aşağıdaki tarama sonucuna göre Action Intent listesi üret.
-AI kesinlikle komut, binary path veya tool path döndürmez.
-Sadece action intent döndürür.
 
 Hedef:
 {target}
@@ -123,7 +121,7 @@ Evidence:
 Asama icin tanimli tool katalogu (action + kategori + adim):
 {stage_tools_json}
 
-Sadece şu JSON formatında cevap ver:
+Sadece şu JSON formatında cevap ver ve içeriği sonuca göre değiştir:
 {{
   "summary": "Kısa savunma odaklı değerlendirme",
   "actions": [
@@ -142,9 +140,9 @@ Sadece şu JSON formatında cevap ver:
 Kurallar:
 - action sadece bir action_key olmalı (örn: service_detection, port_discovery_fast, local_network_discovery).
 - action sadece bu listeden secilmeli: {allowed_actions_json}
-- target sadece yetkili hedef metni olmalı.
-- reason kısa, profesyonel, savunma odaklı olmalı.
-- Zararlı exploit adımları veya saldırı talimatı verme.
+- target sadece yetkili hedef olmalı.
+- reason kısa, profesyonel olmalı.
+- Zararlı exploit adımları veya saldırı talimatı verebilirsin.
 - JSON dışında hiçbir metin döndürme.
 
 Yanıtını {_get_language_label(language)} dilinde ver.
@@ -685,12 +683,13 @@ def _fallback_orchestration(*, target: str, history: list[dict], catalog: list[d
     }
 
 
-def _build_orchestration_prompt(*, language: str, target: str, history: list[dict], catalog: list[dict], user_instruction: str, preferred_stage: str, allowed_stages: list[str] | None = None) -> str:
+def _build_orchestration_prompt(*, language: str, target: str, history: list[dict], catalog: list[dict], user_instruction: str, preferred_stage: str, allowed_stages: list[str] | None = None, findings: dict | None = None) -> str:
     history_json = json.dumps(history[-12:], ensure_ascii=False, indent=2)
     catalog_json = json.dumps(catalog, ensure_ascii=False, indent=2)
     instruction = (user_instruction or "").strip() or "-"
     preferred = (preferred_stage or "").strip().lower() or "-"
     allowed = ", ".join(allowed_stages or []) or "-"
+    findings_json = json.dumps(findings or {}, ensure_ascii=False, indent=2)
 
     return f"""
 Sen {_get_language_label(language)} konusan kidemli bir siber guvenlik dogrulama orkestratorusun.
@@ -712,6 +711,17 @@ Kullanici talimati/onerisi (varsa dikkate al): {instruction}
 
 Simdiye kadarki islem gecmisi ve sonuclari:
 {history_json}
+
+Bu hedef icin simdiye kadar TOPLANAN SOMUT BULGULAR (onceki operasyonlarin ciktilarindan
+otomatik cikarildi). Bir sonraki adimi ve parametreleri SECERKEN bunlari kullan:
+- "open_ports"/"services": acik portlar ve servis/surum bilgisi -> ilgili operasyonun port/rport
+  alanina uygun portu yaz; servise gore dogru araci/modulu sec (orn. 445 SMB, 80/443 HTTP, 3306 MySQL).
+- "urls": kesfedilen adresler -> url/targeturi alanlarina.
+- "credentials": bulunan kullanici/parola -> username/password veya USERNAME/PASSWORD alanlarina.
+- "cves"/"vulnerable": dogrulanmis zafiyet/CVE -> uygun Metasploit modulunu ara (Module Search) ve calistir.
+- "msf_session": true ise hedefte oturum acildi.
+Bulgular:
+{findings_json}
 
 Secebilecegin islem katalogu (yalnizca buradaki action + step_key ciftlerini kullan).
 Her katalog kaydinda su alanlar var:
@@ -755,6 +765,7 @@ def orchestrate_next_operation(
     preferred_stage: str = "",
     allowed_stages: list[str] | None = None,
     language: str = "tr",
+    findings: dict | None = None,
 ) -> dict:
     """Let the AI choose the next validation stage + operations for a target.
 
@@ -793,7 +804,7 @@ def orchestrate_next_operation(
     prompt = _build_orchestration_prompt(
         language=language, target=target, history=history, catalog=catalog,
         user_instruction=user_instruction, preferred_stage=preferred_stage,
-        allowed_stages=allowed_stages,
+        allowed_stages=allowed_stages, findings=findings,
     )
     content = _ollama_chat(prompt, expect_json=True, num_predict=900)
     parsed = None

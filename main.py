@@ -14,7 +14,9 @@ from backend.services.settings_store import init_settings_store
 from backend.services.ai_operations_store import (
     deactivate_manual_kali_catalog,
     ensure_seeded as ensure_ai_operations_seeded,
+    ensure_operations_present,
     ensure_stage_seeded,
+    ensure_wrappers_current,
     seed_ai_native_operations,
 )
 from backend.services.manual_catalog_store import (
@@ -52,6 +54,16 @@ def on_startup():
     # remediation category blocks — only if they are missing.
     ensure_stage_seeded("remediation")
     ensure_catalog_additions()
+    # Backfill Metasploit module discovery ops (search/info) added after earlier installs.
+    ensure_operations_present(["msf_module_search", "msf_module_info"])
+    # Regenerate on-disk wrappers when the template changed (lower-priority run,
+    # partial-output-on-timeout, msf result parsing) and refresh the 3YM scripts too.
+    if ensure_wrappers_current().get("regenerated"):
+        try:
+            from backend.services.manual_catalog_store import refresh_manual_catalog
+            refresh_manual_catalog()
+        except Exception:
+            pass
     # AI-native OSINT operation lives only in the YZO catalog (idempotent upsert).
     seed_ai_native_operations()
     # Wordlist (sözlük) catalog: ensure table + upload dir exist, then bring any

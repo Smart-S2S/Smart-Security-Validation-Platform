@@ -1,4 +1,24 @@
 # SSVP_SCRIPT_TEMPLATE_V1
+import json
+import os
+
+
+def ssvp_input():
+    raw = os.getenv("SSVP_INPUT_JSON", "{}")
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def ssvp_log(message):
+    print(f"[SSVP_LOG] {message}", flush=True)
+
+
+def ssvp_emit_result(data):
+    print("SSVP_RESULT_JSON:" + json.dumps(data, ensure_ascii=False), flush=True)
+
+# SSVP_SCRIPT_TEMPLATE_V2
 """Auto-generated SSVP wrapper for the "msfconsole" tool (attack).
 
 Authorized lab / owned-systems validation only. Runs an allowlisted binary with
@@ -13,7 +33,7 @@ import shutil
 import subprocess
 
 TOOL = "msfconsole"
-SPEC = json.loads(r'''{"mode": "msf", "fixed_pre": [], "positionals_first": false, "params": [{"key": "module", "label": "Module", "kind": "msf_module", "flag": "", "setting": "MODULE", "default": "", "required": true, "pattern": "module", "choices": [], "must_exist": false}, {"key": "action", "label": "Action", "kind": "none", "flag": "", "setting": "ACTION", "default": "run", "required": false, "pattern": "safe", "choices": ["run", "exploit", "check"], "must_exist": false}, {"key": "rhosts", "label": "RHOSTS", "kind": "msf_set", "flag": "", "setting": "RHOSTS", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "rport", "label": "RPORT", "kind": "msf_set", "flag": "", "setting": "RPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "targeturi", "label": "TARGETURI", "kind": "msf_set", "flag": "", "setting": "TARGETURI", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "username", "label": "USERNAME", "kind": "msf_set", "flag": "", "setting": "USERNAME", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "password", "label": "PASSWORD", "kind": "msf_set", "flag": "", "setting": "PASSWORD", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "payload", "label": "PAYLOAD", "kind": "msf_set", "flag": "", "setting": "PAYLOAD", "default": "", "required": false, "pattern": "module", "choices": [], "must_exist": false}, {"key": "lhost", "label": "LHOST", "kind": "msf_set", "flag": "", "setting": "LHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "lport", "label": "LPORT", "kind": "msf_set", "flag": "", "setting": "LPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ssl", "label": "SSL", "kind": "msf_set", "flag": "", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "verbose", "label": "VERBOSE", "kind": "msf_set", "flag": "", "setting": "VERBOSE", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "srvhost", "label": "SRVHOST", "kind": "msf_set", "flag": "", "setting": "SRVHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "srvport", "label": "SRVPORT", "kind": "msf_set", "flag": "", "setting": "SRVPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "uripath", "label": "URIPATH", "kind": "msf_set", "flag": "", "setting": "URIPATH", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "threads", "label": "THREADS", "kind": "msf_set", "flag": "", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "extra_options", "label": "Extra datastore options", "kind": "none", "flag": "", "setting": "EXTRA_OPTIONS", "default": {}, "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+SPEC = json.loads(r'''{"mode": "msf", "fixed_pre": [], "positionals_first": false, "params": [{"key": "module", "label": "Module", "kind": "msf_module", "flag": "", "setting": "MODULE", "default": "", "required": true, "pattern": "module", "choices": [], "must_exist": false}, {"key": "action", "label": "Action", "kind": "none", "flag": "", "setting": "ACTION", "default": "run", "required": false, "pattern": "safe", "choices": ["run", "exploit", "check"], "must_exist": false}, {"key": "rhosts", "label": "RHOSTS", "kind": "msf_set", "flag": "", "setting": "RHOSTS", "default": "", "required": true, "pattern": "range", "choices": [], "must_exist": false}, {"key": "rport", "label": "RPORT", "kind": "msf_set", "flag": "", "setting": "RPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "targeturi", "label": "TARGETURI", "kind": "msf_set", "flag": "", "setting": "TARGETURI", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "username", "label": "USERNAME", "kind": "msf_set", "flag": "", "setting": "USERNAME", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "password", "label": "PASSWORD", "kind": "msf_set", "flag": "", "setting": "PASSWORD", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "payload", "label": "PAYLOAD", "kind": "msf_set", "flag": "", "setting": "PAYLOAD", "default": "", "required": false, "pattern": "module", "choices": [], "must_exist": false}, {"key": "lhost", "label": "LHOST", "kind": "msf_set", "flag": "", "setting": "LHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "lport", "label": "LPORT", "kind": "msf_set", "flag": "", "setting": "LPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "ssl", "label": "SSL", "kind": "msf_set", "flag": "", "setting": "SSL", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "verbose", "label": "VERBOSE", "kind": "msf_set", "flag": "", "setting": "VERBOSE", "default": "", "required": false, "pattern": "safe", "choices": ["true", "false"], "must_exist": false}, {"key": "srvhost", "label": "SRVHOST", "kind": "msf_set", "flag": "", "setting": "SRVHOST", "default": "", "required": false, "pattern": "host", "choices": [], "must_exist": false}, {"key": "srvport", "label": "SRVPORT", "kind": "msf_set", "flag": "", "setting": "SRVPORT", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "uripath", "label": "URIPATH", "kind": "msf_set", "flag": "", "setting": "URIPATH", "default": "", "required": false, "pattern": "ident", "choices": [], "must_exist": false}, {"key": "threads", "label": "THREADS", "kind": "msf_set", "flag": "", "setting": "THREADS", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "extra_options", "label": "Extra datastore options", "kind": "none", "flag": "", "setting": "EXTRA_OPTIONS", "default": {}, "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "300", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -38,6 +58,7 @@ _PATTERNS = {
     "int": re.compile(r"^[0-9]+$"),
     "path": re.compile(r"^[A-Za-z0-9_./\ -]+$"),
     "text": re.compile(r"^[^;&|`$<>\n\r]+$"),
+    "msfquery": re.compile(r"^[A-Za-z0-9 _./:+-]{1,120}$"),
 }
 
 
@@ -85,6 +106,16 @@ def _is_truthy(value):
     return str(value or "").strip().lower() in ("1", "true", "yes", "on", "evet")
 
 
+def _lower_priority():
+    # Run the (potentially heavy) tool at a lower CPU priority so it never starves
+    # the single-worker web app that shares this host. Raising niceness is always
+    # permitted; best-effort, never fatal.
+    try:
+        os.nice(10)
+    except Exception:
+        pass
+
+
 def _build_msf(binary, params):
     module = str(params.get("module", "") or "").strip()
     if not _PATTERNS["module"].match(module):
@@ -130,6 +161,8 @@ def _build_msf(binary, params):
 def build_argv(binary, params, target):
     if SPEC.get("mode") == "msf":
         return _build_msf(binary, params)
+    if SPEC.get("mode") == "msf_query":
+        return _build_msf_query(binary, params)
 
     prefix = [binary] + list(SPEC.get("fixed_pre", []))
     opts = []
@@ -205,23 +238,36 @@ def main():
         _emit({"ok": False, "tool": TOOL, "tool_installed": True, "error": str(exc)})
         return
 
+    # Metasploit needs headroom: msfconsole cold-starts (~20 s) before the module
+    # even runs, so msf-mode operations default to a longer timeout.
+    _def_to = 300 if str(SPEC.get("mode", "")).startswith("msf") else 180
     try:
-        timeout = int(params.get("timeout_sec", 180) or 180)
+        timeout = int(params.get("timeout_sec", _def_to) or _def_to)
     except Exception:
-        timeout = 180
+        timeout = _def_to
     timeout = max(10, min(timeout, 3600))
 
     _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, timeout=timeout,
+            text=True, timeout=timeout, preexec_fn=_lower_priority,
         )
     except subprocess.TimeoutExpired as exc:
+        # Keep the partial output on timeout: a long scan that got cut off still
+        # yields usable findings (open ports, URLs) for the next step.
         partial = (exc.output or "") if isinstance(exc.output, str) else ""
-        for line in partial.splitlines():
+        plines = [ln for ln in partial.splitlines() if ln.strip()]
+        for line in plines:
             print(line, flush=True)
-        _emit({"ok": False, "tool": TOOL, "tool_installed": True, "error": "timeout (" + str(timeout) + "s)", "command": " ".join(argv)})
+        result = {
+            "ok": False, "tool": TOOL, "tool_installed": True,
+            "error": "timeout (" + str(timeout) + "s)", "command": " ".join(argv),
+            "timed_out": True, "line_count": len(plines), "output_tail": plines[-80:],
+        }
+        if str(SPEC.get("mode", "")).startswith("msf"):
+            _apply_msf_summary(result, partial)
+        _emit(result)
         return
     except Exception as exc:
         _emit({"ok": False, "tool": TOOL, "tool_installed": True, "error": str(exc)})
@@ -232,7 +278,7 @@ def main():
     for line in lines:
         print(line, flush=True)
 
-    _emit({
+    result = {
         "ok": completed.returncode == 0,
         "tool": TOOL,
         "tool_installed": True,
@@ -241,7 +287,26 @@ def main():
         "command": " ".join(argv),
         "line_count": len(lines),
         "output_tail": lines[-80:],
-    })
+    }
+    if str(SPEC.get("mode", "")).startswith("msf"):
+        _apply_msf_summary(result, output)
+    _emit(result)
+
+
+def _apply_msf_summary(result, output):
+    """Structured signals for the AI: msfconsole exits 0 even on failure, so
+    surface the meaningful markers (session opened, [+] hits, vuln verdict)."""
+    low = output.lower()
+    plus = [ln.strip() for ln in output.splitlines() if ln.strip().startswith("[+]")]
+    session = ("meterpreter session" in low) or ("command shell session" in low) or ("session " in low and "opened" in low)
+    vulnerable = any(w in low for w in ("is vulnerable", "appears to be vulnerable", "target is vulnerable", "the target appears"))
+    if plus:
+        result["msf_success_lines"] = plus[:20]
+    result["msf_session_opened"] = bool(session)
+    result["msf_vulnerable"] = bool(vulnerable)
+    # A search/info query with output is a success even though nothing "ran".
+    if str(SPEC.get("mode", "")) == "msf_query" and result.get("line_count", 0) > 0:
+        result["ok"] = True
 
 
 if __name__ == "__main__":

@@ -279,7 +279,29 @@ def run_nmap_scan(
             text=True,
             timeout=timeout_sec,
             env=scan_env,
+            # Lower CPU priority so a heavy scan never starves the web app.
+            preexec_fn=lambda: os.nice(10),
         )
+
+        # nmap can exit non-zero yet still write a valid XML (e.g. some hosts down,
+        # a script error on one host). Prefer the parsed XML whenever it is present
+        # and parseable, so a partial-but-useful result is not thrown away.
+        add_log(job_id, t(language, "nmap.parsing", "Nmap XML ciktisi parse ediliyor..."))
+        parsed = None
+        if output_file.exists():
+            try:
+                parsed = parse_nmap_xml(output_file)
+            except Exception:
+                parsed = None
+
+        if parsed is not None and (parsed["ports"] or parsed["hosts"]):
+            add_log(job_id, t(language, "nmap.ports.found", "{count} port sonucu bulundu.").replace("{count}", str(len(parsed["ports"]))))
+            return {
+                "target": ", ".join(target_tokens),
+                "xml_file": str(output_file),
+                "ports": parsed["ports"],
+                "hosts": parsed["hosts"],
+            }
 
         if completed.returncode != 0:
             add_log(job_id, t(language, "nmap.error.generic", "Nmap hata verdi."))
@@ -289,16 +311,13 @@ def run_nmap_scan(
                 "stdout": completed.stdout,
             }
 
-        add_log(job_id, t(language, "nmap.parsing", "Nmap XML ciktisi parse ediliyor..."))
-        parsed = parse_nmap_xml(output_file)
-
-        add_log(job_id, t(language, "nmap.ports.found", "{count} port sonucu bulundu.").replace("{count}", str(len(parsed["ports"]))))
-
+        # Ran cleanly but found nothing.
+        add_log(job_id, t(language, "nmap.ports.found", "{count} port sonucu bulundu.").replace("{count}", "0"))
         return {
             "target": ", ".join(target_tokens),
             "xml_file": str(output_file),
-            "ports": parsed["ports"],
-            "hosts": parsed["hosts"],
+            "ports": parsed["ports"] if parsed else [],
+            "hosts": parsed["hosts"] if parsed else [],
         }
 
     except subprocess.TimeoutExpired:

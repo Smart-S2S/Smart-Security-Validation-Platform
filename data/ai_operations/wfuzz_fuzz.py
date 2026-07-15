@@ -1,4 +1,4 @@
-# SSVP_SCRIPT_TEMPLATE_V1
+# SSVP_SCRIPT_TEMPLATE_V2
 """Auto-generated SSVP wrapper for the "wfuzz" tool (scan).
 
 Authorized lab / owned-systems validation only. Runs an allowlisted binary with
@@ -38,6 +38,7 @@ _PATTERNS = {
     "int": re.compile(r"^[0-9]+$"),
     "path": re.compile(r"^[A-Za-z0-9_./\ -]+$"),
     "text": re.compile(r"^[^;&|`$<>\n\r]+$"),
+    "msfquery": re.compile(r"^[A-Za-z0-9 _./:+-]{1,120}$"),
 }
 
 
@@ -85,10 +86,22 @@ def _is_truthy(value):
     return str(value or "").strip().lower() in ("1", "true", "yes", "on", "evet")
 
 
+def _lower_priority():
+    # Run the (potentially heavy) tool at a lower CPU priority so it never starves
+    # the single-worker web app that shares this host. Raising niceness is always
+    # permitted; best-effort, never fatal.
+    try:
+        os.nice(10)
+    except Exception:
+        pass
+
+
 
 def build_argv(binary, params, target):
     if SPEC.get("mode") == "msf":
         return _build_msf(binary, params)
+    if SPEC.get("mode") == "msf_query":
+        return _build_msf_query(binary, params)
 
     prefix = [binary] + list(SPEC.get("fixed_pre", []))
     opts = []
@@ -164,23 +177,36 @@ def main():
         _emit({"ok": False, "tool": TOOL, "tool_installed": True, "error": str(exc)})
         return
 
+    # Metasploit needs headroom: msfconsole cold-starts (~20 s) before the module
+    # even runs, so msf-mode operations default to a longer timeout.
+    _def_to = 300 if str(SPEC.get("mode", "")).startswith("msf") else 180
     try:
-        timeout = int(params.get("timeout_sec", 180) or 180)
+        timeout = int(params.get("timeout_sec", _def_to) or _def_to)
     except Exception:
-        timeout = 180
+        timeout = _def_to
     timeout = max(10, min(timeout, 3600))
 
     _log("running: " + " ".join(argv))
     try:
         completed = subprocess.run(
             argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, timeout=timeout,
+            text=True, timeout=timeout, preexec_fn=_lower_priority,
         )
     except subprocess.TimeoutExpired as exc:
+        # Keep the partial output on timeout: a long scan that got cut off still
+        # yields usable findings (open ports, URLs) for the next step.
         partial = (exc.output or "") if isinstance(exc.output, str) else ""
-        for line in partial.splitlines():
+        plines = [ln for ln in partial.splitlines() if ln.strip()]
+        for line in plines:
             print(line, flush=True)
-        _emit({"ok": False, "tool": TOOL, "tool_installed": True, "error": "timeout (" + str(timeout) + "s)", "command": " ".join(argv)})
+        result = {
+            "ok": False, "tool": TOOL, "tool_installed": True,
+            "error": "timeout (" + str(timeout) + "s)", "command": " ".join(argv),
+            "timed_out": True, "line_count": len(plines), "output_tail": plines[-80:],
+        }
+        if str(SPEC.get("mode", "")).startswith("msf"):
+            _apply_msf_summary(result, partial)
+        _emit(result)
         return
     except Exception as exc:
         _emit({"ok": False, "tool": TOOL, "tool_installed": True, "error": str(exc)})
@@ -191,7 +217,7 @@ def main():
     for line in lines:
         print(line, flush=True)
 
-    _emit({
+    result = {
         "ok": completed.returncode == 0,
         "tool": TOOL,
         "tool_installed": True,
@@ -200,7 +226,26 @@ def main():
         "command": " ".join(argv),
         "line_count": len(lines),
         "output_tail": lines[-80:],
-    })
+    }
+    if str(SPEC.get("mode", "")).startswith("msf"):
+        _apply_msf_summary(result, output)
+    _emit(result)
+
+
+def _apply_msf_summary(result, output):
+    """Structured signals for the AI: msfconsole exits 0 even on failure, so
+    surface the meaningful markers (session opened, [+] hits, vuln verdict)."""
+    low = output.lower()
+    plus = [ln.strip() for ln in output.splitlines() if ln.strip().startswith("[+]")]
+    session = ("meterpreter session" in low) or ("command shell session" in low) or ("session " in low and "opened" in low)
+    vulnerable = any(w in low for w in ("is vulnerable", "appears to be vulnerable", "target is vulnerable", "the target appears"))
+    if plus:
+        result["msf_success_lines"] = plus[:20]
+    result["msf_session_opened"] = bool(session)
+    result["msf_vulnerable"] = bool(vulnerable)
+    # A search/info query with output is a success even though nothing "ran".
+    if str(SPEC.get("mode", "")) == "msf_query" and result.get("line_count", 0) > 0:
+        result["ok"] = True
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ schema bootstrap is required.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -373,6 +374,58 @@ def count_operations_by_stage(stage: str) -> int:
             cur.execute("SELECT COUNT(*) AS c FROM ai_operations WHERE stage = %s", (stage,))
             row = cur.fetchone()
     return int(row["c"]) if row else 0
+
+
+def ensure_wrappers_current() -> dict:
+    """Regenerate the on-disk wrappers when they were built by an older template.
+
+    The wrapper template's first line carries a version marker; if a sampled
+    wrapper file is missing or stale, re-run the idempotent seed so template
+    improvements (lower-priority execution, partial-output-on-timeout, msf result
+    parsing…) reach existing installs. Returns {"regenerated": bool} so the caller
+    can also refresh the 3YM manual step scripts.
+    """
+    init_ai_operations_store()
+    from backend.services.pentest_tool_specs import TEMPLATE_MARKER
+
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT script_path FROM ai_operations WHERE script_path LIKE %s LIMIT 1", ("%.py",))
+            row = cur.fetchone()
+    path = row.get("script_path") if row else None
+    current = False
+    if path and os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                current = fh.readline().strip() == TEMPLATE_MARKER
+        except Exception:
+            current = False
+    if current:
+        return {"regenerated": False, "skipped": True}
+    seed_operations()
+    return {"regenerated": True}
+
+
+def ensure_operations_present(operation_keys: list[str]) -> dict:
+    """Backfill specific new operations into an existing catalog. If any of the
+    given operation_keys are missing, run the idempotent full seed (which upserts
+    every op by key + refreshes wrapper files) — so ops added to the spec after an
+    install still appear, without disturbing existing rows."""
+    init_ai_operations_store()
+    keys = [k for k in (operation_keys or []) if k]
+    if not keys:
+        return {"seeded": 0, "skipped": True}
+    with mysql_conn() as conn:
+        with conn.cursor() as cur:
+            placeholders = ",".join(["%s"] * len(keys))
+            cur.execute(
+                f"SELECT operation_key FROM ai_operations WHERE operation_key IN ({placeholders})",
+                tuple(keys),
+            )
+            have = {str(r["operation_key"]) for r in cur.fetchall() or []}
+    if all(k in have for k in keys):
+        return {"seeded": 0, "skipped": True}
+    return seed_operations()
 
 
 def ensure_stage_seeded(stage: str) -> dict:

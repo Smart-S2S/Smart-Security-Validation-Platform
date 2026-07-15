@@ -411,7 +411,7 @@ def settings_access(current_user: dict = Depends(get_current_user)):
     # everyone. The admin-only tabs stay admin-only.
     tabs = ["appearance", "ai", "system"]
     if current_user.get("is_admin"):
-        tabs = ["appearance", "ai", "toolsmgmt", "wordlists", "database", "tools", "progress-categories", "system"]
+        tabs = ["appearance", "ai", "toolsmgmt", "wordlists", "database", "security", "tools", "progress-categories", "system"]
 
     from backend.services.user_settings import resolve_user_table_page_size
 

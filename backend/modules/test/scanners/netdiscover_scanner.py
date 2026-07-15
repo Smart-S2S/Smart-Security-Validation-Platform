@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 
@@ -119,6 +120,7 @@ def run_netdiscover_scan(
                 capture_output=True,
                 text=True,
                 timeout=timeout_sec,
+                preexec_fn=lambda: os.nice(10),
             )
 
             if completed.returncode != 0 and _looks_like_permission_error(completed.stderr, completed.stdout) and sudo_binary:
@@ -129,6 +131,7 @@ def run_netdiscover_scan(
                     capture_output=True,
                     text=True,
                     timeout=timeout_sec,
+                    preexec_fn=lambda: os.nice(10),
                 )
 
             if completed.returncode != 0:

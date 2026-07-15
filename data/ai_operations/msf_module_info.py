@@ -1,5 +1,5 @@
 # SSVP_SCRIPT_TEMPLATE_V2
-"""Auto-generated SSVP wrapper for the "theHarvester" tool (scan).
+"""Auto-generated SSVP wrapper for the "msfconsole" tool (attack).
 
 Authorized lab / owned-systems validation only. Runs an allowlisted binary with
 a safely built argv (no shell). Every parameter is validated. Reports cleanly if
@@ -12,8 +12,8 @@ import re
 import shutil
 import subprocess
 
-TOOL = "theHarvester"
-SPEC = json.loads(r'''{"mode": "argv", "fixed_pre": [], "positionals_first": false, "params": [{"key": "domain", "label": "Domain", "kind": "opt", "flag": "-d", "setting": "DOMAIN", "default": "", "required": true, "pattern": "host", "choices": [], "must_exist": false}, {"key": "source", "label": "Source", "kind": "opt", "flag": "-b", "setting": "SOURCE", "default": "duckduckgo", "required": false, "pattern": "safe", "choices": ["duckduckgo", "crtsh", "dnsdumpster", "hackertarget", "rapiddns", "otx", "yahoo", "urlscan", "certspotter", "waybackarchive", "subdomaincenter", "all"], "must_exist": false}, {"key": "limit", "label": "Result limit", "kind": "opt", "flag": "-l", "setting": "LIMIT", "default": "100", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "start", "label": "Start offset", "kind": "opt", "flag": "-s", "setting": "START", "default": "", "required": false, "pattern": "int", "choices": [], "must_exist": false}, {"key": "dns_brute", "label": "DNS brute (-c)", "kind": "flag", "flag": "-c", "setting": "DNS_BRUTE", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "takeover", "label": "Takeover check (-t)", "kind": "flag", "flag": "-t", "setting": "TAKEOVER", "default": "", "required": false, "pattern": "safe", "choices": [], "must_exist": false}, {"key": "screenshot", "label": "Screenshot directory", "kind": "opt", "flag": "--screenshot", "setting": "SCREENSHOT", "default": "", "required": false, "pattern": "path", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "180", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
+TOOL = "msfconsole"
+SPEC = json.loads(r'''{"mode": "msf_query", "fixed_pre": [], "positionals_first": false, "params": [{"key": "query_op", "label": "Operation", "kind": "none", "flag": "", "setting": "QUERY_OP", "default": "info", "required": false, "pattern": "safe", "choices": ["info"], "must_exist": false}, {"key": "module", "label": "Module", "kind": "none", "flag": "", "setting": "MODULE", "default": "", "required": true, "pattern": "module", "choices": [], "must_exist": false}, {"key": "timeout_sec", "label": "Timeout (s)", "kind": "none", "flag": "", "setting": "TIMEOUT_SEC", "default": "300", "required": false, "pattern": "int", "choices": [], "must_exist": false}]}''')
 
 _COMMON_DIRS = (
     "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
@@ -50,7 +50,7 @@ def _load():
 
 
 def _log(msg):
-    print("[THEHARVESTER] " + str(msg), flush=True)
+    print("[MSFCONSOLE] " + str(msg), flush=True)
 
 
 def _emit(result):
@@ -95,6 +95,20 @@ def _lower_priority():
     except Exception:
         pass
 
+
+def _build_msf_query(binary, params):
+    op = str(params.get("query_op", "search") or "search").strip().lower()
+    if op == "info":
+        module = str(params.get("module", "") or "").strip()
+        if not _PATTERNS["module"].match(module):
+            raise ValueError("A module path is required for info (e.g. auxiliary/scanner/http/http_version).")
+        cmds = "info " + module + "; show options; exit"
+    else:
+        query = str(params.get("query", "") or "").strip()
+        if not query or not _PATTERNS["msfquery"].match(query):
+            raise ValueError("A search query is required and may contain only letters, digits, space and _-./:+ (e.g. 'type:exploit smb', 'cve:2021-44228').")
+        cmds = "search " + query + "; exit"
+    return [binary, "-q", "-x", cmds]
 
 
 def build_argv(binary, params, target):

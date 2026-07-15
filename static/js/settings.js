@@ -319,6 +319,7 @@ const I18N = {
         "settings.toolsmgmt.clearLog": "Temizle",
         "settings.tab.wordlists": "Sözlük Yönetimi",
         "settings.tab.database": "Veritabanı ve Yedekleme",
+        "settings.tab.security": "Güvenlik Ayarları",
         "breadcrumb.root": "ana",
         "breadcrumb.settings": "ayarlar",
         "breadcrumb.appearance": "görünüm",
@@ -328,6 +329,7 @@ const I18N = {
         "breadcrumb.toolsmgmt": "pentest araçları",
         "breadcrumb.wordlists": "sözlükler",
         "breadcrumb.database": "veritabanı",
+        "breadcrumb.security": "güvenlik",
         "breadcrumb.steps": "adım listesi",
         "breadcrumb.progress-categories": "kategoriler",
         "settings.database.title": "Veritabanı ve Yedekleme",
@@ -345,6 +347,20 @@ const I18N = {
         "settings.network.confirmPublic": "Bu servis internete açılacak. Emin misiniz? (Bulut güvenlik grubunda da portu açmanız gerekir.)",
         "settings.network.done": "Ağ erişimi güncellendi.",
         "settings.network.fail": "Ağ ayarı değiştirilemedi.",
+        "settings.services.networkMoved": "Servis port/ağ erişimi ayarları artık \"Güvenlik Ayarları\" sekmesindedir.",
+        "settings.security.title": "Güvenlik Ayarları",
+        "settings.security.note": "Servis portlarının internete açık olup olmadığını buradan yönetin. Güvenlik için varsayılan yalnızca yereldir (127.0.0.1); portları yalnızca gerçekten ihtiyaç olduğunda genele açın.",
+        "settings.security.exposureTitle": "Port / Ağ Erişimi",
+        "settings.security.lockdown": "Tümünü Yerele Al (Kilitle)",
+        "settings.security.lockdownConfirm": "İnternete açık tüm servisler yalnızca yerele alınacak. Onaylıyor musunuz?",
+        "settings.security.lockdownDone": "Tüm servisler yerele alındı.",
+        "settings.security.exposedCount": "⚠ {n} servis internete açık.",
+        "settings.security.allLocal": "✓ Tüm servisler yalnızca yerelde çalışıyor.",
+        "settings.security.cloudHint": "Not: Bir portu genele açtığınızda, dışarıdan erişim için ayrıca bulut güvenlik grubunda (ör. AWS Security Group) ilgili portu açmanız gerekir. Yerel sunucu güvenlik duvarı (ufw) otomatik güncellenir.",
+        "settings.security.hardeningTitle": "Sıkılaştırma İpuçları",
+        "settings.security.tip1": "Kullanmadığınız tüm servis portlarını yerelde tutun; en güvenli durum tüm servislerin \"Yalnızca yerel\" olmasıdır.",
+        "settings.security.tip2": "Veritabanı parolasını düzenli olarak güçlü bir parola ile değiştirin (Veritabanı ve Yedekleme sekmesi).",
+        "settings.security.tip3": "Bir portu genele açmadan önce bulut güvenlik grubunda erişimi güvendiğiniz IP adresleriyle sınırlandırın.",
         "settings.database.host": "Host",
         "settings.database.port": "Port",
         "settings.database.user": "Kullanıcı",
@@ -590,6 +606,7 @@ const I18N = {
         "settings.toolsmgmt.clearLog": "Clear",
         "settings.tab.wordlists": "Wordlists",
         "settings.tab.database": "Database & Backup",
+        "settings.tab.security": "Security Settings",
         "breadcrumb.root": "home",
         "breadcrumb.settings": "settings",
         "breadcrumb.appearance": "appearance",
@@ -599,6 +616,7 @@ const I18N = {
         "breadcrumb.toolsmgmt": "pentest tools",
         "breadcrumb.wordlists": "wordlists",
         "breadcrumb.database": "database",
+        "breadcrumb.security": "security",
         "breadcrumb.steps": "steps",
         "breadcrumb.progress-categories": "categories",
         "settings.database.title": "Database & Backup",
@@ -616,6 +634,20 @@ const I18N = {
         "settings.network.confirmPublic": "This service will be exposed to the internet. Are you sure? (You must also open the port in the cloud security group.)",
         "settings.network.done": "Network access updated.",
         "settings.network.fail": "Could not change network setting.",
+        "settings.services.networkMoved": "Service port / network access settings have moved to the \"Security Settings\" tab.",
+        "settings.security.title": "Security Settings",
+        "settings.security.note": "Manage whether service ports are exposed to the internet here. For security the default is local-only (127.0.0.1); open ports to the public only when genuinely needed.",
+        "settings.security.exposureTitle": "Port / Network Access",
+        "settings.security.lockdown": "Lock Down All (Local Only)",
+        "settings.security.lockdownConfirm": "All internet-exposed services will be switched to local-only. Continue?",
+        "settings.security.lockdownDone": "All services switched to local-only.",
+        "settings.security.exposedCount": "⚠ {n} service(s) exposed to the internet.",
+        "settings.security.allLocal": "✓ All services are local-only.",
+        "settings.security.cloudHint": "Note: after opening a port to the public, external access also requires opening the port in your cloud security group (e.g. AWS Security Group). The local host firewall (ufw) is updated automatically.",
+        "settings.security.hardeningTitle": "Hardening Tips",
+        "settings.security.tip1": "Keep every unused service port local; the safest state is all services set to \"Local only\".",
+        "settings.security.tip2": "Rotate the database password regularly with a strong password (Database & Backup tab).",
+        "settings.security.tip3": "Before opening a port to the public, restrict access in the cloud security group to trusted IP addresses.",
         "settings.database.host": "Host",
         "settings.database.port": "Port",
         "settings.database.user": "User",
@@ -2902,12 +2934,13 @@ async function loadTabData(tab, { force = false } = {}) {
     }
     if (tab === "database" && hasTab("database")) {
         await loadDatabaseTab();
+    }
+    if (tab === "security" && hasTab("security")) {
         loadNetworkStatus();
     }
     // Service controls are admin-only; only refresh their status when present.
     if (tab === "ai" && hasTab("ai") && document.getElementById("ollamaServiceStatus")) {
         refreshOllamaStatus("status");
-        loadNetworkStatus();
     }
 }
 
@@ -3403,9 +3436,9 @@ bindServiceButtons("open-webui", "openwebuiStartBtn", "openwebuiStopBtn");
 
 // --- Network exposure (local-only vs public) toggles ---------------------
 const NETWORK_SERVICES = [
-    { key: "mysql", label: "MySQL", where: "db" },
-    { key: "phpmyadmin", label: "phpMyAdmin", where: "db" },
-    { key: "ollama", label: "Ollama", where: "ai" },
+    { key: "mysql", label: "MySQL", port: 3306 },
+    { key: "phpmyadmin", label: "phpMyAdmin", port: 8081 },
+    { key: "ollama", label: "Ollama", port: 11434 },
 ];
 
 function netExposeRowHtml(svc, mode) {
@@ -3418,27 +3451,42 @@ function netExposeRowHtml(svc, mode) {
     const btnText = isPublic
         ? (t("settings.network.makeLocal") || "Yerele al")
         : (t("settings.network.makePublic") || "Genele aç");
+    const portLabel = svc.port ? `:${svc.port}` : "";
     return `<div class="net-expose-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:6px 0;">
-        <span style="min-width:120px; font-weight:600;">${escPentest(svc.label)}</span>
+        <span style="min-width:160px; font-weight:600;">${escPentest(svc.label)} <span class="muted" style="font-weight:400;">${escPentest(portLabel)}</span></span>
         <span style="color:${badgeColor}; font-weight:600; min-width:150px;">${escPentest(badgeText)}</span>
         <button type="button" class="net-expose-btn" data-service="${escPentest(svc.key)}" data-mode="${nextMode}">${escPentest(btnText)}</button>
     </div>`;
 }
 
 function renderNetworkExposure(services) {
-    const byWhere = { db: [], ai: [] };
+    const rows = [];
+    let publicCount = 0;
     NETWORK_SERVICES.forEach((svc) => {
         const mode = (services && services[svc.key]) || "local";
-        byWhere[svc.where].push(netExposeRowHtml(svc, mode));
+        if (mode === "public") publicCount += 1;
+        rows.push(netExposeRowHtml(svc, mode));
     });
-    const dbEl = document.getElementById("networkExposureDb");
-    const aiEl = document.getElementById("networkExposureAi");
-    if (dbEl) dbEl.innerHTML = byWhere.db.join("");
-    if (aiEl) aiEl.innerHTML = byWhere.ai.join("");
+    const el = document.getElementById("networkExposureSecurity");
+    if (el) el.innerHTML = rows.join("");
+
+    const summary = document.getElementById("securityExposureSummary");
+    if (summary) {
+        if (publicCount > 0) {
+            const tpl = t("settings.security.exposedCount") || "⚠ {n} servis internete açık.";
+            summary.textContent = tpl.replace("{n}", String(publicCount));
+            summary.style.color = "#c62828";
+        } else {
+            summary.textContent = t("settings.security.allLocal") || "✓ Tüm servisler yalnızca yerelde çalışıyor.";
+            summary.style.color = "#1a7f37";
+        }
+    }
+    const lockBtn = document.getElementById("securityLockdownBtn");
+    if (lockBtn) lockBtn.disabled = publicCount === 0;
 }
 
 async function loadNetworkStatus() {
-    if (!document.getElementById("networkExposureDb") && !document.getElementById("networkExposureAi")) {
+    if (!document.getElementById("networkExposureSecurity")) {
         return;
     }
     try {
@@ -3448,6 +3496,34 @@ async function loadNetworkStatus() {
         renderNetworkExposure({});
     }
 }
+
+// Lock down: switch every internet-exposed service back to local in one click.
+async function lockdownAllServices() {
+    const lockBtn = document.getElementById("securityLockdownBtn");
+    if (!window.confirm(t("settings.security.lockdownConfirm") || "İnternete açık tüm servisler yalnızca yerele alınacak. Onaylıyor musunuz?")) {
+        return;
+    }
+    if (lockBtn) lockBtn.disabled = true;
+    try {
+        const data = await apiRequest("/settings/network", { cache: "no-store" });
+        const services = (data && data.services) || {};
+        const targets = NETWORK_SERVICES.filter((svc) => services[svc.key] === "public");
+        for (const svc of targets) {
+            await apiRequest("/settings/network", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ service: svc.key, mode: "local" }),
+            });
+        }
+        await loadNetworkStatus();
+        setFeedback(t("settings.security.lockdownDone") || "Tüm servisler yerele alındı.");
+    } catch (error) {
+        setFeedback(error.message || (t("settings.network.fail") || "Ağ ayarı değiştirilemedi."), true);
+        await loadNetworkStatus();
+    }
+}
+
+document.getElementById("securityLockdownBtn")?.addEventListener("click", lockdownAllServices);
 
 document.addEventListener("click", async (event) => {
     const btn = event.target.closest?.(".net-expose-btn");

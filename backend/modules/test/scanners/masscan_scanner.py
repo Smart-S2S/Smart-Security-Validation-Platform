@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import time
@@ -149,7 +150,22 @@ def run_masscan_scan(
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            # Lower CPU priority so a heavy scan never starves the web app.
+            preexec_fn=lambda: os.nice(10),
         )
+
+        # Prefer any results masscan wrote, even on a non-zero exit (it can be
+        # interrupted yet still have found open ports).
+        ports = _parse_masscan_list_output(output_file) if output_file.exists() else []
+        if ports:
+            hosts = _build_hosts_summary(ports)
+            add_log(job_id, t(language, "masscan.ports.found", "{count} port sonucu bulundu.").replace("{count}", str(len(ports))))
+            return {
+                "target": ", ".join(target_tokens),
+                "xml_file": str(output_file),
+                "ports": ports,
+                "hosts": hosts,
+            }
 
         if completed.returncode != 0:
             if _looks_like_permission_error(completed.stderr, completed.stdout):
@@ -164,16 +180,12 @@ def run_masscan_scan(
                 "stdout": completed.stdout,
             }
 
-        ports = _parse_masscan_list_output(output_file)
-        hosts = _build_hosts_summary(ports)
-
-        add_log(job_id, t(language, "masscan.ports.found", "{count} port sonucu bulundu.").replace("{count}", str(len(ports))))
-
+        add_log(job_id, t(language, "masscan.ports.found", "{count} port sonucu bulundu.").replace("{count}", "0"))
         return {
             "target": ", ".join(target_tokens),
             "xml_file": str(output_file),
-            "ports": ports,
-            "hosts": hosts,
+            "ports": [],
+            "hosts": [],
         }
 
     except FileNotFoundError:

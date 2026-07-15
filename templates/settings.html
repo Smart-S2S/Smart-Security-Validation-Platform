@@ -34,6 +34,7 @@
         <button class="tab-btn" data-tab="toolsmgmt" data-i18n="settings.tab.toolsmgmt">Pentest Araçları</button>
         <button class="tab-btn" data-tab="wordlists" data-i18n="settings.tab.wordlists">Sözlük Yönetimi</button>
         <button class="tab-btn" data-tab="database" data-i18n="settings.tab.database">Veritabanı ve Yedekleme</button>
+        <button class="tab-btn" data-tab="security" data-i18n="settings.tab.security">Güvenlik Ayarları</button>
         {% endif %}
         <button class="tab-btn" data-tab="system" data-i18n="settings.tab.system">Sistem ve Proje</button>
     </aside>
@@ -165,10 +166,7 @@
                             <button id="openwebuiStopBtn" type="button" data-i18n="settings.services.stop">Durdur</button>
                         </div>
                         <p class="muted" style="margin:10px 0 0 0; font-size:12px;" data-i18n="settings.services.hint">Kullanmadığınız servisleri durdurarak RAM/CPU boşaltabilirsiniz. Open WebUI durdurulunca 3000 portu da kapatılır.</p>
-
-                        <h3 data-i18n="settings.network.aiTitle" style="margin-top:24px;">Ağ Erişimi</h3>
-                        <p class="muted" data-i18n="settings.network.aiNote">Ollama'yı yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Varsayılan yereldir.</p>
-                        <div id="networkExposureAi" class="net-expose-list"></div>
+                        <p class="muted" style="margin:8px 0 0 0; font-size:12px;" data-i18n="settings.services.networkMoved">Servis port/ağ erişimi ayarları artık "Güvenlik Ayarları" sekmesindedir.</p>
                     </div>
                     {% endif %}
                 </div>
@@ -284,12 +282,6 @@
                 </section>
             </div>
 
-            <section class="card" style="margin:0 0 16px 0;">
-                <h3 data-i18n="settings.network.title">Ağ Erişimi</h3>
-                <p class="muted" data-i18n="settings.network.note">Servisleri yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Güvenlik için varsayılan yereldir; sadece ihtiyaç durumunda genele açın. Genel erişim için ayrıca bulut güvenlik grubunda ilgili portu açmanız gerekir.</p>
-                <div id="networkExposureDb" class="net-expose-list"></div>
-            </section>
-
             <section class="card">
                 <div class="step-list-header-row">
                     <h3 data-i18n="settings.database.backupTitle">Yedekler</h3>
@@ -311,6 +303,31 @@
             </section>
         </section>
 
+        <section class="panel" data-panel="security" hidden>
+            <h2 data-i18n="settings.security.title">Güvenlik Ayarları</h2>
+            <p class="muted" data-i18n="settings.security.note">Servis portlarının internete açık olup olmadığını buradan yönetin. Güvenlik için varsayılan yalnızca yereldir (127.0.0.1); portları yalnızca gerçekten ihtiyaç olduğunda genele açın.</p>
+
+            <section class="card" style="margin:0 0 16px 0;">
+                <div class="step-list-header-row">
+                    <h3 data-i18n="settings.security.exposureTitle">Port / Ağ Erişimi</h3>
+                    <button id="securityLockdownBtn" type="button" data-i18n="settings.security.lockdown" disabled>Tümünü Yerele Al (Kilitle)</button>
+                </div>
+                <p class="muted" data-i18n="settings.network.note">Servisleri yalnızca yerelde (127.0.0.1) veya internete açık çalıştırın. Güvenlik için varsayılan yereldir; sadece ihtiyaç durumunda genele açın. Genel erişim için ayrıca bulut güvenlik grubunda ilgili portu açmanız gerekir.</p>
+                <p id="securityExposureSummary" style="font-weight:600; margin:10px 0;"></p>
+                <div id="networkExposureSecurity" class="net-expose-list"></div>
+                <p class="muted" style="font-size:12px; margin-top:12px;" data-i18n="settings.security.cloudHint">Not: Bir portu genele açtığınızda, dışarıdan erişim için ayrıca bulut güvenlik grubunda (ör. AWS Security Group) ilgili portu açmanız gerekir. Yerel sunucu güvenlik duvarı (ufw) otomatik güncellenir.</p>
+            </section>
+
+            <section class="card">
+                <h3 data-i18n="settings.security.hardeningTitle">Sıkılaştırma İpuçları</h3>
+                <ul class="muted" style="margin:8px 0 0 0; padding-left:20px; line-height:1.7;">
+                    <li data-i18n="settings.security.tip1">Kullanmadığınız tüm servis portlarını yerelde tutun; en güvenli durum tüm servislerin "Yalnızca yerel" olmasıdır.</li>
+                    <li data-i18n="settings.security.tip2">Veritabanı parolasını düzenli olarak güçlü bir parola ile değiştirin (Veritabanı ve Yedekleme sekmesi).</li>
+                    <li data-i18n="settings.security.tip3">Bir portu genele açmadan önce bulut güvenlik grubunda erişimi güvendiğiniz IP adresleriyle sınırlandırın.</li>
+                </ul>
+            </section>
+        </section>
+
 
         {% endif %}
 
@@ -321,6 +338,6 @@
 <script src="/static/js/notify.js?v=20260706c"></script>
 <script src="/static/js/table_tools.js?v=20260706b"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/static/js/settings.js?v=20260706n"></script>
+<script src="/static/js/settings.js?v=20260708a"></script>
 </body>
 </html>
